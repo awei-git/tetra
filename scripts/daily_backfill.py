@@ -14,7 +14,7 @@ from typing import List, Dict, Set
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.universe import Universe
+from src.data_definitions.market_universe import MarketUniverse as Universe
 from src.ingestion.data_ingester import DataIngester
 from src.db.base import get_session
 from src.db.models import OHLCVModel

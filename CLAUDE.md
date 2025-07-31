@@ -77,7 +77,7 @@ Preferred languages:
 
 Backend:
 - FastAPI, Flask
-- PostgreSQL
+- PostgreSQL with Alembic for DB migration
 
 Frontend:
 - React (functional, hooks)

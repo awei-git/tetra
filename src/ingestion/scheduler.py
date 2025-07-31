@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from src.ingestion.data_ingester import DataIngester
-from src.universe import Universe
+from src.data_definitions.market_universe import MarketUniverse as Universe
 from src.utils.logging import logger
 from config import settings
 
