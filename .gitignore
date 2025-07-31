@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Secrets
+config/secrets.yml
+config/secrets.yaml
+
+# Database
+*.db
+*.sqlite3
+data/
+
+# Logs
+logs/
+*.log
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Docker volumes
+docker/volumes/
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/airflow-webserver.pid
+
+# ML
+mlruns/
+models/
+
+# Kafka
+kafka-logs/
