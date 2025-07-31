@@ -15,6 +15,7 @@ class Universe:
         "DIA",   # Dow Jones
         "VOO",   # Vanguard S&P 500
         "VTI",   # Total Market
+        "HDV",   # iShares Core High Dividend
     ]
     
     # Sector ETFs
@@ -194,7 +195,7 @@ class Universe:
         "BITF",  # Bitfarms
         "BTBT",  # Bit Digital
         "GBTC",  # Grayscale Bitcoin Trust
-        "SQ",    # Block (Square)
+        "IBIT",  # iShares Bitcoin Trust
         "PYPL",  # PayPal
     ]
     
