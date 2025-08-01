@@ -10,6 +10,7 @@ import uuid
 from .base import Base
 from ..models.event_data import EventType
 from ..models.derived import IndicatorType, SignalType
+from ..models.news_sentiment import NewsSource, NewsCategory
 
 
 class OHLCVModel(Base):
@@ -393,5 +394,178 @@ class EarningsEventModel(Base):
     guidance = Column(Text)
     call_time = Column(String(10))  # BMO, AMC
     fiscal_period = Column(String(20))  # Q1 2024, FY 2024
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+# News and Sentiment Models
+class NewsArticleModel(Base):
+    """News articles storage"""
+    __tablename__ = "news_articles"
+    __table_args__ = (
+        Index("idx_news_published", "published_at"),
+        Index("idx_news_symbols", "symbols"),
+        Index("idx_news_source", "source"),
+        UniqueConstraint("source", "source_id", name="uq_source_article"),
+        {"schema": "news"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Article identifiers
+    source_id = Column(String(500))  # ID from source API
+    source = Column(String(100), nullable=False)
+    source_category = Column(String(50), nullable=False)
+    
+    # Article content
+    author = Column(String(200))
+    title = Column(Text, nullable=False)
+    description = Column(Text)
+    content = Column(Text)
+    url = Column(Text, nullable=False)
+    image_url = Column(Text)
+    
+    # Timing
+    published_at = Column(DateTime(timezone=True), nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
+    
+    # Related entities
+    symbols = Column(JSON)  # List of stock symbols
+    entities = Column(JSON)  # List of entities mentioned
+    categories = Column(JSON)  # List of categories
+    
+    # Raw data
+    raw_data = Column(JSON)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    # Relationship to sentiment
+    sentiments = relationship("NewsSentimentModel", back_populates="article", cascade="all, delete-orphan")
+
+
+class NewsSentimentModel(Base):
+    """News sentiment analysis results"""
+    __tablename__ = "news_sentiments"
+    __table_args__ = (
+        Index("idx_sentiment_article", "article_id"),
+        Index("idx_sentiment_analyzed", "analyzed_at"),
+        Index("idx_sentiment_symbols", "symbols"),
+        {"schema": "news"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Link to article
+    article_id = Column(UUID(as_uuid=True), ForeignKey("news.news_articles.id"), nullable=False)
+    
+    # Sentiment scores
+    polarity = Column(Float, nullable=False)  # -1 to 1
+    subjectivity = Column(Float, nullable=False)  # 0 to 1
+    positive = Column(Float, nullable=False)  # 0 to 1
+    negative = Column(Float, nullable=False)  # 0 to 1
+    neutral = Column(Float, nullable=False)  # 0 to 1
+    bullish = Column(Float)  # 0 to 1 (optional)
+    bearish = Column(Float)  # 0 to 1 (optional)
+    
+    # Analysis metadata
+    sentiment_model = Column(String(100), nullable=False)
+    analyzed_at = Column(DateTime(timezone=True), nullable=False)
+    
+    # Trading signals
+    symbols = Column(JSON)  # Symbols this sentiment applies to
+    relevance_score = Column(Float, default=0.0)  # 0 to 1
+    impact_score = Column(Float, default=0.0)  # 0 to 1
+    
+    # Flags
+    is_breaking = Column(Boolean, default=False)
+    is_rumor = Column(Boolean, default=False)
+    requires_confirmation = Column(Boolean, default=False)
+    
+    # Additional sentiment data (by type)
+    sentiment_by_type = Column(JSON)  # Dict of sentiment scores by type
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    # Relationship
+    article = relationship("NewsArticleModel", back_populates="sentiments")
+
+
+class NewsClusterModel(Base):
+    """Clusters of related news articles"""
+    __tablename__ = "news_clusters"
+    __table_args__ = (
+        Index("idx_cluster_created", "created_at"),
+        Index("idx_cluster_symbols", "symbols"),
+        {"schema": "news"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Articles in cluster
+    article_ids = Column(JSON, nullable=False)  # List of article IDs
+    lead_article_id = Column(UUID(as_uuid=True), nullable=False)
+    
+    # Cluster metadata
+    symbols = Column(JSON)
+    categories = Column(JSON)
+    
+    # Timing
+    earliest_published = Column(DateTime(timezone=True), nullable=False)
+    latest_published = Column(DateTime(timezone=True), nullable=False)
+    
+    # Aggregated sentiment
+    avg_polarity = Column(Float, nullable=False)
+    sentiment_std = Column(Float, nullable=False)
+    article_count = Column(Integer, nullable=False)
+    
+    # Cluster properties
+    coherence_score = Column(Float, nullable=False)  # 0 to 1
+    velocity = Column(Float, nullable=False)  # Articles per hour
+    is_trending = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class NewsSummaryModel(Base):
+    """Daily/periodic summaries of news sentiment"""
+    __tablename__ = "news_summaries"
+    __table_args__ = (
+        Index("idx_summary_symbol_date", "symbol", "start_date"),
+        UniqueConstraint("symbol", "start_date", "end_date", name="uq_summary_period"),
+        {"schema": "news"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Summary period
+    symbol = Column(String(20), nullable=False)
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
+    
+    # Article counts
+    total_articles = Column(Integer, nullable=False)
+    positive_articles = Column(Integer, nullable=False)
+    negative_articles = Column(Integer, nullable=False)
+    neutral_articles = Column(Integer, nullable=False)
+    
+    # Aggregated metrics
+    avg_sentiment = Column(Float, nullable=False)  # -1 to 1
+    sentiment_std = Column(Float, nullable=False)
+    
+    # Volume metrics
+    article_velocity = Column(Float, nullable=False)  # Articles per day
+    velocity_change = Column(Float, nullable=False)  # Change from previous period
+    
+    # Key topics
+    top_categories = Column(JSON)
+    key_entities = Column(JSON)
+    
+    # Notable articles
+    most_positive_id = Column(UUID(as_uuid=True))
+    most_negative_id = Column(UUID(as_uuid=True))
+    most_impactful_id = Column(UUID(as_uuid=True))
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

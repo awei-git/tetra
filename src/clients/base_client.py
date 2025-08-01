@@ -140,7 +140,12 @@ class BaseAPIClient:
             
             response.raise_for_status()
             
-            return response.json()
+            # Try to parse as JSON
+            try:
+                return response.json()
+            except:
+                # If not JSON, return text
+                return response.text
             
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error: {e.response.status_code} - {e.response.text}")

@@ -20,8 +20,12 @@ from src.data_definitions.event_calendar import EventCalendar
 from src.ingestion.data_ingester import DataIngester
 from src.clients.economic_data_client import EconomicDataClient
 from src.clients.event_data_client import EventDataClient
+from src.clients.news_sentiment_client import NewsSentimentClient
 from src.db.base import get_session
-from src.db.models import OHLCVModel, EconomicDataModel, EventDataModel, EconomicEventModel, EarningsEventModel
+from src.db.models import (
+    OHLCVModel, EconomicDataModel, EventDataModel, EconomicEventModel, 
+    EarningsEventModel, NewsArticleModel, NewsSentimentModel
+)
 from src.models.event_data import EventType, EventStatus
 import uuid
 from src.utils.logging import logger
@@ -37,6 +41,7 @@ class SmartBackfiller:
         self.polygon_ingester = DataIngester(provider="polygon")
         self.economic_client = None  # Lazy initialization
         self.event_client = None  # Lazy initialization
+        self.news_client = None  # Lazy initialization
         
     async def get_last_update_dates(self, symbols: List[str], timeframe: str = "1d") -> Dict[str, datetime]:
         """Get the last update date for each symbol"""
@@ -99,113 +104,99 @@ class SmartBackfiller:
         last_dates = await self.get_last_update_dates([symbol], timeframe)
         last_date = last_dates.get(symbol)
         
-        # Determine date range
+        # Calculate date range
         end_date = date.today()
-        
-        # Special handling for crypto with known start dates
-        crypto_start_dates = {
-            "BTC-USD": date(2014, 9, 17),  # Bitcoin on Yahoo Finance
-            "ETH-USD": date(2017, 11, 9),   # Ethereum on Yahoo Finance
-        }
-        
         if last_date:
-            # Check if we have sufficient historical data
-            expected_start = end_date - timedelta(days=days_back)
-            
-            # For crypto, use actual start date if more recent
-            if symbol in crypto_start_dates:
-                expected_start = max(expected_start, crypto_start_dates[symbol])
-            
-            # Calculate days of data we should have
-            expected_days = (end_date - expected_start).days
-            actual_days = (last_date.date() - expected_start).days if last_date else 0
-            
-            # Get earliest date in DB for this symbol
-            async for session in get_session():
-                query = select(func.min(OHLCVModel.timestamp)).where(
-                    OHLCVModel.symbol == symbol,
-                    OHLCVModel.timeframe == timeframe
-                )
-                result = await session.execute(query)
-                earliest_date = result.scalar()
-                
-                if earliest_date:
-                    actual_coverage = (last_date - earliest_date).days
-                    expected_coverage = min(expected_days, days_back)
-                    
-                    # If we have less than 80% of expected data, force full backfill
-                    if actual_coverage < expected_coverage * 0.8:
-                        logger.info(f"{symbol}: Incomplete data detected ({actual_coverage} days vs {expected_coverage} expected)")
-                        logger.info(f"{symbol}: Forcing full backfill from {expected_start}")
-                        start_date = expected_start
-                    else:
-                        # Normal update from last date
-                        start_date = (last_date + timedelta(days=1)).date()
-                        logger.info(f"{symbol}: Last update was {last_date.date()}, updating from {start_date}")
-                else:
-                    # Have last_date but no earliest_date? Force full backfill
-                    start_date = expected_start
-                    logger.info(f"{symbol}: Data inconsistency detected, forcing full backfill")
+            # Update from last date
+            start_date = (last_date + timedelta(days=1)).date()
+            if start_date > end_date:
+                logger.info(f"{symbol}: Already up to date")
+                return stats
         else:
-            # No data, get historical
+            # No data, start from days_back
             start_date = end_date - timedelta(days=days_back)
-            
-            # For crypto, use actual start date if more recent
-            if symbol in crypto_start_dates:
-                start_date = max(start_date, crypto_start_dates[symbol])
-                
-            logger.info(f"{symbol}: No existing data, fetching from {start_date}")
         
-        # Skip if already up to date
-        if start_date >= end_date:
-            logger.info(f"{symbol}: Already up to date")
-            return stats
+        logger.info(f"{symbol}: Fetching {timeframe} data from {start_date} to {end_date}")
         
-        # Use yfinance for historical data (more than 7 days old)
-        yf_end_date = end_date - timedelta(days=7)
-        if start_date < yf_end_date:
+        # Use Polygon for recent data (last 2 years) for non-crypto
+        use_polygon = (
+            not Universe.is_crypto(symbol) and 
+            self._has_polygon_key() and
+            (end_date - start_date).days <= 730
+        )
+        
+        if use_polygon:
             try:
-                logger.info(f"{symbol}: Using yfinance for {start_date} to {yf_end_date}")
-                result = await self.yfinance_ingester.ingest_ohlcv_batch(
-                    symbols=[symbol],
-                    from_date=start_date,
-                    to_date=yf_end_date,
-                    timeframe=timeframe
-                )
-                stats["yfinance"] = result.get("inserted", 0) + result.get("updated", 0)
+                async with self.polygon_ingester as ingester:
+                    result = await ingester.fetch_ohlcv(
+                        symbols=[symbol],
+                        from_date=start_date,
+                        to_date=end_date,
+                        timeframe=timeframe
+                    )
+                    stats["polygon"] += result.get("inserted", 0) + result.get("updated", 0)
+                    logger.info(f"{symbol}: Fetched {result.get('inserted', 0)} records from Polygon")
             except Exception as e:
-                logger.error(f"{symbol}: yfinance error: {e}")
-                stats["errors"] += 1
-        
-        # Use Polygon for recent data (last 7 days) if available
-        if settings.polygon_api_key and start_date < end_date:
-            polygon_start = max(start_date, end_date - timedelta(days=7))
-            try:
-                logger.info(f"{symbol}: Using Polygon for recent data {polygon_start} to {end_date}")
-                result = await self.polygon_ingester.ingest_ohlcv_batch(
-                    symbols=[symbol],
-                    from_date=polygon_start,
-                    to_date=end_date,
-                    timeframe=timeframe
-                )
-                stats["polygon"] = result.get("inserted", 0) + result.get("updated", 0)
-            except Exception as e:
-                logger.error(f"{symbol}: Polygon error: {e}")
-                # If Polygon fails, try yfinance for recent data too
-                if stats["yfinance"] == 0:  # Only if yfinance hasn't been tried
-                    try:
-                        result = await self.yfinance_ingester.ingest_ohlcv_batch(
+                logger.warning(f"{symbol}: Polygon error: {e}, falling back to yfinance")
+                # Fall back to yfinance
+                try:
+                    async with self.yfinance_ingester as ingester:
+                        result = await ingester.fetch_ohlcv(
                             symbols=[symbol],
-                            from_date=polygon_start,
+                            from_date=start_date,
                             to_date=end_date,
                             timeframe=timeframe
                         )
                         stats["yfinance"] += result.get("inserted", 0) + result.get("updated", 0)
-                    except Exception as e2:
-                        logger.error(f"{symbol}: yfinance fallback error: {e2}")
+                except Exception as e2:
+                    logger.error(f"{symbol}: yfinance fallback error: {e2}")
+                    stats["errors"] += 1
+        else:
+            # Use yfinance for historical data or crypto
+            try:
+                async with self.yfinance_ingester as ingester:
+                    # Check if symbol is available
+                    available = await ingester.check_available_symbols([symbol])
+                    if symbol not in available:
+                        logger.warning(f"{symbol}: Not available on yfinance")
                         stats["errors"] += 1
+                        return stats
+                    
+                    result = await ingester.fetch_ohlcv(
+                        symbols=[symbol],
+                        from_date=start_date,
+                        to_date=end_date,
+                        timeframe=timeframe
+                    )
+                    stats["yfinance"] += result.get("inserted", 0) + result.get("updated", 0)
+                    logger.info(f"{symbol}: Fetched {result.get('inserted', 0)} records from yfinance")
+            except Exception as e:
+                logger.error(f"{symbol}: Error during yfinance fetch: {e}")
+                stats["errors"] += 1
+                
+                # Try polygon as last resort for non-crypto
+                if not Universe.is_crypto(symbol) and self._has_polygon_key():
+                    try:
+                        async with self.polygon_ingester as ingester:
+                            result = await ingester.fetch_ohlcv(
+                                symbols=[symbol],
+                                from_date=max(start_date, end_date - timedelta(days=730)),
+                                to_date=end_date,
+                                timeframe=timeframe
+                            )
+                            stats["polygon"] += result.get("inserted", 0) + result.get("updated", 0)
+                    except Exception as e2:
+                        logger.error(f"{symbol}: Polygon fallback error: {e2}")
         
         return stats
+    
+    def _has_polygon_key(self) -> bool:
+        """Check if Polygon API key is configured"""
+        return bool(settings.polygon_api_key)
+    
+    def _supports_crypto(self) -> bool:
+        """Check if any configured provider supports crypto"""
+        return True  # yfinance supports crypto
     
     async def run_daily_backfill(self):
         """Run the daily backfill process"""
@@ -301,58 +292,65 @@ class SmartBackfiller:
             # Get last update date
             last_date = await self.get_last_economic_update(symbol)
             
-            # Determine date range
+            # Calculate date range
             end_date = date.today()
             if last_date:
                 start_date = (last_date + timedelta(days=1)).date()
-                logger.info(f"{symbol}: Last update was {last_date.date()}, updating from {start_date}")
+                if start_date > end_date:
+                    logger.info(f"{symbol}: Already up to date")
+                    return stats
             else:
                 start_date = end_date - timedelta(days=days_back)
-                logger.info(f"{symbol}: No existing data, fetching from {start_date}")
             
-            # Skip if already up to date
-            if start_date >= end_date:
-                logger.info(f"{symbol}: Already up to date")
-                return stats
+            logger.info(f"{symbol}: Fetching data from {start_date} to {end_date}")
             
             # Fetch data
             async with self.economic_client as client:
                 data = await client.get_indicator_data(
                     symbol=symbol,
-                    from_date=start_date,
-                    to_date=end_date
+                    start_date=start_date,
+                    end_date=end_date
                 )
             
             if not data:
-                logger.warning(f"{symbol}: No data returned from FRED")
+                logger.warning(f"{symbol}: No data returned")
                 return stats
             
             # Insert into database
             async for session in get_session():
-                for item in data:
-                    # Check if already exists
-                    exists_query = select(EconomicDataModel).where(
-                        EconomicDataModel.symbol == symbol,
-                        EconomicDataModel.date == item.date
-                    )
-                    result = await session.execute(exists_query)
-                    existing = result.scalar_one_or_none()
-                    
-                    if not existing:
+                for point in data:
+                    try:
+                        # Check if already exists
+                        exists_query = select(EconomicDataModel).where(
+                            EconomicDataModel.symbol == point.symbol,
+                            EconomicDataModel.date == point.date
+                        )
+                        result = await session.execute(exists_query)
+                        if result.scalar_one_or_none():
+                            continue
+                        
+                        # Create new record
                         db_record = EconomicDataModel(
-                            symbol=symbol,
-                            date=item.date,
-                            value=item.value,
-                            source=item.source
+                            symbol=point.symbol,
+                            date=point.date,
+                            value=point.value,
+                            revision_date=point.revision_date,
+                            is_preliminary=point.is_preliminary,
+                            source=point.source
                         )
                         session.add(db_record)
                         stats["records"] += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Error inserting {symbol} data: {e}")
+                        stats["errors"] += 1
                 
                 await session.commit()
-                logger.info(f"{symbol}: Inserted {stats['records']} new records")
-                
+            
+            logger.info(f"{symbol}: Inserted {stats['records']} records")
+            
         except Exception as e:
-            logger.error(f"{symbol}: Error during backfill: {e}")
+            logger.error(f"Error fetching {symbol}: {e}")
             stats["errors"] += 1
         
         return stats
@@ -361,137 +359,133 @@ class SmartBackfiller:
         """Run backfill for economic indicators"""
         logger.info("Starting economic data backfill")
         
+        # Get all indicators if not specified
         if not indicators:
-            # Use high priority indicators
-            indicators = [ind[0] for ind in EconomicIndicators.get_high_priority_indicators()]
+            indicators = EconomicIndicators.get_all_symbols()
         
         logger.info(f"Processing {len(indicators)} economic indicators")
         
-        total_stats = {"indicators_processed": 0, "records": 0, "errors": 0}
+        total_stats = {"records": 0, "errors": 0, "indicators_processed": 0}
         
-        for symbol in indicators:
-            logger.info(f"\nProcessing {symbol}...")
-            stats = await self.backfill_economic_indicator(symbol)
+        for i, symbol in enumerate(indicators):
+            if i % 10 == 0:
+                logger.info(f"\nProgress: {i}/{len(indicators)} indicators...")
             
+            stats = await self.backfill_economic_indicator(symbol)
             total_stats["records"] += stats["records"]
             total_stats["errors"] += stats["errors"]
             total_stats["indicators_processed"] += 1
             
-            # Small delay to respect rate limits
+            # Small delay to avoid rate limits
             await asyncio.sleep(0.5)
         
         logger.info("\n=== Economic Backfill Summary ===")
         logger.info(f"Indicators processed: {total_stats['indicators_processed']}")
-        logger.info(f"Total records: {total_stats['records']}")
+        logger.info(f"Records inserted: {total_stats['records']}")
         logger.info(f"Errors: {total_stats['errors']}")
         
         return total_stats
     
-    def _supports_crypto(self) -> bool:
-        """Check if current providers support crypto"""
-        # yfinance supports crypto with -USD suffix
-        # Polygon needs special subscription
-        return True  # yfinance supports crypto
-    
-    async def get_last_event_update(self, event_type: Optional[str] = None) -> Optional[datetime]:
-        """Get the last update date for events"""
-        async for session in get_session():
-            query = select(func.max(EventDataModel.event_datetime))
-            if event_type:
-                query = query.where(EventDataModel.event_type == event_type)
-            result = await session.execute(query)
-            return result.scalar()
-    
-    async def backfill_earnings_events(self, symbols: List[str], days_back: int = 365, provider: str = "finnhub") -> Dict[str, int]:
-        """Backfill earnings events for specific symbols"""
+    async def backfill_earnings_events(self, symbols: List[str], days_back: int = 365, provider: str = "yahoo") -> Dict[str, int]:
+        """Backfill earnings events for given symbols"""
         stats = {"events": 0, "errors": 0}
         
-        if not self.event_client or self.event_client.provider_name != provider:
-            self.event_client = EventDataClient(provider=provider)
+        # Choose provider
+        if provider.lower() in ["polygon", "finnhub"]:
+            if not self.event_client or self.event_client.provider_name != provider:
+                self.event_client = EventDataClient(provider=provider)
+        else:
+            if not self.event_client:
+                self.event_client = EventDataClient(provider="yahoo")
         
-        try:
-            end_date = date.today()
-            start_date = end_date - timedelta(days=days_back)
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days_back)
+        
+        logger.info(f"Fetching earnings from {start_date} to {end_date} using {provider}")
+        
+        for i, symbol in enumerate(symbols):
+            if i % 10 == 0:
+                logger.info(f"Progress: {i}/{len(symbols)} symbols...")
             
-            logger.info(f"Fetching earnings events for {len(symbols)} symbols from {start_date} to {end_date}")
-            
-            async with self.event_client as client:
-                events = await client.get_earnings_calendar(
-                    from_date=start_date,
-                    to_date=end_date,
-                    symbols=symbols
-                )
-            
-            if not events:
-                logger.warning("No earnings events found")
-                return stats
-            
-            # Insert into database
-            async for session in get_session():
-                for event in events:
-                    try:
-                        # Check if event already exists
-                        exists_query = select(EventDataModel).where(
-                            EventDataModel.source == event.source,
-                            EventDataModel.source_id == event.source_id
-                        )
-                        result = await session.execute(exists_query)
-                        existing = result.scalar_one_or_none()
-                        
-                        if existing:
-                            continue
-                        
-                        # Create main event record
-                        db_event = EventDataModel(
-                            event_type=event.event_type.value,
-                            event_datetime=event.event_datetime,
-                            event_name=event.event_name,
-                            description=event.description,
-                            impact=event.impact.value,
-                            status=event.status.value,
-                            symbol=event.symbol,
-                            source=event.source,
-                            source_id=event.source_id,
-                            event_data=event.model_dump(
-                                exclude={"event_id", "created_at", "updated_at"},
-                                mode="json"
+            try:
+                async with self.event_client as client:
+                    events = await client.get_earnings_events(
+                        symbol=symbol,
+                        from_date=start_date,
+                        to_date=end_date
+                    )
+                
+                # Insert into database
+                async for session in get_session():
+                    for event in events:
+                        try:
+                            # Check if already exists
+                            exists_query = select(EventDataModel).where(
+                                EventDataModel.source == event.source,
+                                EventDataModel.source_id == event.source_id
                             )
-                        )
-                        session.add(db_event)
-                        await session.flush()
-                        
-                        # Create earnings-specific record
-                        db_earnings = EarningsEventModel(
-                            event_id=db_event.id,
-                            symbol=event.symbol,
-                            event_datetime=event.event_datetime,
-                            eps_actual=event.eps_actual,
-                            eps_estimate=event.eps_estimate,
-                            revenue_actual=event.revenue_actual,
-                            revenue_estimate=event.revenue_estimate,
-                            call_time=event.call_time,
-                            fiscal_period=event.fiscal_period
-                        )
-                        session.add(db_earnings)
-                        
-                        stats["events"] += 1
-                        
-                    except Exception as e:
-                        logger.error(f"Error inserting event {event.event_name}: {e}")
-                        stats["errors"] += 1
-                        continue
-                
-                await session.commit()
-                logger.info(f"Inserted {stats['events']} earnings events")
-                
-        except Exception as e:
-            logger.error(f"Error during earnings backfill: {e}")
-            stats["errors"] += 1
+                            result = await session.execute(exists_query)
+                            if result.scalar_one_or_none():
+                                continue
+                            
+                            # Create event record
+                            db_event = EventDataModel(
+                                event_type=event.event_type.value,
+                                event_datetime=event.event_datetime,
+                                event_name=event.event_name,
+                                description=event.description,
+                                impact=event.impact.value,
+                                status=event.status.value,
+                                symbol=event.symbol,
+                                source=event.source,
+                                source_id=event.source_id,
+                                event_data=event.model_dump(
+                                    exclude={"event_id", "created_at", "updated_at"},
+                                    mode="json"
+                                )
+                            )
+                            session.add(db_event)
+                            await session.flush()  # Get the ID
+                            
+                            # Create earnings specific record
+                            db_earnings = EarningsEventModel(
+                                event_id=db_event.id,
+                                symbol=event.symbol,
+                                event_datetime=event.event_datetime,
+                                eps_actual=event.eps_actual,
+                                eps_estimate=event.eps_estimate,
+                                eps_surprise=event.eps_surprise,
+                                eps_surprise_pct=event.eps_surprise_pct,
+                                revenue_actual=event.revenue_actual,
+                                revenue_estimate=event.revenue_estimate,
+                                revenue_surprise=event.revenue_surprise,
+                                revenue_surprise_pct=event.revenue_surprise_pct,
+                                guidance=event.guidance,
+                                call_time=event.call_time,
+                                fiscal_period=event.fiscal_period
+                            )
+                            session.add(db_earnings)
+                            
+                            stats["events"] += 1
+                            
+                        except Exception as e:
+                            logger.error(f"Error inserting earnings for {symbol}: {e}")
+                            stats["errors"] += 1
+                    
+                    await session.commit()
+                    
+            except Exception as e:
+                logger.error(f"Error fetching earnings for {symbol}: {e}")
+                stats["errors"] += 1
+            
+            # Small delay to avoid rate limits
+            await asyncio.sleep(0.5)
         
+        logger.info(f"Inserted {stats['events']} earnings events")
         return stats
     
-    async def backfill_market_holidays(self, years: List[int] = None) -> Dict[str, int]:
-        """Backfill market holiday events"""
+    async def backfill_market_holidays(self, years: Optional[List[int]] = None) -> Dict[str, int]:
+        """Backfill market holidays"""
         stats = {"events": 0, "errors": 0}
         
         if not self.event_client:
@@ -677,6 +671,212 @@ class SmartBackfiller:
         logger.info(f"Errors: {total_stats['errors']}")
         
         return total_stats
+    
+    async def backfill_news_sentiment(
+        self, 
+        symbols: Optional[List[str]] = None, 
+        days_back: int = 30, 
+        provider: str = "alphavantage"
+    ) -> Dict[str, int]:
+        """Backfill news and sentiment data"""
+        stats = {"articles": 0, "sentiments": 0, "errors": 0}
+        
+        if not self.news_client:
+            self.news_client = NewsSentimentClient(provider=provider)
+        
+        # Use high priority symbols if not specified
+        if not symbols:
+            symbols = Universe.get_high_priority_symbols()[:20]  # Limit to avoid rate limits
+        
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days_back)
+        
+        logger.info(f"Fetching news from {start_date} to {end_date} using {provider}")
+        logger.info(f"Processing {len(symbols)} symbols")
+        
+        async with self.news_client as client:
+            for i, symbol in enumerate(symbols):
+                if i % 5 == 0:
+                    logger.info(f"Progress: {i}/{len(symbols)} symbols...")
+                
+                try:
+                    # Get news with sentiment
+                    if provider.lower() in ["alphavantage", "alpha_vantage", "av"]:
+                        sentiments = await client.get_sentiment(
+                            symbols=[symbol],
+                            from_date=start_date,
+                            to_date=end_date,
+                            limit=50
+                        )
+                    else:
+                        # NewsAPI doesn't provide sentiment
+                        articles = await client.get_news(
+                            symbols=[symbol],
+                            from_date=start_date,
+                            to_date=end_date,
+                            limit=100
+                        )
+                        sentiments = []
+                    
+                    # Insert into database
+                    async for session in get_session():
+                        # Process sentiments (includes articles for AlphaVantage)
+                        for sentiment in sentiments:
+                            try:
+                                # Check if article already exists
+                                article = sentiment.article
+                                exists_query = select(NewsArticleModel).where(
+                                    NewsArticleModel.source == article.source,
+                                    NewsArticleModel.source_id == article.source_id
+                                )
+                                result = await session.execute(exists_query)
+                                existing_article = result.scalar_one_or_none()
+                                
+                                if not existing_article:
+                                    # Create article record
+                                    db_article = NewsArticleModel(
+                                        source_id=article.source_id,
+                                        source=article.source,
+                                        source_category=article.source_category.value,
+                                        author=article.author,
+                                        title=article.title,
+                                        description=article.description,
+                                        content=article.content,
+                                        url=str(article.url),
+                                        image_url=str(article.image_url) if article.image_url else None,
+                                        published_at=article.published_at,
+                                        fetched_at=article.fetched_at,
+                                        symbols=article.symbols,
+                                        entities=article.entities,
+                                        categories=[cat.value for cat in article.categories],
+                                        raw_data=article.raw_data
+                                    )
+                                    session.add(db_article)
+                                    await session.flush()
+                                    stats["articles"] += 1
+                                    article_id = db_article.id
+                                else:
+                                    article_id = existing_article.id
+                                
+                                # Check if sentiment already exists
+                                sentiment_exists = select(NewsSentimentModel).where(
+                                    NewsSentimentModel.article_id == article_id
+                                )
+                                result = await session.execute(sentiment_exists)
+                                if not result.scalar_one_or_none():
+                                    # Create sentiment record
+                                    overall = sentiment.overall_sentiment
+                                    db_sentiment = NewsSentimentModel(
+                                        article_id=article_id,
+                                        polarity=overall.polarity,
+                                        subjectivity=overall.subjectivity,
+                                        positive=overall.positive,
+                                        negative=overall.negative,
+                                        neutral=overall.neutral,
+                                        bullish=overall.bullish,
+                                        bearish=overall.bearish,
+                                        sentiment_model=sentiment.sentiment_model,
+                                        analyzed_at=sentiment.analyzed_at,
+                                        symbols=article.symbols,
+                                        relevance_score=sentiment.relevance_score,
+                                        impact_score=sentiment.impact_score,
+                                        is_breaking=sentiment.is_breaking,
+                                        is_rumor=sentiment.is_rumor,
+                                        requires_confirmation=sentiment.requires_confirmation,
+                                        sentiment_by_type={
+                                            st.value: {
+                                                "polarity": score.polarity,
+                                                "subjectivity": score.subjectivity,
+                                                "positive": score.positive,
+                                                "negative": score.negative,
+                                                "neutral": score.neutral
+                                            }
+                                            for st, score in sentiment.sentiment_scores.items()
+                                        }
+                                    )
+                                    session.add(db_sentiment)
+                                    stats["sentiments"] += 1
+                                
+                            except Exception as e:
+                                logger.error(f"Error inserting news/sentiment for {symbol}: {e}")
+                                stats["errors"] += 1
+                        
+                        # Process raw articles (NewsAPI)
+                        if provider.lower() == "newsapi":
+                            for article in articles:
+                                try:
+                                    # Check if already exists
+                                    exists_query = select(NewsArticleModel).where(
+                                        NewsArticleModel.source == article.source,
+                                        NewsArticleModel.url == str(article.url)
+                                    )
+                                    result = await session.execute(exists_query)
+                                    if result.scalar_one_or_none():
+                                        continue
+                                    
+                                    # Create article record
+                                    db_article = NewsArticleModel(
+                                        source_id=article.source_id,
+                                        source=article.source,
+                                        source_category=article.source_category.value,
+                                        author=article.author,
+                                        title=article.title,
+                                        description=article.description,
+                                        content=article.content,
+                                        url=str(article.url),
+                                        image_url=str(article.image_url) if article.image_url else None,
+                                        published_at=article.published_at,
+                                        fetched_at=article.fetched_at,
+                                        symbols=article.symbols,
+                                        entities=article.entities,
+                                        categories=[cat.value for cat in article.categories],
+                                        raw_data=article.raw_data
+                                    )
+                                    session.add(db_article)
+                                    stats["articles"] += 1
+                                    
+                                except Exception as e:
+                                    logger.error(f"Error inserting article: {e}")
+                                    stats["errors"] += 1
+                        
+                        await session.commit()
+                        
+                except Exception as e:
+                    logger.error(f"Error fetching news for {symbol}: {e}")
+                    stats["errors"] += 1
+                
+                # Delay to respect rate limits
+                if provider.lower() in ["alphavantage", "alpha_vantage", "av"]:
+                    await asyncio.sleep(12)  # 5 requests per minute
+                else:
+                    await asyncio.sleep(0.5)
+        
+        logger.info(f"\nInserted {stats['articles']} articles and {stats['sentiments']} sentiments")
+        return stats
+    
+    async def run_news_backfill(self, provider: str = "alphavantage", symbols: Optional[List[str]] = None):
+        """Run news sentiment backfill"""
+        logger.info("Starting news sentiment backfill")
+        
+        total_stats = {"articles": 0, "sentiments": 0, "errors": 0}
+        
+        # Run backfill
+        stats = await self.backfill_news_sentiment(
+            symbols=symbols,
+            days_back=30,
+            provider=provider
+        )
+        
+        total_stats["articles"] += stats["articles"]
+        total_stats["sentiments"] += stats["sentiments"]
+        total_stats["errors"] += stats["errors"]
+        
+        logger.info("\n=== News Backfill Summary ===")
+        logger.info(f"Articles inserted: {total_stats['articles']}")
+        logger.info(f"Sentiments analyzed: {total_stats['sentiments']}")
+        logger.info(f"Errors: {total_stats['errors']}")
+        
+        return total_stats
 
 
 async def main():
@@ -697,235 +897,92 @@ async def main():
     # Check if this is a scheduled run or manual
     if args.scheduled:
         # Scheduled run - just run without prompting
-        logger.info("Running scheduled daily backfill")
-        if args.quiet:
-            logger.setLevel("ERROR")
-        
-        # Run market data backfill
         await backfiller.run_daily_backfill()
-        
-        # Run economic data backfill for high priority indicators
-        await backfiller.run_economic_backfill()
-        
-        # Run event data backfill
-        await backfiller.run_event_backfill()
-    elif args.symbols:
-        # Backfill specific symbols
-        logger.info(f"Backfilling specific symbols: {args.symbols}")
-        for symbol in args.symbols:
-            stats = await backfiller.backfill_symbol(symbol, days_back=args.days)
-            logger.info(f"{symbol}: {stats}")
-    elif args.high_priority_only:
-        # Backfill only high priority symbols
-        logger.info("Backfilling high priority symbols only")
-        high_priority = Universe.get_high_priority_symbols()
-        for symbol in high_priority:
-            stats = await backfiller.backfill_symbol(symbol, days_back=args.days)
-            logger.info(f"{symbol}: {stats}")
     else:
         # Manual run - show menu
-        print("🚀 Tetra Trading Platform - Smart Data Backfill")
-        print("=" * 60)
-        print("\nMarket Data:")
-        print("- Uses yfinance for historical data (free, unlimited)")
-        print("- Uses Polygon for recent/real-time data (if available)")
-        print(f"- Total symbols: {len(Universe.get_all_symbols())} (ETFs: {len(Universe.get_all_etfs())}, Stocks: {len(Universe.get_all_stocks())}, Crypto: {len(Universe.CRYPTO_SYMBOLS)})")
+        print("\nTetra Data Backfill Utility")
+        print("===========================")
+        print("\nSelect data type to backfill:")
+        print("1. Market data (OHLCV)")
+        print("2. Economic indicators")
+        print("3. Event data (earnings, holidays, economic calendar)")
+        print("4. News sentiment data")
+        print("5. All data types")
+        print("6. Check current data coverage")
+        print("0. Exit")
         
-        print("\nEconomic Data:")
-        print("- Uses FRED for economic indicators")
-        print(f"- Total indicators: {len(EconomicIndicators.get_all_indicators())}")
-        
-        print("\nEvent Data:")
-        print("- Earnings calendar from Yahoo Finance")
-        print("- Market holidays and economic events")
-        print(f"- Tracking {len(EventCalendar.get_earnings_symbols())} symbols for earnings")
-        
-        print("\nOptions:")
-        print("1. Run full daily backfill (market + economic + events)")
-        print("2. Backfill specific market symbols")
-        print("3. Backfill economic indicators")
-        print("4. Backfill event data")
-        print("5. Show universe categories")
-        print("6. Check market data coverage")
-        print("7. Check economic data coverage")
-        print("8. Check event data coverage")
-        print("9. Exit")
-        
-        choice = input("\nSelect option (1-9): ")
+        choice = input("\nEnter choice (0-6): ").strip()
         
         if choice == "1":
-            # Run full backfill
+            # Market data
+            if args.symbols:
+                # Specific symbols
+                for symbol in args.symbols:
+                    await backfiller.backfill_symbol(symbol, days_back=args.days)
+            else:
+                # All symbols
+                await backfiller.run_daily_backfill()
+                
+        elif choice == "2":
+            # Economic data
+            await backfiller.run_economic_backfill()
+            
+        elif choice == "3":
+            # Event data
+            print("\nSelect event provider:")
+            print("1. Yahoo Finance (default)")
+            print("2. Polygon")
+            print("3. Finnhub")
+            provider_choice = input("Enter choice (1-3): ").strip()
+            
+            provider_map = {"1": "yahoo", "2": "polygon", "3": "finnhub"}
+            provider = provider_map.get(provider_choice, "yahoo")
+            
+            await backfiller.run_event_backfill(provider=provider)
+            
+        elif choice == "4":
+            # News sentiment
+            print("\nSelect news provider:")
+            print("1. Alpha Vantage (with sentiment)")
+            print("2. NewsAPI (raw news only)")
+            news_choice = input("Enter choice (1-2): ").strip()
+            
+            provider = "alphavantage" if news_choice == "1" else "newsapi"
+            await backfiller.run_news_backfill(provider=provider, symbols=args.symbols)
+            
+        elif choice == "5":
+            # All data
+            print("\nRunning full backfill (this may take a while)...")
             await backfiller.run_daily_backfill()
             await backfiller.run_economic_backfill()
             await backfiller.run_event_backfill()
-        
-        elif choice == "2":
-            symbols_input = input("Enter symbols (comma-separated): ")
-            symbols = [s.strip().upper() for s in symbols_input.split(",")]
+            await backfiller.run_news_backfill()
             
-            for symbol in symbols:
-                print(f"\nBackfilling {symbol}...")
-                stats = await backfiller.backfill_symbol(symbol, days_back=3650)  # 10 years
-                print(f"Results: {stats}")
-        
-        elif choice == "3":
-            # Backfill economic indicators
-            print("\nEconomic indicator options:")
-            print("1. Backfill high priority indicators")
-            print("2. Backfill ALL indicators (60 indicators)")
-            print("3. Backfill specific indicators")
-            print("4. Show all available indicators")
-            
-            sub_choice = input("\nSelect option (1-4): ")
-            
-            if sub_choice == "1":
-                await backfiller.run_economic_backfill()
-            elif sub_choice == "2":
-                # Backfill ALL indicators
-                all_indicators = EconomicIndicators.get_all_indicators()
-                all_symbols = [ind[0] for ind in all_indicators]
-                print(f"\nStarting backfill for ALL {len(all_symbols)} economic indicators...")
-                print("This may take a while due to rate limits...")
-                await backfiller.run_economic_backfill(indicators=all_symbols)
-            elif sub_choice == "3":
-                symbols_input = input("Enter FRED symbols (comma-separated, e.g., DFF,DGS10,CPIAUCSL): ")
-                symbols = [s.strip().upper() for s in symbols_input.split(",")]
-                await backfiller.run_economic_backfill(indicators=symbols)
-            elif sub_choice == "4":
-                categories = EconomicIndicators.get_indicators_by_category()
-                for category, indicators in categories.items():
-                    print(f"\n{category.upper()} ({len(indicators)} indicators):")
-                    for symbol, name, freq in indicators[:5]:
-                        print(f"  {symbol}: {name} ({freq.value})")
-                    if len(indicators) > 5:
-                        print(f"  ... and {len(indicators) - 5} more")
-        
-        elif choice == "4":
-            # Backfill event data
-            print("\nEvent data options:")
-            print("1. Backfill earnings events")
-            print("2. Backfill market holidays")
-            print("3. Backfill economic calendar (Finnhub)")
-            print("4. Backfill all event types")
-            
-            sub_choice = input("\nSelect option (1-4): ")
-            
-            # Ask for provider for earnings events
-            provider = "yahoo"
-            if sub_choice in ["1", "4"]:
-                print("\nSelect provider for earnings events:")
-                print("1. Yahoo Finance (limited)")
-                print("2. Polygon")
-                print("3. Finnhub")
-                provider_choice = input("\nSelect provider (1-3): ")
-                if provider_choice == "2":
-                    provider = "polygon"
-                elif provider_choice == "3":
-                    provider = "finnhub"
-            
-            if sub_choice == "1":
-                await backfiller.run_event_backfill(event_types=["earnings"], provider=provider)
-            elif sub_choice == "2":
-                await backfiller.run_event_backfill(event_types=["holidays"])
-            elif sub_choice == "3":
-                await backfiller.run_event_backfill(event_types=["economic_calendar"])
-            elif sub_choice == "4":
-                await backfiller.run_event_backfill(provider=provider)
-        
-        elif choice == "5":
-            # Show universe categories
-            categories = Universe.get_universe_by_category()
-            for category, symbols in categories.items():
-                print(f"\n{category.upper()} ({len(symbols)} symbols):")
-                print(", ".join(sorted(symbols[:10])), "..." if len(symbols) > 10 else "")
-        
         elif choice == "6":
-            # Check market data coverage
-            print("\nChecking market data coverage...")
+            # Check coverage
             coverage = await backfiller.check_data_coverage()
-            
-            print(f"\nTotal symbols in database: {coverage['total_symbols']}")
+            print(f"\nData Coverage Summary:")
+            print(f"Total symbols: {coverage['total_symbols']}")
             print(f"Total records: {coverage['total_records']:,}")
-            print("-" * 80)
-            print(f"{'Symbol':<10} {'Records':<10} {'Earliest':<20} {'Latest':<20} {'Days':<10}")
-            print("-" * 80)
+            print("\nTop 10 symbols by record count:")
             
-            for symbol, data in sorted(coverage['symbols'].items()):
-                print(f"{symbol:<10} {data['records']:<10} {str(data['earliest'])[:10]:<20} {str(data['latest'])[:10]:<20} {data['days']:<10}")
+            sorted_symbols = sorted(
+                coverage['symbols'].items(), 
+                key=lambda x: x[1]['records'], 
+                reverse=True
+            )[:10]
             
-            if not coverage['symbols']:
-                print("No data found in database. Run backfill to populate data.")
+            for symbol, data in sorted_symbols:
+                print(f"  {symbol}: {data['records']:,} records, "
+                      f"{data['days']} days, "
+                      f"{data['earliest'].strftime('%Y-%m-%d') if data['earliest'] else 'N/A'} to "
+                      f"{data['latest'].strftime('%Y-%m-%d') if data['latest'] else 'N/A'}")
         
-        elif choice == "7":
-            # Check economic data coverage
-            print("\nChecking economic data coverage...")
-            
-            async for session in get_session():
-                # Get summary statistics
-                query = select(
-                    EconomicDataModel.symbol,
-                    func.count(EconomicDataModel.id).label('record_count'),
-                    func.min(EconomicDataModel.date).label('earliest_date'),
-                    func.max(EconomicDataModel.date).label('latest_date')
-                ).group_by(EconomicDataModel.symbol).order_by(EconomicDataModel.symbol)
-                
-                result = await session.execute(query)
-                data = result.all()
-                
-                if data:
-                    print(f"\nTotal indicators in database: {len(data)}")
-                    print("-" * 80)
-                    print(f"{'Symbol':<15} {'Records':<10} {'Earliest':<20} {'Latest':<20}")
-                    print("-" * 80)
-                    
-                    for row in data:
-                        print(f"{row.symbol:<15} {row.record_count:<10} {str(row.earliest_date)[:10]:<20} {str(row.latest_date)[:10]:<20}")
-                else:
-                    print("No economic data found. Run economic backfill to populate data.")
-        
-        elif choice == "8":
-            # Check event data coverage
-            print("\nChecking event data coverage...")
-            
-            async for session in get_session():
-                # Get summary statistics
-                query = select(
-                    EventDataModel.event_type,
-                    func.count(EventDataModel.id).label('event_count'),
-                    func.min(EventDataModel.event_datetime).label('earliest_date'),
-                    func.max(EventDataModel.event_datetime).label('latest_date')
-                ).group_by(EventDataModel.event_type).order_by(EventDataModel.event_type)
-                
-                result = await session.execute(query)
-                data = result.all()
-                
-                # Get total events
-                total_query = select(func.count(EventDataModel.id))
-                total_result = await session.execute(total_query)
-                total_events = total_result.scalar()
-                
-                if data:
-                    print(f"\nTotal events in database: {total_events}")
-                    print("-" * 80)
-                    print(f"{'Event Type':<20} {'Count':<10} {'Earliest':<20} {'Latest':<20}")
-                    print("-" * 80)
-                    
-                    for row in data:
-                        print(f"{row.event_type:<20} {row.event_count:<10} {str(row.earliest_date)[:19]:<20} {str(row.latest_date)[:19]:<20}")
-                else:
-                    print("No event data found. Run event backfill to populate data.")
-        
-        else:
+        elif choice == "0":
             print("Exiting...")
+        else:
+            print("Invalid choice")
 
 
 if __name__ == "__main__":
-    # Install yfinance if needed
-    try:
-        import yfinance
-    except ImportError:
-        print("Installing yfinance...")
-        import subprocess
-        subprocess.run([sys.executable, "-m", "pip", "install", "yfinance"], check=True)
-    
     asyncio.run(main())
