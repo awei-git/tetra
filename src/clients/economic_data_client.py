@@ -67,13 +67,14 @@ class FREDProvider(BaseAPIClient):
     
     async def __aenter__(self):
         """Async context manager entry"""
+        await super().__aenter__()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
-        await self.close()
+        await super().__aexit__(exc_type, exc_val, exc_tb)
     
-    async def _request(self, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _make_fred_request(self, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make a request to FRED API"""
         if params is None:
             params = {}
@@ -82,16 +83,8 @@ class FREDProvider(BaseAPIClient):
         params["api_key"] = self.api_key
         params["file_type"] = "json"
         
-        url = f"{self.base_url}/{endpoint}"
-        
-        async with self.rate_limiter:
-            try:
-                response = await self.client.get(url, params=params)
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPError as e:
-                logger.error(f"FRED API error: {e}")
-                raise
+        # Use the base class's get method
+        return await self.get(endpoint, params=params)
     
     async def get_indicator_data(
         self,
@@ -109,7 +102,7 @@ class FREDProvider(BaseAPIClient):
         if to_date:
             params["observation_end"] = to_date.isoformat()
         
-        data = await self._request(endpoint, params)
+        data = await self._make_fred_request(endpoint, params)
         
         observations = []
         for obs in data["observations"]:
