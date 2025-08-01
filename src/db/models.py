@@ -288,3 +288,110 @@ class EconomicForecastModel(Base):
     source = Column(String(100), nullable=False)  # e.g., "Fed", "Bloomberg Consensus", "Reuters Poll"
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+# Event Data Models
+class EventDataModel(Base):
+    """Base event data storage"""
+    __tablename__ = "event_data"
+    __table_args__ = (
+        Index("idx_event_datetime", "event_datetime"),
+        Index("idx_event_type_datetime", "event_type", "event_datetime"),
+        Index("idx_symbol_datetime", "symbol", "event_datetime"),
+        Index("idx_currency_datetime", "currency", "event_datetime"),
+        UniqueConstraint("source", "source_id", name="uq_source_event"),
+        {"schema": "events"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Event identification
+    event_type = Column(String(50), nullable=False)
+    event_datetime = Column(DateTime(timezone=True), nullable=False)
+    event_name = Column(String(500), nullable=False)
+    description = Column(Text)
+    
+    # Impact and status
+    impact = Column(Integer, nullable=False, default=2)  # 1=Low, 2=Medium, 3=High, 4=Critical
+    status = Column(String(20), nullable=False, default="scheduled")
+    
+    # Related entities
+    symbol = Column(String(50))  # For company-specific events
+    currency = Column(String(10))  # For economic events
+    country = Column(String(10))  # Country code
+    
+    # Source information
+    source = Column(String(100), nullable=False)
+    source_id = Column(String(255))  # ID in source system
+    
+    # JSON field for type-specific data
+    event_data = Column(JSON, nullable=False, default={})
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class EconomicEventModel(Base):
+    """Economic event specific data"""
+    __tablename__ = "economic_events"
+    __table_args__ = (
+        Index("idx_econ_event_id", "event_id"),
+        Index("idx_econ_datetime", "event_datetime"),
+        {"schema": "events"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.event_data.id"), nullable=False)
+    
+    # Copy key fields for faster queries
+    event_datetime = Column(DateTime(timezone=True), nullable=False)
+    currency = Column(String(10))
+    
+    # Economic data
+    actual = Column(Numeric(20, 8))
+    forecast = Column(Numeric(20, 8))
+    previous = Column(Numeric(20, 8))
+    revised = Column(Numeric(20, 8))
+    
+    # Additional context
+    unit = Column(String(50))  # %, billions, etc.
+    frequency = Column(String(50))  # monthly, quarterly
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class EarningsEventModel(Base):
+    """Earnings event specific data"""
+    __tablename__ = "earnings_events"
+    __table_args__ = (
+        Index("idx_earn_event_id", "event_id"),
+        Index("idx_earn_symbol_datetime", "symbol", "event_datetime"),
+        {"schema": "events"}
+    )
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.event_data.id"), nullable=False)
+    
+    # Copy key fields for faster queries
+    symbol = Column(String(50), nullable=False)
+    event_datetime = Column(DateTime(timezone=True), nullable=False)
+    
+    # Earnings data
+    eps_actual = Column(Numeric(20, 8))
+    eps_estimate = Column(Numeric(20, 8))
+    eps_surprise = Column(Numeric(20, 8))
+    eps_surprise_pct = Column(Numeric(20, 8))
+    
+    # Revenue data
+    revenue_actual = Column(Numeric(20, 8))
+    revenue_estimate = Column(Numeric(20, 8))
+    revenue_surprise = Column(Numeric(20, 8))
+    revenue_surprise_pct = Column(Numeric(20, 8))
+    
+    # Additional info
+    guidance = Column(Text)
+    call_time = Column(String(10))  # BMO, AMC
+    fiscal_period = Column(String(20))  # Q1 2024, FY 2024
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
