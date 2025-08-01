@@ -127,6 +127,10 @@ class Settings(BaseSettings):
         return self._secrets.get("api_keys", {}).get("fred")
     
     @property
+    def alphavantage_api_key(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("alphavantage")
+    
+    @property
     def openai_api_key(self) -> Optional[str]:
         return self._secrets.get("api_keys", {}).get("openai", {}).get("api_key")
     
