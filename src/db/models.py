@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
 from .base import Base
-from ..models.events import EventType
+from ..models.event_data import EventType
 from ..models.derived import IndicatorType, SignalType
 
 

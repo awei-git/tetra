@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import List, Optional
 
 from src.db.base import get_session
-from src.db.models import EventModel
-from src.models.events import EconomicEvent, SecurityEvent, GeopoliticalEvent, EventType
+from src.db.models import EventDataModel, EarningsEventModel, EconomicEventModel
+from src.models.event_data import EventType, EventImpact, EventStatus
 from src.utils.logging import logger
 
 router = APIRouter()
@@ -36,20 +36,20 @@ async def get_events(
     """
     try:
         # Build query
-        query = select(EventModel)
+        query = select(EventDataModel)
         
         # Add filters
         filters = []
         if event_type:
-            filters.append(EventModel.event_type == event_type)
+            filters.append(EventDataModel.event_type == event_type.value)
         if start_date:
-            filters.append(EventModel.timestamp >= start_date)
+            filters.append(EventDataModel.event_datetime >= start_date)
         if end_date:
-            filters.append(EventModel.timestamp <= end_date)
+            filters.append(EventDataModel.event_datetime <= end_date)
         if impact_level:
-            filters.append(EventModel.impact_level == impact_level)
+            filters.append(EventDataModel.impact == EventImpact[impact_level.upper()].value)
         if processed is not None:
-            filters.append(EventModel.processed == processed)
+            # EventDataModel doesn't have processed field
         
         if filters:
             query = query.where(and_(*filters))
@@ -57,40 +57,41 @@ async def get_events(
         # Filter by symbol if provided
         if symbol:
             query = query.where(
-                EventModel.affected_symbols.contains([symbol.upper()])
+                EventDataModel.symbol == symbol.upper()
             )
         
         # Order by timestamp descending and limit
-        query = query.order_by(EventModel.timestamp.desc()).limit(limit)
+        query = query.order_by(EventDataModel.event_datetime.desc()).limit(limit)
         
         # Execute query
         result = await db.execute(query)
         events = result.scalars().all()
         
-        # Convert to appropriate event types
+        # Convert to response format
         event_list = []
         for event in events:
-            event_data = {
+            event_dict = {
                 "id": str(event.id),
-                "event_type": event.event_type.value,
-                "timestamp": event.timestamp.isoformat(),
-                "title": event.title,
+                "event_type": event.event_type,
+                "event_datetime": event.event_datetime.isoformat(),
+                "event_name": event.event_name,
                 "description": event.description,
-                "impact_level": event.impact_level,
-                "affected_symbols": event.affected_symbols,
-                "affected_sectors": event.affected_sectors,
+                "impact": event.impact,
+                "status": event.status,
+                "symbol": event.symbol,
+                "currency": event.currency,
+                "country": event.country,
                 "source": event.source,
-                "source_url": event.source_url,
-                "processed": event.processed,
-                "processing_notes": event.processing_notes,
+                "source_id": event.source_id,
                 "created_at": event.created_at.isoformat(),
+                "updated_at": event.updated_at.isoformat(),
             }
             
-            # Add type-specific data
+            # Add type-specific data from JSON field
             if event.event_data:
-                event_data.update(event.event_data)
+                event_dict["event_data"] = event.event_data
             
-            event_list.append(event_data)
+            event_list.append(event_dict)
         
         return event_list
         
