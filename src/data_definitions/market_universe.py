@@ -4,7 +4,7 @@ from typing import List, Dict, Set
 from datetime import datetime, date
 
 
-class Universe:
+class MarketUniverse:
     """Central definition of trading universe"""
     
     # Major Index ETFs
@@ -99,6 +99,17 @@ class Universe:
         "AMT",   # American Tower
         "CCI",   # Crown Castle
         "PLD",   # Prologis (Warehouses)
+    ]
+    
+    # Volatility Index ETFs/ETNs
+    VOLATILITY_ETFS = [
+        "VXX",   # iPath S&P 500 VIX Short-Term Futures ETN
+        "VIXY",  # ProShares VIX Short-Term Futures ETF
+        "UVXY",  # ProShares Ultra VIX Short-Term Futures ETF (1.5x)
+        "SVXY",  # ProShares Short VIX Short-Term Futures ETF (-0.5x)
+        "VXZ",   # iPath S&P 500 VIX Mid-Term Futures ETN
+        "VIXM",  # ProShares VIX Mid-Term Futures ETF
+        "VIIX",  # VelocityShares VIX Short-Term ETN
     ]
     
     # Large Cap Stocks (Top 30)
@@ -223,7 +234,8 @@ class Universe:
             cls.BOND_ETFS + 
             cls.COMMODITY_ETFS + 
             cls.THEMATIC_ETFS + 
-            cls.REIT_ETFS
+            cls.REIT_ETFS +
+            cls.VOLATILITY_ETFS
         ))
     
     @classmethod
@@ -268,6 +280,7 @@ class Universe:
             "commodity_etfs": cls.COMMODITY_ETFS,
             "thematic_etfs": cls.THEMATIC_ETFS,
             "reit_etfs": cls.REIT_ETFS,
+            "volatility_etfs": cls.VOLATILITY_ETFS,
             "large_cap_stocks": cls.LARGE_CAP_STOCKS,
             "quantum_computing": cls.QUANTUM_COMPUTING_STOCKS,
             "defense": cls.MILITARY_DEFENSE_STOCKS,

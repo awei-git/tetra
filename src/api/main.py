@@ -8,7 +8,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config import settings
-from src.api.routers import market_data, events, health
+from src.api.routers import market_data, events, event_data, health
 from src.utils.logging import setup_logging
 
 
@@ -46,7 +46,8 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
 app.include_router(market_data.router, prefix="/api/v1/market-data", tags=["market-data"])
-app.include_router(events.router, prefix="/api/v1/events", tags=["events"])
+app.include_router(events.router, prefix="/api/v1/events", tags=["events"])  # Old events API (to be deprecated)
+app.include_router(event_data.router, prefix="/api/v1/event-data", tags=["event-data"])  # New event data API
 
 
 @app.get("/")

@@ -1,7 +1,7 @@
 """Test the universe module"""
 
 import pytest
-from src.universe import Universe
+from src.data_definitions.market_universe import MarketUniverse as Universe
 
 
 class TestUniverse:
@@ -121,7 +121,7 @@ class TestUniverse:
         expected_categories = [
             "index_etfs", "sector_etfs", "international_etfs",
             "bond_etfs", "commodity_etfs", "thematic_etfs",
-            "reit_etfs", "large_cap_stocks", "quantum_computing",
+            "reit_etfs", "volatility_etfs", "large_cap_stocks", "quantum_computing",
             "defense", "ai_infrastructure", "consumer",
             "crypto_stocks", "crypto"
         ]
