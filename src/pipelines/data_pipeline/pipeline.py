@@ -162,7 +162,8 @@ class DataPipeline(Pipeline):
         logger.info(f"=== {mode.title()} Pipeline Summary ===")
         logger.info(f"Status: {context.status}")
         logger.info(f"Duration: {context.metrics.get('duration_seconds', 0):.2f} seconds")
-        logger.info(f"Symbols processed: {len(context.data.get('symbols', []))}")
+        symbols = context.data.get('symbols') or []
+        logger.info(f"Symbols processed: {len(symbols)}")
         
         # Report record counts
         total_records = 0
@@ -190,6 +191,14 @@ class DataPipeline(Pipeline):
                 logger.warning(
                     f"Missing data for symbols: {quality_checks['missing_symbols']}"
                 )
+            
+            # Display coverage summary
+            coverage = quality_checks.get("coverage", {})
+            if coverage:
+                logger.info("\n=== Data Coverage Summary ===")
+                for data_type, stats in coverage.items():
+                    if stats:
+                        logger.info(f"{data_type}: {stats}")
                 
         # Errors summary
         if context.errors:

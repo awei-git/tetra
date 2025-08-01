@@ -1,6 +1,6 @@
 """Economic data pipeline step"""
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from typing import Dict, Any
 import asyncio
 
@@ -8,6 +8,9 @@ from src.pipelines.base import PipelineStep, PipelineContext
 from src.clients.economic_data_client import EconomicDataClient
 from src.data_definitions.economic_indicators import EconomicIndicators
 from src.utils.logging import logger
+from src.db.base import get_session
+from src.db.models import EconomicDataModel
+from sqlalchemy.dialects.postgresql import insert
 
 
 class EconomicDataStep(PipelineStep[Dict[str, Any]]):
@@ -58,6 +61,12 @@ class EconomicDataStep(PipelineStep[Dict[str, Any]]):
                     )
                     count = len(data) if data else 0
                     
+                    # Save to database if we have data
+                    if data:
+                        async for db in get_session():
+                            await self._save_economic_data(data, db)
+                            break
+                    
                     results["success"][indicator] = count
                     results["total_records"] += count
                     
@@ -81,3 +90,34 @@ class EconomicDataStep(PipelineStep[Dict[str, Any]]):
         )
         
         return results
+    
+    async def _save_economic_data(self, data, db):
+        """Save economic data to database with upsert logic"""
+        try:
+            # Prepare values for insert
+            values = []
+            for item in data:
+                values.append({
+                    "symbol": item.symbol,
+                    "date": item.date,
+                    "value": item.value,
+                    "source": item.source,
+                })
+            
+            # Use PostgreSQL upsert
+            stmt = insert(EconomicDataModel).values(values)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_econ_symbol_date",
+                set_={
+                    "value": stmt.excluded.value,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
+            
+            await db.execute(stmt)
+            await db.commit()
+            
+        except Exception as e:
+            logger.error(f"Error saving economic data: {e}")
+            await db.rollback()
+            raise

@@ -334,7 +334,7 @@ class TestPolygonEventProvider:
                 # Verify API call
                 mock_get.assert_called_once()
                 call_args = mock_get.call_args
-                assert "/v2/reference/financials" in call_args[0][0]
+                assert "/v3/reference/financials" in call_args[0][0]
     
     @pytest.mark.asyncio
     async def test_get_market_holidays(self):
