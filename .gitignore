@@ -78,3 +78,6 @@ models/
 
 # Kafka
 kafka-logs/
+
+# Sketch folder for temporary scripts
+sketch/
