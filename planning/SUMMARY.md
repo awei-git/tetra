@@ -8,7 +8,9 @@ Build a comprehensive quantitative trading platform that combines data ingestion
 - [Data Pipeline](DATA_PIPELINE.md) 
 - [Web GUI & Monitoring](WEBGUI.md)
 - [Market Simulator](SIMULATOR.md)
-- [Trading Strategies](STRATEGY.md)
+- [Signals Module](SIGNALS.md)
+- [Trading Strategies](STRATEGIES.md)
+- [Performance Assessment](PERFORMANCE.md)
 - [Machine Learning](ML_MODELS.md)
 - [Reporting System](REPORTING.md)
 - [Trade Execution](EXECUTION.md)
@@ -30,19 +32,21 @@ Build a comprehensive quantitative trading platform that combines data ingestion
 | **Web Dashboard** | Vue.js monitoring interface | • Coverage visualization<br>• Real-time updates<br>• WebSocket support |
 | **LLM Chat** | Natural language SQL queries | • GPT-4 integration<br>• Schema-aware<br>• Safe query execution |
 | **Automation** | Daily pipeline scheduling | • macOS launchd<br>• Error handling<br>• Logging |
+| **Historical Simulator** | Market replay engine | • Event periods defined<br>• Portfolio tracking<br>• Corporate actions |
 
 ### 🚧 In Progress
 
 | Component | Description | Current Status |
 |-----------|-------------|----------------|
-| **Historical Simulator** | Replay market conditions | Design phase - architecture planned |
-| **Strategy Engine** | Trading strategy framework | Requirements gathering |
-| **ML Models** | Predictive analytics | Data preparation phase |
+| **Signals Module** | Compute technical/statistical/ML signals | Architecture designed - ready for implementation |
+| **Strategies Module** | Trading strategy framework | Architecture designed - ready for implementation |
+| **Performance Module** | Backtesting and metrics | Architecture designed - ready for implementation |
 
 ### 📋 Planned Components
 
 | Component | Description | Priority |
 |-----------|-------------|----------|
+| **ML Models** | Predictive analytics integration | High |
 | **Stochastic Simulator** | Monte Carlo simulations | High |
 | **Event Simulator** | Market shock modeling | High |
 | **Risk Management** | Portfolio risk analytics | High |
@@ -116,10 +120,11 @@ Build a comprehensive quantitative trading platform that combines data ingestion
 - LLM chat integration
 
 ### Phase 2: Simulation & Strategy (Current 🚧)
-- Historical market simulator
-- Trading strategy framework
-- Backtesting engine
-- Performance analytics
+- Historical market simulator ✅
+- Signals computation module 🚧
+- Trading strategy framework 🚧
+- Backtesting engine 🚧
+- Performance analytics 🚧
 
 ### Phase 3: Intelligence (Q3 2025)
 - ML prediction models

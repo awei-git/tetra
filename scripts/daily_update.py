@@ -14,6 +14,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.ingestion.data_ingester import DataIngester
 from src.data_definitions.market_universe import MarketUniverse
+from src.simulators.utils.trading_calendar import TradingCalendar
 from src.utils.logging import logger
 
 
@@ -22,15 +23,25 @@ async def run_daily_update():
     logger.info("=== Starting Daily Market Data Update ===")
     logger.info(f"Time: {datetime.now()}")
     
+    # Initialize trading calendar
+    calendar = TradingCalendar()
+    today = datetime.now().date()
+    
+    # Check if today is a trading day
+    if not calendar.is_trading_day(today):
+        logger.info(f"Today ({today}) is not a trading day. Checking for previous trading day data...")
+        end_date = calendar.previous_trading_day(today)
+    else:
+        end_date = today
+    
+    logger.info(f"Target date for data: {end_date}")
+    
     # Get symbols to update
     symbols = MarketUniverse.get_all_symbols()
     logger.info(f"Updating {len(symbols)} symbols")
     
     # Initialize data ingester with polygon (primary provider)
     ingester = DataIngester(provider="polygon")
-    
-    # Set date range - we'll check each symbol's last data point
-    end_date = datetime.now().date()
     
     # First, identify symbols with gaps or missing recent data
     from src.db.base import get_session
@@ -59,25 +70,38 @@ async def run_daily_update():
     for symbol in symbols:
         if symbol in symbol_dates:
             last_date = symbol_dates[symbol]
-            days_behind = (end_date - last_date).days
+            # Count trading days, not calendar days
+            trading_days_behind = calendar.count_trading_days(last_date, end_date) - 1
             
-            # Group by days behind: 0-3, 4-10, 11-30, 31+
-            if days_behind <= 3:
+            # Group by trading days behind
+            if trading_days_behind <= 0:
+                range_key = "current"
+                start_date = end_date
+            elif trading_days_behind <= 3:
                 range_key = "recent"
-                start_date = last_date
-            elif days_behind <= 10:
+                start_date = calendar.next_trading_day(last_date)
+            elif trading_days_behind <= 10:
                 range_key = "week_old"
-                start_date = last_date
-            elif days_behind <= 30:
+                start_date = calendar.next_trading_day(last_date)
+            elif trading_days_behind <= 30:
                 range_key = "month_old"
-                start_date = end_date - timedelta(days=30)
+                # Get start date that's ~30 trading days back
+                start_date = last_date
+                for _ in range(min(30, trading_days_behind)):
+                    start_date = calendar.previous_trading_day(start_date)
             else:
                 range_key = "very_old"
-                start_date = end_date - timedelta(days=90)
+                # Get start date that's ~90 trading days back
+                start_date = end_date
+                for _ in range(90):
+                    start_date = calendar.previous_trading_day(start_date)
         else:
-            # No data for this symbol - fetch 1 year
+            # No data for this symbol - fetch 1 year of trading days
             range_key = "missing"
-            start_date = end_date - timedelta(days=365)
+            start_date = end_date
+            # Go back ~252 trading days (1 year)
+            for _ in range(252):
+                start_date = calendar.previous_trading_day(start_date)
         
         if range_key not in symbols_by_range:
             symbols_by_range[range_key] = []
@@ -172,11 +196,32 @@ async def run_daily_update():
     
     logger.info(f"Final total records: {total_records}")
     
+    # Update economic data (can run on any day including weekends)
+    logger.info("\n=== Updating Economic Data ===")
+    try:
+        from src.pipelines.data_pipeline.steps.economic_data import EconomicDataStep
+        from src.pipelines.base import PipelineContext
+        
+        econ_step = EconomicDataStep()
+        context = PipelineContext(data={
+            "mode": "daily",
+            "start_date": datetime.now().date() - timedelta(days=7),
+            "end_date": datetime.now().date()
+        })
+        
+        econ_result = await econ_step.execute(context)
+        econ_records = econ_result.get("total_records", 0)
+        logger.info(f"Economic data update complete: {econ_records} new records")
+        
+    except Exception as e:
+        logger.error(f"Economic data update failed: {e}")
+    
     return {
         "total_records": total_records,
         "symbols_processed": len(symbols) - len(failed_symbols),
         "symbols_failed": len(failed_symbols),
-        "date": end_date.isoformat()
+        "date": end_date.isoformat(),
+        "is_trading_day": calendar.is_trading_day(today)
     }
 
 

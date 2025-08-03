@@ -1,0 +1,54 @@
+{
+  "name": "ml_focused",
+  "description": "Configuration focused on machine learning signals",
+  "created_at": "2024-01-01T00:00:00",
+  "tags": ["ml", "ai", "predictive"],
+  "config": {
+    "compute_technical": true,
+    "compute_statistical": true,
+    "compute_ml": true,
+    "technical_signals": [
+      "rsi_14",
+      "macd",
+      "bb_20",
+      "atr_14",
+      "obv",
+      "mfi_14"
+    ],
+    "statistical_signals": [
+      "returns",
+      "volatility",
+      "correlation",
+      "beta",
+      "sharpe_ratio"
+    ],
+    "ml_signals": [
+      "rf_classifier",
+      "xgb_regressor",
+      "lstm_predictor",
+      "isolation_forest",
+      "kmeans_cluster"
+    ],
+    "ml_feature_window": 30,
+    "ml_prediction_horizon": 10,
+    "ml_min_train_samples": 1500,
+    "ml_retrain_frequency": 30,
+    "ml_confidence_threshold": 0.65,
+    "returns_periods": [1, 5, 10, 20],
+    "volatility_window": 30,
+    "correlation_window": 90,
+    "parallel_compute": true,
+    "cache_results": true,
+    "batch_size": 5000,
+    "min_data_points": 1000,
+    "custom_params": {
+      "rf_n_estimators": 100,
+      "rf_max_depth": 10,
+      "xgb_n_estimators": 100,
+      "xgb_learning_rate": 0.1,
+      "lstm_epochs": 50,
+      "lstm_batch_size": 32,
+      "kmeans_n_clusters": 5
+    }
+  }
+}

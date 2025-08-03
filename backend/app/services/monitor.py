@@ -1,6 +1,8 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, date, timedelta
+import os
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -454,3 +456,184 @@ class MonitorService:
             return "fair"
         else:
             return "poor"
+    
+    async def get_daily_update_summary(self) -> Dict[str, Any]:
+        """Get summary of the most recent daily update from pipeline logs"""
+        summary = {
+            "last_run": None,
+            "status": "unknown",
+            "duration": None,
+            "records_processed": 0,
+            "symbols_updated": 0,
+            "errors": [],
+            "details": {}
+        }
+        
+        # Try to read from pipeline log file
+        log_path = "/Users/angwei/Repos/tetra/logs/launchd_pipeline_out.log"
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r') as f:
+                    lines = f.readlines()
+                    
+                # Parse log lines to extract summary info
+                last_run_found = False
+                pipeline_start_time = None
+                
+                # First pass: find the most recent pipeline start
+                for i in range(len(lines) - 1, max(-1, len(lines) - 500), -1):
+                    line = lines[i].strip()
+                    
+                    if "Starting daily data pipeline" in line:
+                        match = re.search(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', line)
+                        if match and not pipeline_start_time:
+                            pipeline_start_time = match.group(1)
+                            summary["last_run"] = pipeline_start_time
+                            break
+                
+                # Second pass: look for completion/failure after the start time
+                if pipeline_start_time:
+                    start_idx = None
+                    for i in range(len(lines) - 500, len(lines)):
+                        line = lines[i].strip()
+                        if pipeline_start_time in line and "Starting daily data pipeline" in line:
+                            start_idx = i
+                            break
+                    
+                    if start_idx is not None:
+                        # Look for completion or failure after this point
+                        for i in range(start_idx, len(lines)):
+                            line = lines[i].strip()
+                            
+                            # Look for completion status
+                            if "Daily pipeline completed" in line or "Daily update completed" in line:
+                                summary["status"] = "success"
+                                # Extract duration if available
+                                duration_match = re.search(r'Duration: ([\d.]+)s', line)
+                                if duration_match:
+                                    summary["duration"] = float(duration_match.group(1))
+                            
+                            # Look for failure
+                            elif "Daily update failed" in line:
+                                summary["status"] = "failed"
+                                error_match = re.search(r'exit code: (\d+)', line)
+                                if error_match:
+                                    summary["errors"].append(f"Exit code: {error_match.group(1)}")
+                            
+                            # Look for ModuleNotFoundError
+                            elif "ModuleNotFoundError" in line:
+                                summary["status"] = "failed"
+                                summary["errors"].append(line)
+                            
+                            # Extract metrics
+                            elif "Total records processed:" in line:
+                                records_match = re.search(r'Total records processed: (\d+)', line)
+                                if records_match:
+                                    summary["records_processed"] = int(records_match.group(1))
+                            
+                            elif "Symbols processed:" in line:
+                                symbols_match = re.search(r'Symbols processed: (\d+)', line)
+                                if symbols_match:
+                                    summary["symbols_updated"] = int(symbols_match.group(1))
+                            
+                            # Look for specific data type updates
+                            elif "Market Data:" in line and "symbols," in line:
+                                match = re.search(r'(\d+) symbols, ([\d,]+) records', line)
+                                if match:
+                                    summary["details"]["market_data"] = {
+                                        "symbols": int(match.group(1)),
+                                        "records": int(match.group(2).replace(',', ''))
+                                    }
+                            
+                            elif "Economic Data:" in line and "indicators successful" in line:
+                                match = re.search(r'(\d+) indicators successful', line)
+                                if match:
+                                    summary["details"]["economic_data"] = {
+                                        "indicators": int(match.group(1))
+                                    }
+                            
+                            elif "News:" in line and "articles" in line:
+                                match = re.search(r'(\d+) articles', line)
+                                if match:
+                                    summary["details"]["news"] = {
+                                        "articles": int(match.group(1))
+                                    }
+                
+                # If we couldn't find recent run info in logs, check database
+                if not summary["last_run"]:
+                    summary = await self._get_summary_from_db(summary)
+                    
+            except Exception as e:
+                logger.error(f"Error reading pipeline log: {e}")
+                # Fall back to database query
+                summary = await self._get_summary_from_db(summary)
+        else:
+            # No log file, use database
+            summary = await self._get_summary_from_db(summary)
+        
+        return summary
+    
+    async def _get_summary_from_db(self, summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Get daily update summary from database if log parsing fails"""
+        try:
+            # Check recent data updates
+            query = """
+                WITH recent_updates AS (
+                    SELECT 
+                        'Market Data' as data_type,
+                        COUNT(DISTINCT symbol) as symbols,
+                        COUNT(*) as records,
+                        MAX(created_at) as last_update
+                    FROM market_data.ohlcv
+                    WHERE created_at >= CURRENT_DATE - INTERVAL '2 days'
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        'Economic Data' as data_type,
+                        COUNT(DISTINCT symbol) as symbols,
+                        COUNT(*) as records,
+                        MAX(created_at) as last_update
+                    FROM economic_data.economic_data
+                    WHERE created_at >= CURRENT_DATE - INTERVAL '2 days'
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        'News' as data_type,
+                        COUNT(DISTINCT source) as symbols,
+                        COUNT(*) as records,
+                        MAX(created_at) as last_update
+                    FROM news.news_articles
+                    WHERE created_at >= CURRENT_DATE - INTERVAL '2 days'
+                )
+                SELECT * FROM recent_updates
+                ORDER BY last_update DESC
+            """
+            
+            rows = await self.db.fetch(query)
+            
+            if rows:
+                # Use the most recent update time
+                summary["last_run"] = str(rows[0]["last_update"])
+                summary["status"] = "success" if any(row["records"] > 0 for row in rows) else "no_data"
+                
+                total_records = 0
+                total_symbols = 0
+                
+                for row in rows:
+                    data_type = row["data_type"].lower().replace(" ", "_")
+                    summary["details"][data_type] = {
+                        "symbols": row["symbols"],
+                        "records": row["records"]
+                    }
+                    total_records += row["records"]
+                    total_symbols += row["symbols"]
+                
+                summary["records_processed"] = total_records
+                summary["symbols_updated"] = total_symbols
+                
+        except Exception as e:
+            logger.error(f"Error getting summary from database: {e}")
+        
+        return summary

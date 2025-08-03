@@ -1,0 +1,49 @@
+name: long_term_investing
+description: Configuration for long-term investment strategies
+created_at: '2024-01-01T00:00:00'
+tags:
+  - long-term
+  - investing
+  - fundamental
+config:
+  # Technical indicators with longer periods
+  rsi_period: 21
+  macd_fast: 19
+  macd_slow: 39
+  macd_signal: 9
+  bb_period: 50
+  bb_std: 2.5
+  ema_periods: [21, 50, 100, 200]
+  sma_periods: [50, 100, 200]
+  atr_period: 21
+  adx_period: 21
+  
+  # Statistical settings for longer timeframes  
+  returns_periods: [5, 20, 60, 252]
+  volatility_window: 60
+  correlation_window: 252
+  beta_window: 252
+  sharpe_window: 252
+  regime_lookback: 504  # 2 years
+  
+  # ML settings
+  ml_feature_window: 60
+  ml_prediction_horizon: 20
+  ml_min_train_samples: 2000
+  ml_retrain_frequency: 60
+  ml_confidence_threshold: 0.7
+  
+  # Performance settings
+  parallel_compute: true
+  cache_results: true
+  cache_ttl_seconds: 3600  # 1 hour cache
+  
+  # Signal selection
+  compute_technical: true
+  compute_statistical: true
+  compute_ml: true
+  
+  # Data validation
+  min_data_points: 500
+  max_missing_pct: 0.05
+  handle_missing: interpolate
