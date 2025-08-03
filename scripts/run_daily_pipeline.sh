@@ -53,12 +53,8 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Change to project directory
 cd "$PROJECT_ROOT"
 
-# Activate virtual environment
-if [ -d "$PROJECT_ROOT/../dev" ]; then
-    source "$PROJECT_ROOT/../dev/bin/activate"
-elif [ -d "$PROJECT_ROOT/venv" ]; then
-    source "$PROJECT_ROOT/venv/bin/activate"
-fi
+# Ensure we're using the right Python
+export PATH="/Users/angwei/Repos/dev/bin:$PATH"
 
 # Create logs directory if it doesn't exist
 mkdir -p "$PROJECT_ROOT/logs/data_pipeline"
@@ -78,20 +74,16 @@ log "Python: $(which python)"
 log "Working directory: $(pwd)"
 log "========================================="
 
-# Run the daily pipeline
-python -m src.pipelines.data_pipeline.main --mode=daily 2>&1 | tee -a "$LOG_FILE"
+# Run the simple daily update
+python scripts/daily_update.py 2>&1 | tee -a "$LOG_FILE"
 
 # Check exit status
 if [ ${PIPESTATUS[0]} -eq 0 ]; then
-    log "✅ Daily pipeline completed successfully"
+    log "✅ Daily update completed successfully"
 else
-    log "❌ Daily pipeline failed with exit code: ${PIPESTATUS[0]}"
+    log "❌ Daily update failed with exit code: ${PIPESTATUS[0]}"
     # You could add email notification here
 fi
-
-# Run a quick backfill for the last 2 days to catch any gaps
-log "Running 2-day backfill to ensure no gaps..."
-python -m src.pipelines.data_pipeline.main --mode=backfill --days=2 2>&1 | tee -a "$LOG_FILE"
 
 log "========================================="
 log "All pipeline tasks completed"

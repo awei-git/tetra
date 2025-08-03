@@ -65,6 +65,7 @@ Claude must:
 - Only include code in output unless explanation is explicitly requested
 - Annotate non-obvious logic with inline comments
 - Avoid placeholder variable names unless specifically called for
+- If some script is needed to handle certain job, put it in scripts folder
 
 ---
 

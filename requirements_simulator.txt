@@ -1,0 +1,12 @@
+# Additional requirements for the simulator module
+
+# Market calendars
+pandas-market-calendars>=4.0.0
+
+# Numerical computation
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
