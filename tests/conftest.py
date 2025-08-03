@@ -41,6 +41,64 @@ def sample_ohlcv_data():
 
 
 @pytest.fixture
+def sample_ohlcv_df():
+    """Provide sample OHLCV DataFrame for signal testing"""
+    import pandas as pd
+    import numpy as np
+    
+    np.random.seed(42)
+    dates = pd.date_range(start='2024-01-01', periods=252, freq='D')
+    
+    # Generate realistic price movements
+    returns = np.random.normal(0.0005, 0.02, 252)
+    close_prices = 100 * np.exp(np.cumsum(returns))
+    
+    data = pd.DataFrame({
+        'date': dates,
+        'close': close_prices
+    })
+    
+    # Generate OHLV from close
+    data['open'] = data['close'].shift(1).fillna(data['close'].iloc[0]) * (1 + np.random.uniform(-0.005, 0.005, 252))
+    data['high'] = data[['open', 'close']].max(axis=1) * (1 + np.random.uniform(0, 0.01, 252))
+    data['low'] = data[['open', 'close']].min(axis=1) * (1 - np.random.uniform(0, 0.01, 252))
+    data['volume'] = np.random.randint(1000000, 10000000, 252)
+    
+    return data.set_index('date')
+
+
+@pytest.fixture
+def multi_symbol_df():
+    """Create multi-symbol OHLCV DataFrame"""
+    import pandas as pd
+    import numpy as np
+    
+    symbols = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META']
+    dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
+    
+    all_data = []
+    for symbol in symbols:
+        np.random.seed(hash(symbol) % 2**32)
+        returns = np.random.normal(0.0005, 0.02, 100)
+        close_prices = 100 * np.exp(np.cumsum(returns))
+        
+        df = pd.DataFrame({
+            'date': dates,
+            'symbol': symbol,
+            'close': close_prices,
+            'volume': np.random.randint(1000000, 10000000, 100)
+        })
+        
+        df['open'] = df['close'].shift(1).fillna(df['close'].iloc[0]) * (1 + np.random.uniform(-0.005, 0.005, 100))
+        df['high'] = df[['open', 'close']].max(axis=1) * (1 + np.random.uniform(0, 0.01, 100))
+        df['low'] = df[['open', 'close']].min(axis=1) * (1 - np.random.uniform(0, 0.01, 100))
+        
+        all_data.append(df)
+    
+    return pd.concat(all_data, ignore_index=True)
+
+
+@pytest.fixture
 def sample_symbols():
     """Provide sample symbols for testing"""
     return ["AAPL", "MSFT", "GOOGL", "SPY", "QQQ"]

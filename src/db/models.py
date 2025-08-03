@@ -9,7 +9,7 @@ from sqlalchemy.orm import relationship
 import uuid
 from .base import Base
 from ..models.event_data import EventType
-from ..models.derived import IndicatorType, SignalType
+# from ..models.derived import IndicatorType, SignalType  # TODO: Implement when needed
 from ..models.news_sentiment import NewsSource, NewsCategory
 
 
@@ -132,67 +132,69 @@ class EventModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
 
 
-class TechnicalIndicatorModel(Base):
-    """Technical indicators table"""
-    __tablename__ = "technical_indicators"
-    __table_args__ = (
-        Index("idx_indicator_symbol_timestamp", "symbol", "timestamp"),
-        Index("idx_indicator_type", "indicator_type"),
-        {"schema": "derived"}
-    )
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    symbol = Column(String(20), nullable=False)
-    timestamp = Column(DateTime(timezone=True), nullable=False)
-    
-    indicator_type = Column(SQLEnum(IndicatorType), nullable=False)
-    timeframe = Column(String(10), nullable=False)
-    
-    parameters = Column(JSON, nullable=False)
-    
-    value = Column(Numeric(20, 8))
-    values = Column(JSON, default=dict)
-    
-    calculation_time = Column(Float, nullable=False)
-    
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+# TODO: Implement when IndicatorType is defined
+# class TechnicalIndicatorModel(Base):
+#     """Technical indicators table"""
+#     __tablename__ = "technical_indicators"
+#     __table_args__ = (
+#         Index("idx_indicator_symbol_timestamp", "symbol", "timestamp"),
+#         Index("idx_indicator_type", "indicator_type"),
+#         {"schema": "derived"}
+#     )
+#     
+#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+#     
+#     symbol = Column(String(20), nullable=False)
+#     timestamp = Column(DateTime(timezone=True), nullable=False)
+#     
+#     indicator_type = Column(SQLEnum(IndicatorType), nullable=False)
+#     timeframe = Column(String(10), nullable=False)
+#     
+#     parameters = Column(JSON, nullable=False)
+#     
+#     value = Column(Numeric(20, 8))
+#     values = Column(JSON, default=dict)
+#     
+#     calculation_time = Column(Float, nullable=False)
+#     
+#     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
-class SignalModel(Base):
-    """Trading signals table"""
-    __tablename__ = "signals"
-    __table_args__ = (
-        Index("idx_signal_symbol_timestamp", "symbol", "timestamp"),
-        Index("idx_signal_type", "signal_type"),
-        Index("idx_signal_strategy", "strategy_name"),
-        {"schema": "derived"}
-    )
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    symbol = Column(String(20), nullable=False)
-    timestamp = Column(DateTime(timezone=True), nullable=False)
-    
-    signal_type = Column(SQLEnum(SignalType), nullable=False)
-    strength = Column(Float, nullable=False)
-    
-    strategy_name = Column(String(100), nullable=False)
-    timeframe = Column(String(10), nullable=False)
-    
-    current_price = Column(Numeric(20, 8), nullable=False)
-    target_price = Column(Numeric(20, 8))
-    stop_price = Column(Numeric(20, 8))
-    
-    indicators_used = Column(JSON, default=list)
-    reasoning = Column(Text)
-    
-    risk_reward_ratio = Column(Float)
-    position_size_suggestion = Column(Float)
-    
-    backtest_id = Column(String(100))
-    
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+# TODO: Implement when SignalType is defined
+# class SignalModel(Base):
+#     """Trading signals table"""
+#     __tablename__ = "signals"
+#     __table_args__ = (
+#         Index("idx_signal_symbol_timestamp", "symbol", "timestamp"),
+#         Index("idx_signal_type", "signal_type"),
+#         Index("idx_signal_strategy", "strategy_name"),
+#         {"schema": "derived"}
+#     )
+#     
+#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+#     
+#     symbol = Column(String(20), nullable=False)
+#     timestamp = Column(DateTime(timezone=True), nullable=False)
+#     
+#     signal_type = Column(SQLEnum(SignalType), nullable=False)
+#     strength = Column(Float, nullable=False)
+#     
+#     strategy_name = Column(String(100), nullable=False)
+#     timeframe = Column(String(10), nullable=False)
+#     
+#     current_price = Column(Numeric(20, 8), nullable=False)
+#     target_price = Column(Numeric(20, 8))
+#     stop_price = Column(Numeric(20, 8))
+#     
+#     indicators_used = Column(JSON, default=list)
+#     reasoning = Column(Text)
+#     
+#     risk_reward_ratio = Column(Float)
+#     position_size_suggestion = Column(Float)
+#     
+#     backtest_id = Column(String(100))
+#     
+#     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
 class EconomicDataModel(Base):

@@ -41,14 +41,18 @@ volumes:
 ```
 
 ### Connection Details
+
+**ACTUAL PRODUCTION CREDENTIALS:**
 ```
 Host: localhost
 Port: 5432
 Database: tetra
-Username: postgres
-Password: postgres
-URL: postgresql://postgres:postgres@localhost:5432/tetra
+Username: tetra_user
+Password: tetra_password
+URL: postgresql://tetra_user:tetra_password@localhost:5432/tetra
 ```
+
+**Note:** The Docker container is configured with these credentials in docker-compose.yml
 
 ## Schema Design
 

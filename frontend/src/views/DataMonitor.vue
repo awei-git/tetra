@@ -1,6 +1,20 @@
 <template>
   <div class="data-monitor p-6">
-    <h1 class="text-3xl font-bold mb-8 text-gray-100">Database Monitor</h1>
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold text-gray-100">Database Monitor</h1>
+      <button 
+        @click="triggerDailyUpdate"
+        :disabled="triggeringUpdate"
+        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-2"
+      >
+        <svg v-if="triggeringUpdate" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span v-if="triggeringUpdate">Running...</span>
+        <span v-else>Update Data</span>
+      </button>
+    </div>
     
     <!-- Summary Stats -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -114,9 +128,95 @@
       </div>
     </div>
     
-    <!-- Last updated timestamp -->
-    <div class="mt-8 text-center text-sm text-gray-400">
-      Last updated: {{ lastUpdated }}
+    <!-- Notification -->
+    <div v-if="notification" 
+         class="fixed top-4 right-4 max-w-sm z-50 animate-slide-in"
+         :class="notification.type === 'success' ? 'bg-green-900 border-green-700' : 'bg-red-900 border-red-700'"
+         style="border-width: 1px; border-radius: 0.5rem; padding: 1rem;">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <svg v-if="notification.type === 'success'" class="h-5 w-5 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <svg v-else class="h-5 w-5 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+          <div>
+            <p class="font-medium" :class="notification.type === 'success' ? 'text-green-100' : 'text-red-100'">{{ notification.title }}</p>
+            <p class="text-sm" :class="notification.type === 'success' ? 'text-green-300' : 'text-red-300'">{{ notification.message }}</p>
+          </div>
+        </div>
+        <button @click="notification = null" class="text-gray-400 hover:text-gray-200">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Daily Update Summary -->
+    <div class="mt-8 bg-gray-800 border border-gray-700 rounded-lg p-6">
+      <h3 class="text-lg font-semibold mb-4 text-gray-100">Daily Update Summary</h3>
+      
+      <div v-if="dailyUpdateSummary" class="space-y-3">
+        <!-- Show running status prominently -->
+        <div v-if="triggeringUpdate" class="bg-blue-900 border border-blue-700 rounded-lg p-4 mb-4">
+          <div class="flex items-center gap-3">
+            <svg class="animate-spin h-5 w-5 text-blue-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <div>
+              <p class="text-blue-100 font-medium">Data update in progress...</p>
+              <p class="text-sm text-blue-300">This may take a few minutes depending on the amount of data.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <p class="text-sm text-gray-400">Last Run</p>
+            <p class="text-gray-200 font-medium">{{ formatLastRun(dailyUpdateSummary.last_run) }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-400">Status</p>
+            <div class="flex items-center gap-2">
+              <p class="font-medium" :class="getStatusClass(dailyUpdateSummary.status)">{{ formatStatus(dailyUpdateSummary.status) }}</p>
+              <span v-if="triggeringUpdate && dailyUpdateSummary.status !== 'success' && dailyUpdateSummary.status !== 'failed'" 
+                    class="text-xs text-gray-400">(updating...)</span>
+            </div>
+          </div>
+          <div>
+            <p class="text-sm text-gray-400">Records Processed</p>
+            <p class="text-gray-200 font-medium">{{ formatNumber(dailyUpdateSummary.records_processed) }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-400">Symbols Updated</p>
+            <p class="text-gray-200 font-medium">{{ formatNumber(dailyUpdateSummary.symbols_updated) }}</p>
+          </div>
+        </div>
+        
+        <div v-if="dailyUpdateSummary.details && Object.keys(dailyUpdateSummary.details).length > 0" class="pt-3 border-t border-gray-700">
+          <p class="text-sm font-medium text-gray-300 mb-2">Details:</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div v-for="(detail, key) in dailyUpdateSummary.details" :key="key" class="text-sm">
+              <span class="text-gray-400">{{ formatDetailKey(key) }}:</span>
+              <span class="text-gray-200 ml-2">{{ formatDetailValue(detail) }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="dailyUpdateSummary.errors && dailyUpdateSummary.errors.length > 0" class="pt-3 border-t border-gray-700">
+          <p class="text-sm font-medium text-red-400 mb-2">Errors:</p>
+          <ul class="list-disc list-inside text-sm text-red-300">
+            <li v-for="(error, index) in dailyUpdateSummary.errors" :key="index">{{ error }}</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div v-else class="text-sm text-gray-400">
+        No daily update information available
+      </div>
     </div>
     
     <!-- Symbol Details Modal -->
@@ -280,6 +380,9 @@ const showModal = ref(false)
 const modalTitle = ref('')
 const symbolData = ref([])
 const loadingSymbols = ref(false)
+const dailyUpdateSummary = ref(null)
+const triggeringUpdate = ref(false)
+const notification = ref(null)
 
 let ws = null
 
@@ -322,6 +425,16 @@ const fetchCoverage = async () => {
     console.error('Error fetching coverage:', err)
   } finally {
     loading.value = false
+  }
+}
+
+// Fetch daily update summary
+const fetchDailyUpdateSummary = async () => {
+  try {
+    const summary = await monitorAPI.getDailyUpdateSummary()
+    dailyUpdateSummary.value = summary
+  } catch (err) {
+    console.error('Error fetching daily update summary:', err)
   }
 }
 
@@ -427,14 +540,169 @@ const handleWebSocketMessage = (data) => {
   }
 }
 
+// Format helpers for daily update summary
+const formatLastRun = (lastRun) => {
+  if (!lastRun) return 'Never'
+  const date = new Date(lastRun)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  
+  if (diffMins < 60) {
+    return `${diffMins} minutes ago`
+  } else if (diffHours < 24) {
+    return `${diffHours} hours ago`
+  } else if (diffDays < 7) {
+    return `${diffDays} days ago`
+  } else {
+    return date.toLocaleString()
+  }
+}
+
+const formatStatus = (status) => {
+  if (!status) return 'Unknown'
+  return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')
+}
+
+const getStatusClass = (status) => {
+  switch (status) {
+    case 'success':
+      return 'text-green-400'
+    case 'failed':
+      return 'text-red-400'
+    case 'no_data':
+      return 'text-yellow-400'
+    default:
+      return 'text-gray-400'
+  }
+}
+
+const formatDetailKey = (key) => {
+  return key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
+
+const formatDetailValue = (detail) => {
+  if (!detail) return '-'
+  if (detail.records !== undefined) {
+    return `${formatNumber(detail.records)} records`
+  }
+  if (detail.symbols !== undefined) {
+    return `${formatNumber(detail.symbols)} symbols`
+  }
+  if (detail.indicators !== undefined) {
+    return `${formatNumber(detail.indicators)} indicators`
+  }
+  if (detail.articles !== undefined) {
+    return `${formatNumber(detail.articles)} articles`
+  }
+  return JSON.stringify(detail)
+}
+
+// Trigger daily update
+const triggerDailyUpdate = async () => {
+  if (triggeringUpdate.value) return
+  
+  triggeringUpdate.value = true
+  const initialStatus = dailyUpdateSummary.value?.status
+  let checkCount = 0
+  
+  try {
+    const response = await monitorAPI.triggerDailyUpdate()
+    
+    // Show success message (you could add a toast notification here)
+    console.log('Daily update triggered:', response)
+    
+    // Function to check status
+    const checkStatus = async () => {
+      checkCount++
+      const previousStatus = dailyUpdateSummary.value?.status
+      await fetchDailyUpdateSummary()
+      
+      const currentStatus = dailyUpdateSummary.value?.status
+      
+      // Check if the run has completed
+      if (currentStatus && currentStatus !== initialStatus) {
+        if (currentStatus === 'success') {
+          // Update completed successfully
+          console.log('✅ Data update completed successfully!')
+          notification.value = {
+            type: 'success',
+            title: 'Update Complete',
+            message: `Successfully updated ${dailyUpdateSummary.value.symbols_updated || 0} symbols with ${dailyUpdateSummary.value.records_processed || 0} records`
+          }
+          triggeringUpdate.value = false
+          // Refresh coverage data too
+          await fetchCoverage()
+          // Auto-hide notification after 5 seconds
+          setTimeout(() => notification.value = null, 5000)
+          return true
+        } else if (currentStatus === 'failed') {
+          // Update failed
+          console.error('❌ Data update failed. Check errors in the summary.')
+          notification.value = {
+            type: 'error',
+            title: 'Update Failed',
+            message: dailyUpdateSummary.value.errors?.[0] || 'Check the summary below for error details'
+          }
+          triggeringUpdate.value = false
+          // Auto-hide notification after 8 seconds
+          setTimeout(() => notification.value = null, 8000)
+          return true
+        }
+      }
+      
+      // Still running
+      return false
+    }
+    
+    // Check immediately after 3 seconds
+    setTimeout(async () => {
+      if (await checkStatus()) return
+      
+      // Then check every 5 seconds for the first minute
+      const fastInterval = setInterval(async () => {
+        if (await checkStatus() || checkCount > 12) {
+          clearInterval(fastInterval)
+          
+          // If still running after 1 minute, check every 15 seconds
+          if (triggeringUpdate.value) {
+            const slowInterval = setInterval(async () => {
+              if (await checkStatus() || checkCount > 40) {
+                clearInterval(slowInterval)
+                triggeringUpdate.value = false
+              }
+            }, 15000)
+          }
+        }
+      }, 5000)
+    }, 3000)
+    
+    // Force stop after 10 minutes
+    setTimeout(() => {
+      triggeringUpdate.value = false
+      console.warn('⏱️ Update check timed out after 10 minutes')
+    }, 600000)
+    
+  } catch (err) {
+    console.error('Error triggering daily update:', err)
+    triggeringUpdate.value = false
+  }
+}
+
 // Lifecycle hooks
 onMounted(() => {
   fetchCoverage()
+  fetchDailyUpdateSummary()
   // Set up WebSocket for real-time updates
   ws = createWebSocket(handleWebSocketMessage)
   
   // Refresh every 30 seconds
-  const interval = setInterval(fetchCoverage, 30000)
+  const interval = setInterval(() => {
+    fetchCoverage()
+    fetchDailyUpdateSummary()
+  }, 30000)
   onUnmounted(() => {
     clearInterval(interval)
     if (ws) ws.close()
@@ -444,4 +712,18 @@ onMounted(() => {
 
 <style scoped>
 /* Component-specific styles if needed */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
 </style>

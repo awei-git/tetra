@@ -125,6 +125,34 @@ When fixing a bug:
 
 ---
 
+## 📊 Data Philosophy: Raw vs Derived
+
+Claude must understand and respect the separation between **raw data** (stored) and **derived data** (computed):
+
+### Raw Data (Database Storage)
+- Market data (OHLCV, ticks, quotes)  
+- Economic indicators
+- News articles and events
+- Trade executions
+- Configuration and metadata
+
+### Derived Data (Runtime Computation)
+- Technical indicators (SMA, RSI, MACD, etc.)
+- Trading signals
+- Portfolio metrics
+- Backtest results
+- ML predictions
+
+### Key Principles
+1. **Never store computable data** - If it can be calculated from raw data, compute it on-demand
+2. **Maintain flexibility** - Algorithms and parameters should be changeable without data migration
+3. **Ensure accuracy** - Always use the latest calculation methods
+4. **Optimize judiciously** - Only cache derived data when performance requires it, with clear invalidation strategies
+
+When designing features, Claude must always ask: "Is this raw data that needs to be stored, or derived data that should be computed?"
+
+---
+
 ## ❓ Clarification Behavior
 
 If Claude is unsure:

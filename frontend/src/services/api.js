@@ -42,7 +42,9 @@ export const monitorAPI = {
   getCoverage: () => api.get('/monitor/coverage'),
   getSchemas: () => api.get('/monitor/schemas'),
   getStats: (schema) => api.get(`/monitor/stats/${schema}`),
-  getSymbolDetails: (schema) => api.get(`/monitor/symbols/${schema}`)
+  getSymbolDetails: (schema) => api.get(`/monitor/symbols/${schema}`),
+  getDailyUpdateSummary: () => api.get('/monitor/daily-update-summary'),
+  triggerDailyUpdate: () => api.post('/monitor/trigger-daily-update')
 }
 
 // Chat API endpoints

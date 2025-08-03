@@ -36,7 +36,7 @@ class EconomicDataStep(PipelineStep[Dict[str, Any]]):
         
         # For daily mode, focus on frequently updated indicators
         if mode == "daily":
-            indicators = EconomicIndicators.get_daily_indicators()
+            indicators = EconomicIndicators.get_daily_symbols()
             # Look back more days for economic data as it may have delays
             fetch_start = start_date - timedelta(days=7)
         else:

@@ -163,6 +163,16 @@ class EconomicIndicators:
         return [ind for ind in cls.get_all_indicators() if ind[2] == UpdateFrequency.QUARTERLY]
     
     @classmethod
+    def get_all_symbols(cls) -> List[str]:
+        """Get all indicator symbols (for compatibility)"""
+        return [ind[0] for ind in cls.get_all_indicators()]
+    
+    @classmethod
+    def get_daily_symbols(cls) -> List[str]:
+        """Get all daily indicator symbols"""
+        return [ind[0] for ind in cls.get_daily_indicators()]
+    
+    @classmethod
     def get_indicators_by_category(cls) -> Dict[str, List[Tuple[str, str, UpdateFrequency]]]:
         """Get indicators organized by category"""
         return {
