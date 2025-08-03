@@ -109,7 +109,7 @@ class PolygonProvider(BaseAPIClient):
                     high=Decimal(str(bar["h"])),
                     low=Decimal(str(bar["l"])),
                     close=Decimal(str(bar["c"])),
-                    volume=bar["v"],
+                    volume=int(bar["v"] / 1_000_000),  # Convert to millions to match yfinance
                     vwap=Decimal(str(bar["vw"])) if "vw" in bar else None,
                     trades_count=bar.get("n"),
                     timeframe=timeframe_map.get(timespan, "1d"),

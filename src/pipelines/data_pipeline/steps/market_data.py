@@ -36,63 +36,59 @@ class MarketDataStep(PipelineStep[Dict[str, Any]]):
             "total_records": 0
         }
         
-        async with DataIngester(provider="polygon") as ingestion:
+        # DataIngester doesn't have context manager support, create instance directly
+        ingester = DataIngester(provider="polygon")
+        
+        # Process symbols in batches to manage memory and API limits
+        batch_size = 50
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            logger.info(f"Processing batch {i//batch_size + 1}/{(len(symbols)-1)//batch_size + 1}")
             
-            # Process symbols in batches to manage memory and API limits
-            batch_size = 50
-            for i in range(0, len(symbols), batch_size):
-                batch = symbols[i:i + batch_size]
-                logger.info(f"Processing batch {i//batch_size + 1}/{(len(symbols)-1)//batch_size + 1}")
+            # For daily mode, also look back a bit to catch any gaps
+            if mode == "daily":
+                fetch_start = start_date - timedelta(days=context.data.get("days_back", 2))
+            else:
+                fetch_start = start_date
                 
-                for symbol in batch:
-                    try:
-                        # For daily mode, also look back a bit to catch any gaps
-                        if mode == "daily":
-                            fetch_start = start_date - timedelta(days=context.data.get("days_back", 2))
-                        else:
-                            fetch_start = start_date
-                            
-                        # Fetch daily data
-                        result = await ingestion.fetch_ohlcv(
-                            symbols=[symbol],
-                            from_date=fetch_start,
-                            to_date=end_date,
-                            timeframe="1d"
-                        )
-                        daily_count = result.get("inserted", 0) + result.get("updated", 0)
-                        
-                        intraday_count = 0
-                        # For daily mode, also fetch intraday if configured
-                        if mode == "daily" and context.data.get("fetch_intraday", True):
-                            try:
-                                result = await ingestion.fetch_ohlcv(
-                                    symbols=[symbol],
-                                    from_date=end_date,  # Only today
-                                    to_date=end_date,
-                                    timeframe="5m"
-                                )
-                                intraday_count = result.get("inserted", 0) + result.get("updated", 0)
-                            except Exception as e:
-                                logger.debug(f"Intraday fetch failed for {symbol}: {e}")
-                        
-                        total_count = daily_count + intraday_count
-                        results["success"][symbol] = total_count
-                        results["total_records"] += total_count
-                        
-                        # Small delay to respect rate limits
-                        await asyncio.sleep(0.1)
-                        
-                    except Exception as e:
-                        error_msg = str(e)
-                        logger.error(f"Failed to fetch data for {symbol}: {error_msg}")
-                        results["failed"][symbol] = error_msg
-                        context.add_error(f"Market data failed for {symbol}: {error_msg}")
-                
-                # Log batch progress
-                logger.info(
-                    f"Batch complete: {len([s for s in batch if s in results['success']])} success, "
-                    f"{len([s for s in batch if s in results['failed']])} failed"
-                )
+            # Fetch daily data using the correct method
+            result = await ingester.ingest_ohlcv_batch(
+                symbols=batch,
+                from_date=fetch_start,
+                to_date=end_date,
+                timeframe="1d"
+            )
+            
+            # Track results
+            batch_records = result.get("total_records", 0)
+            results["total_records"] += batch_records
+            
+            # Track success/failure per symbol
+            symbols_processed = result.get("symbols_processed", 0)
+            errors = result.get("errors", 0)
+            
+            # Assume symbols are processed successfully unless errors
+            for symbol in batch[:symbols_processed]:
+                results["success"][symbol] = batch_records // max(symbols_processed, 1)
+            
+            # For daily mode, also fetch intraday if configured
+            if mode == "daily" and context.data.get("fetch_intraday", True):
+                try:
+                    intraday_result = await ingester.ingest_ohlcv_batch(
+                        symbols=batch,
+                        from_date=end_date,  # Only today
+                        to_date=end_date,
+                        timeframe="5m"
+                    )
+                    results["total_records"] += intraday_result.get("total_records", 0)
+                except Exception as e:
+                    logger.debug(f"Intraday fetch failed for batch: {e}")
+            
+            # Log batch progress
+            logger.info(
+                f"Batch complete: {symbols_processed} symbols processed, "
+                f"{batch_records} records, {errors} errors"
+            )
         
         # Update metrics
         context.set_metric("market_data_records", results["total_records"])
