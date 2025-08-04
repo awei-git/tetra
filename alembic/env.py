@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Import our models and config
 from src.db.base import Base
-from src.db.models import *
+from src.models.sqlalchemy import *
 from config import settings
 
 # this is the Alembic Config object, which provides

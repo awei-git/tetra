@@ -1,45 +1,54 @@
-from typing import AsyncGenerator
+"""Database connection and session management."""
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.pool import NullPool
-import sys
-import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from typing import AsyncGenerator
 
-# Add parent directory to path to import config
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from config import settings
+from config.config import settings
 
-# Create base class for all models
+# Base for SQLAlchemy models
 Base = declarative_base()
 
-# Create async engine
-engine = create_async_engine(
+# Async engine for async operations
+async_engine = create_async_engine(
     settings.database_url,
-    echo=settings.app_env == "development",
-    poolclass=NullPool,  # Use NullPool for async operations
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=10,
+    pool_recycle=3600
 )
 
-# Create async session factory
+# Sync engine for sync operations
+sync_engine = create_engine(
+    settings.sync_database_url,
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=5
+)
+
+# Session makers
 async_session_maker = async_sessionmaker(
-    engine,
+    async_engine,
     class_=AsyncSession,
-    expire_on_commit=False,
+    expire_on_commit=False
 )
 
+sync_session_maker = sessionmaker(
+    sync_engine,
+    expire_on_commit=False
+)
 
+# Dependency for FastAPI
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency to get database session"""
+    """Get async database session."""
     async with async_session_maker() as session:
         try:
             yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
         finally:
             await session.close()
 
-
-def get_engine():
-    """Get the database engine"""
-    return engine
+# For backward compatibility
+engine = async_engine
