@@ -9,7 +9,7 @@ from src.clients.economic_data_client import EconomicDataClient
 from src.data_definitions.economic_indicators import EconomicIndicators
 from src.utils.logging import logger
 from src.db.base import get_session
-from src.db.models import EconomicDataModel
+from src.models.sqlalchemy import EconomicIndicatorModel
 from sqlalchemy.dialects.postgresql import insert
 
 
@@ -105,7 +105,7 @@ class EconomicDataStep(PipelineStep[Dict[str, Any]]):
                 })
             
             # Use PostgreSQL upsert
-            stmt = insert(EconomicDataModel).values(values)
+            stmt = insert(EconomicIndicatorModel).values(values)
             stmt = stmt.on_conflict_do_update(
                 constraint="uq_econ_symbol_date",
                 set_={

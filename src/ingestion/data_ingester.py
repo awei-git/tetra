@@ -7,8 +7,8 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.clients.market_data_client import MarketDataClient
 from src.db.base import get_session, engine
-from src.db.models import OHLCVModel
-from src.models.market_data import OHLCVData
+from src.models.sqlalchemy import OHLCVModel
+from src.models import OHLCVData
 from src.utils.logging import logger
 from config import settings
 
