@@ -2,7 +2,7 @@
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Any, Set, Union
+from typing import Dict, List, Optional, Any, Set, Union, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from datetime import datetime, timedelta
