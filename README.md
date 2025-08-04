@@ -6,6 +6,9 @@ A comprehensive quantitative trading platform built with Python, FastAPI, Postgr
 
 - **Market Data Ingestion**: Automated data collection from multiple providers (Polygon.io, Finnhub, etc.)
 - **Time-Series Storage**: Optimized storage using TimescaleDB for historical market data
+- **Backtesting Engine**: Complete backtesting framework with portfolio management and performance metrics
+- **Strategy Framework**: Flexible base classes for implementing trading strategies
+- **Market Simulator**: Historical market replay with data from real markets
 - **RESTful API**: FastAPI-based API for data access and strategy management
 - **Event Processing**: Kafka-based event streaming for real-time data
 - **Extensible Architecture**: Easy to add new data sources and strategies
@@ -124,6 +127,47 @@ from src.ingestion.scheduler import IngestionScheduler
 
 scheduler = IngestionScheduler()
 scheduler.start()
+```
+
+### Backtesting Strategies
+
+Run backtests with your trading strategies:
+
+```python
+from src.backtesting.engine import BacktestEngine, BacktestConfig
+from datetime import datetime
+
+# Configure backtest
+config = BacktestConfig(
+    start_date=datetime(2024, 1, 1),
+    end_date=datetime(2024, 3, 31),
+    initial_capital=100000,
+    commission=0.001
+)
+
+# Run backtest
+engine = BacktestEngine(config)
+report = engine.run(
+    strategy=YourStrategy,
+    symbols=['AAPL', 'MSFT', 'GOOGL']
+)
+
+# View results
+print(f"Total Return: {report.total_return:.2%}")
+print(f"Sharpe Ratio: {report.sharpe_ratio:.2f}")
+print(f"Max Drawdown: {report.max_drawdown:.2%}")
+```
+
+Test different strategies:
+```bash
+# Test simple strategies
+python scripts/test_simple_strategies.py
+
+# Test technical indicator strategies
+python scripts/test_technical_strategies.py
+
+# Run comprehensive test suite
+python scripts/run_all_strategy_tests.py
 ```
 
 ## Development

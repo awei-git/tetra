@@ -11,11 +11,13 @@ The goal is to build a comprehensive quant trading platform
 6. **Frontend Dashboard** - Vue.js monitor with real-time coverage stats
 7. **LLM Chat Interface** - Natural language SQL queries with GPT-4
 8. **Daily Automation** - launchd scheduling for 5 AM updates
+9. **Backtesting Engine** - Complete backtesting framework with simulator integration
+10. **Strategy Framework** - Base classes and multiple strategy implementations
+11. **Portfolio Management** - Position tracking, P&L calculation, risk metrics
 
 ### 🚧 In Progress:
-1. **Simulator** - Historical and stochastic market simulation
-2. **Strategy Engine** - Trading strategy definitions and backtesting
-3. **ML Models** - Prediction models using historical data
+1. **Simulator** - Historical market replay completed, stochastic simulation pending
+2. **ML Models** - Prediction models using historical data
 
 ### 📋 Planned:
 1. **Execution Module** - Broker API integration
@@ -31,6 +33,11 @@ The goal is to build a comprehensive quant trading platform
     * security events
     * geopol events
     * macro data
+2. backtesting
+    * engine with portfolio management
+    * strategy framework
+    * performance metrics
+    * integration with simulator
     * sentiment data
     * key news data
     * derived data
