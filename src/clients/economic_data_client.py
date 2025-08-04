@@ -9,7 +9,7 @@ import httpx
 
 from config import settings
 from src.clients.base_client import BaseAPIClient, RateLimiter
-from src.models.economic_data import EconomicData, EconomicRelease, EconomicForecast
+from src.models import EconomicData, EconomicRelease, EconomicForecast
 from src.utils.logging import logger
 
 

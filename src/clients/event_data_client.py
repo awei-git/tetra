@@ -10,7 +10,7 @@ import httpx
 
 from config import settings
 from src.clients.base_client import BaseAPIClient, RateLimiter
-from src.models.event_data import (
+from src.models import (
     EventData, EconomicEvent, EarningsEvent, EventType, 
     EventImpact, EventStatus, create_event
 )

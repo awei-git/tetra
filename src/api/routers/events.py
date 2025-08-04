@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from src.db.base import get_session
 from src.models.sqlalchemy import EventDataModel
-from src.models.event_data import EventType, EventImpact, EventStatus
+from src.models import EventType, EventImpact, EventStatus
 from src.utils.logging import logger
 
 router = APIRouter()

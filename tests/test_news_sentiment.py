@@ -8,7 +8,7 @@ from decimal import Decimal
 from src.clients.news_sentiment_client import (
     NewsSentimentClient, NewsAPIProvider, AlphaVantageNewsProvider
 )
-from src.models.news_sentiment import (
+from src.models import (
     NewsArticle, SentimentScore, NewsSentiment, NewsSource,
     SentimentType, NewsCategory
 )

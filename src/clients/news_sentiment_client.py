@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 
 from config import settings
 from src.clients.base_client import BaseAPIClient, RateLimiter
-from src.models.news_sentiment import (
+from src.models import (
     NewsArticle, SentimentScore, NewsSentiment, NewsSource, 
     SentimentType, NewsCategory
 )

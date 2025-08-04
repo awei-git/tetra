@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.clients.market_data_client import MarketDataClient, YFinanceProvider
-from src.models.market_data import OHLCVData
+from src.models import OHLCVData
 
 
 class TestMarketDataClient:

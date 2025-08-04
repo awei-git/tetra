@@ -23,7 +23,7 @@ def sample_ohlcv_data():
     """Provide sample OHLCV data for testing"""
     from datetime import datetime, timezone
     from decimal import Decimal
-    from src.models.market_data import OHLCVData
+    from src.models import OHLCVData
     
     return OHLCVData(
         symbol="TEST",

@@ -466,14 +466,18 @@ class MonitorService:
             "records_processed": 0,
             "symbols_updated": 0,
             "errors": [],
-            "details": {}
+            "details": {},
+            "run_type": "unknown"
         }
         
-        # Try to read from pipeline log file
-        log_path = "/Users/angwei/Repos/tetra/logs/launchd_pipeline_out.log"
-        if os.path.exists(log_path):
+        # Find the most recent log file (either from launchd or manual runs)
+        most_recent_log = self._find_most_recent_log()
+        
+        if most_recent_log:
             try:
-                with open(log_path, 'r') as f:
+                logger.info(f"Reading pipeline summary from {most_recent_log['type']} log: {most_recent_log['path']}")
+                summary["run_type"] = "automatic" if most_recent_log['type'] == 'launchd' else "manual"
+                with open(most_recent_log['path'], 'r') as f:
                     lines = f.readlines()
                     
                 # Parse log lines to extract summary info
@@ -481,7 +485,7 @@ class MonitorService:
                 pipeline_start_time = None
                 
                 # First pass: find the most recent pipeline start
-                for i in range(len(lines) - 1, max(-1, len(lines) - 500), -1):
+                for i in range(len(lines) - 1, -1, -1):
                     line = lines[i].strip()
                     
                     if "Starting daily data pipeline" in line:
@@ -523,7 +527,7 @@ class MonitorService:
                             # Look for ModuleNotFoundError
                             elif "ModuleNotFoundError" in line:
                                 summary["status"] = "failed"
-                                summary["errors"].append(line)
+                                summary["errors"].append(line.strip())
                             
                             # Extract metrics
                             elif "Total records processed:" in line:
@@ -561,6 +565,7 @@ class MonitorService:
                 
                 # If we couldn't find recent run info in logs, check database
                 if not summary["last_run"]:
+                    logger.info("No pipeline start time found in log, falling back to database")
                     summary = await self._get_summary_from_db(summary)
                     
             except Exception as e:
@@ -572,6 +577,40 @@ class MonitorService:
             summary = await self._get_summary_from_db(summary)
         
         return summary
+    
+    def _find_most_recent_log(self) -> Optional[Dict[str, Any]]:
+        """Find the most recent pipeline log file from either launchd or manual runs"""
+        log_candidates = []
+        
+        # Check launchd log
+        launchd_log = "/Users/angwei/Repos/tetra/logs/launchd_pipeline_out.log"
+        if os.path.exists(launchd_log):
+            stat = os.stat(launchd_log)
+            log_candidates.append({
+                'path': launchd_log,
+                'mtime': stat.st_mtime,
+                'type': 'launchd'
+            })
+        
+        # Check individual pipeline run logs
+        pipeline_log_dir = "/Users/angwei/Repos/tetra/logs/data_pipeline"
+        if os.path.exists(pipeline_log_dir):
+            for filename in os.listdir(pipeline_log_dir):
+                if filename.startswith('daily_') and filename.endswith('.log'):
+                    filepath = os.path.join(pipeline_log_dir, filename)
+                    stat = os.stat(filepath)
+                    log_candidates.append({
+                        'path': filepath,
+                        'mtime': stat.st_mtime,
+                        'type': 'manual',
+                        'filename': filename
+                    })
+        
+        # Return the most recent log file
+        if log_candidates:
+            return max(log_candidates, key=lambda x: x['mtime'])
+        
+        return None
     
     async def _get_summary_from_db(self, summary: Dict[str, Any]) -> Dict[str, Any]:
         """Get daily update summary from database if log parsing fails"""
