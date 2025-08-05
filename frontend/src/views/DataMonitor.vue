@@ -548,8 +548,9 @@ const handleWebSocketMessage = (data) => {
 
 // Format helpers for daily update summary
 const formatLastRun = (lastRun) => {
-  if (!lastRun) return 'Never'
+  if (!lastRun || lastRun === 'None' || lastRun === null) return 'Never'
   const date = new Date(lastRun)
+  if (isNaN(date.getTime())) return 'Never'
   const now = new Date()
   const diffMs = now - date
   const diffMins = Math.floor(diffMs / 60000)

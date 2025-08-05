@@ -477,6 +477,19 @@ class MonitorService:
             try:
                 logger.info(f"Reading pipeline summary from {most_recent_log['type']} log: {most_recent_log['path']}")
                 summary["run_type"] = "automatic" if most_recent_log['type'] == 'launchd' else "manual"
+                
+                # For individual pipeline logs, extract timestamp from filename
+                if most_recent_log['type'] == 'manual' and 'filename' in most_recent_log:
+                    # Extract timestamp from filename like daily_20250804_200005.log
+                    import re
+                    match = re.search(r'daily_(\d{8})_(\d{6})\.log', most_recent_log['filename'])
+                    if match:
+                        date_str = match.group(1)
+                        time_str = match.group(2)
+                        timestamp_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]} {time_str[:2]}:{time_str[2:4]}:{time_str[4:6]}"
+                        summary["last_run"] = timestamp_str
+                        logger.info(f"Extracted timestamp from filename: {timestamp_str}")
+                
                 with open(most_recent_log['path'], 'r') as f:
                     lines = f.readlines()
                     
@@ -498,7 +511,7 @@ class MonitorService:
                 # Second pass: look for completion/failure after the start time
                 if pipeline_start_time:
                     start_idx = None
-                    for i in range(len(lines) - 500, len(lines)):
+                    for i in range(max(0, len(lines) - 500), len(lines)):
                         line = lines[i].strip()
                         if pipeline_start_time in line and "Starting daily data pipeline" in line:
                             start_idx = i
@@ -654,7 +667,13 @@ class MonitorService:
             
             if rows:
                 # Use the most recent update time
-                summary["last_run"] = str(rows[0]["last_update"])
+                last_update = rows[0]["last_update"]
+                if last_update is None:
+                    summary["last_run"] = None
+                elif hasattr(last_update, 'isoformat'):
+                    summary["last_run"] = last_update.isoformat()
+                else:
+                    summary["last_run"] = str(last_update)
                 summary["status"] = "success" if any(row["records"] > 0 for row in rows) else "no_data"
                 
                 total_records = 0
