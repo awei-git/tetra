@@ -523,7 +523,7 @@ class MonitorService:
                             line = lines[i].strip()
                             
                             # Look for completion status
-                            if "Daily pipeline completed" in line or "Daily update completed" in line:
+                            if "Daily pipeline completed" in line or "Daily update completed" in line or "Daily Update Complete" in line:
                                 summary["status"] = "success"
                                 # Extract duration if available
                                 duration_match = re.search(r'Duration: ([\d.]+)s', line)
@@ -543,13 +543,13 @@ class MonitorService:
                                 summary["errors"].append(line.strip())
                             
                             # Extract metrics
-                            elif "Total records processed:" in line:
-                                records_match = re.search(r'Total records processed: (\d+)', line)
+                            elif "Total records processed:" in line or "Total records:" in line:
+                                records_match = re.search(r'Total records[:]?\s*(\d+)', line)
                                 if records_match:
                                     summary["records_processed"] = int(records_match.group(1))
                             
-                            elif "Symbols processed:" in line:
-                                symbols_match = re.search(r'Symbols processed: (\d+)', line)
+                            elif "Symbols processed:" in line or "Successful symbols:" in line:
+                                symbols_match = re.search(r'(?:Symbols processed|Successful symbols):\s*(\d+)', line)
                                 if symbols_match:
                                     summary["symbols_updated"] = int(symbols_match.group(1))
                             
