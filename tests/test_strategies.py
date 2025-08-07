@@ -6,22 +6,22 @@ import numpy as np
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 
-from src.strategies.base import (
+from src.strats.base import (
     BaseStrategy, PositionSide, Trade, Position, StrategyState
 )
-from src.strategies.event_based import (
+from src.strats.event_based import (
     EventBasedStrategy, EventTrigger, EventType, EventImpact,
     MarketEvent, EarningsStrategy, FOMCStrategy
 )
-from src.strategies.signal_based import (
+from src.strats.signal_based import (
     SignalBasedStrategy, SignalCondition, SignalRule, ConditionOperator,
     MomentumStrategy, MeanReversionStrategy, MLStrategy
 )
-from src.strategies.time_based import (
+from src.strats.time_based import (
     TimeBasedStrategy, TradingWindow, TradingSchedule, SessionType,
     IntradayStrategy, OvernightStrategy
 )
-from src.strategies.composite import (
+from src.strats.composite import (
     CompositeStrategy, StrategyWeight, CombinationMode,
     ConservativeComposite, AggressiveComposite
 )

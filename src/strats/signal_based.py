@@ -131,6 +131,11 @@ class SignalBasedStrategy(BaseStrategy):
         self.confirmation_required = confirmation_required
         self.signal_history: Dict[str, pd.DataFrame] = {}
         self.rule_triggers: Dict[str, List[datetime]] = {}
+        self.universe = []  # Initialize empty universe
+    
+    def set_symbols(self, symbols: List[str]):
+        """Set the universe of symbols for this strategy."""
+        self.universe = symbols
     
     def generate_signals(self, 
                         data: pd.DataFrame,

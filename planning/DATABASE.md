@@ -54,6 +54,66 @@ URL: postgresql://tetra_user:tetra_password@localhost:5432/tetra
 
 **Note:** The Docker container is configured with these credentials in docker-compose.yml
 
+### ⚠️ Important: PostgreSQL Instance Conflicts
+
+The system may have **two PostgreSQL instances** that can cause connection issues:
+
+1. **Docker PostgreSQL** (Primary - Contains complete data)
+   - Container: `tetra-postgres`
+   - Data: **367,371 records** (2015-2025)
+   - Location: Docker volume `tetra_postgres_data`
+   - This is where the pipeline writes data
+
+2. **Local PostgreSQL** (May cause conflicts)
+   - Installation: Homebrew (`/opt/homebrew/var/postgresql@15`)
+   - Data: May contain partial or outdated data
+   - Issue: If running on port 5432, it intercepts connections
+
+### Verifying Correct Connection
+
+```bash
+# Check which PostgreSQL is running on port 5432
+lsof -i :5432
+
+# Connect to Docker PostgreSQL specifically
+docker exec -it tetra-postgres psql -U tetra_user -d tetra
+
+# Check data in Docker PostgreSQL
+docker exec tetra-postgres psql -U tetra_user -d tetra -c \
+  "SELECT COUNT(*) as records, MIN(timestamp)::date as from, MAX(timestamp)::date as to FROM market_data.ohlcv;"
+
+# If local PostgreSQL is running, check it separately
+psql -h localhost -U tetra_user -d tetra -c \
+  "SELECT COUNT(*) as records, MIN(timestamp)::date as from, MAX(timestamp)::date as to FROM market_data.ohlcv;"
+```
+
+### Fixing Connection Issues
+
+If the backend connects to the wrong database:
+
+1. **Option 1: Stop local PostgreSQL**
+   ```bash
+   brew services stop postgresql@15
+   ```
+
+2. **Option 2: Change Docker PostgreSQL port**
+   ```yaml
+   # In docker-compose.yml
+   ports:
+     - "5433:5432"  # Use port 5433 externally
+   ```
+   Then update connection strings to use port 5433
+
+3. **Option 3: Ensure Docker starts first**
+   ```bash
+   # Stop all PostgreSQL instances
+   brew services stop postgresql@15
+   docker-compose down
+   
+   # Start only Docker PostgreSQL
+   docker-compose up -d postgres
+   ```
+
 ## Schema Design
 
 ### Schema Organization

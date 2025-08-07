@@ -10,19 +10,19 @@ import numpy as np
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.strategies.event_based import (
+from src.strats.event_based import (
     EventBasedStrategy, EventTrigger, EventType, EventImpact,
     EarningsStrategy, FOMCStrategy
 )
-from src.strategies.signal_based import (
+from src.strats.signal_based import (
     SignalBasedStrategy, SignalCondition, SignalRule, ConditionOperator,
     PositionSide, MomentumStrategy, MeanReversionStrategy
 )
-from src.strategies.time_based import (
+from src.strats.time_based import (
     TimeBasedStrategy, TradingWindow, TradingSchedule, SessionType,
     IntradayStrategy
 )
-from src.strategies.composite import (
+from src.strats.composite import (
     CompositeStrategy, StrategyWeight, CombinationMode
 )
 

@@ -308,6 +308,37 @@ psql -h localhost -p 5432 -U postgres -d tetra \
   -c "SELECT MAX(timestamp) FROM market_data.ohlcv WHERE symbol='AAPL'"
 ```
 
+## Data Storage Location
+
+### Important: Database Architecture
+The Tetra platform stores all data directly in a **PostgreSQL database with TimescaleDB extension**. There are **no raw data files** - all data from APIs is processed and stored directly in the database.
+
+### Database Location
+- **Primary Database**: PostgreSQL running in Docker container `tetra-postgres`
+- **Data Volume**: Docker volume `tetra_postgres_data` mounted at `/var/lib/postgresql/data`
+- **Connection**: `postgresql://tetra_user:tetra_password@localhost:5432/tetra`
+- **Port**: 5432 (ensure no local PostgreSQL conflicts)
+
+### Data Flow
+1. **APIs** (Polygon.io, FRED, NewsAPI, etc.) → 
+2. **Python Pipeline** (data validation & transformation) → 
+3. **PostgreSQL/TimescaleDB** (persistent storage)
+
+### Accessing the Database
+```bash
+# Connect to the Docker PostgreSQL
+docker exec -it tetra-postgres psql -U tetra_user -d tetra
+
+# View data statistics
+SELECT COUNT(*), MIN(timestamp), MAX(timestamp) FROM market_data.ohlcv;
+```
+
+### Troubleshooting
+If data appears incorrect, check:
+1. Ensure Docker container is running: `docker ps | grep tetra-postgres`
+2. Verify no local PostgreSQL is conflicting on port 5432
+3. Check which database the backend is connecting to
+
 ## Future Enhancements
 
 1. **Real-time Data**
