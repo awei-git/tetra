@@ -248,6 +248,114 @@ Example phrasing:
 
 ---
 
+## 🔧 Development Environment Setup
+
+### Package Management with UV
+
+The project uses **UV** for modern Python package management:
+
+1. **Install UV** (if not already installed):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Create virtual environment**:
+   ```bash
+   uv venv
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   uv sync --all-extras
+   ```
+
+### Project Dependencies
+
+Dependencies are defined in `pyproject.toml`:
+- **Core**: FastAPI, Pydantic, SQLAlchemy, asyncpg
+- **Data**: pandas, numpy, yfinance, pandas-market-calendars
+- **Infrastructure**: Redis, Kafka, PostgreSQL
+- **Development**: pytest, black, ruff, mypy
+
+Key packages added for functionality:
+- `greenlet==3.2.4` - Required for async SQLAlchemy
+- `pandas-market-calendars==5.1.1` - Trading calendar support
+
+---
+
+## 🚀 Pipeline Operations
+
+### Scheduled Tasks
+
+The platform runs three scheduled tasks:
+
+| Time     | Task                          | Script                    |
+|----------|-------------------------------|---------------------------|
+| 5:00 AM  | Launch services               | `launch_services.sh`      |
+| 7:00 PM  | Update market data            | `run_data_pipeline.sh`    |
+| 8:00 PM  | Run benchmark tests           | `run_benchmark_pipeline.sh`|
+
+### Manual Execution
+
+Run pipelines manually:
+```bash
+# Data pipeline (daily mode)
+./bin/run_data_pipeline.sh
+
+# Benchmark pipeline
+./bin/run_benchmark_pipeline.sh
+```
+
+### Pipeline Scripts Location
+
+All operational scripts are in `bin/`:
+- `launch_services.sh` - Starts backend (port 8000) and frontend (port 3000)
+- `run_data_pipeline.sh` - Ingests market data, economic indicators, news
+- `run_benchmark_pipeline.sh` - Tests and ranks trading strategies
+- `setup_scheduled_tasks.sh` - Installs launchd jobs for automation
+
+### Setting up Scheduled Tasks
+
+```bash
+# Install all scheduled tasks
+./bin/setup_scheduled_tasks.sh
+
+# Check status
+launchctl list | grep com.tetra
+
+# Manual triggers
+launchctl start com.tetra.launch-services
+launchctl start com.tetra.data-pipeline  
+launchctl start com.tetra.benchmark-pipeline
+```
+
+### Logs
+
+Pipeline logs are written to:
+- `/tmp/tetra_data_pipeline_YYYYMMDD_HHMMSS.log` - Data pipeline execution
+- `/tmp/tetra_benchmark_pipeline_YYYYMMDD_HHMMSS.log` - Benchmark execution
+- `/tmp/tetra-backend.log` - Backend service
+- `/tmp/tetra-frontend.log` - Frontend service
+
+---
+
+## 📁 Directory Structure
+
+### Scripts Organization
+
+- `bin/` - Production operational scripts (startup, pipelines, setup)
+- `scripts/` - Temporary experimental scripts only (cleaned regularly)
+- `src/pipelines/` - Pipeline implementation code
+- `config/launchd/` - macOS launchd configuration files
+
+### Important Notes
+
+1. **Never put production scripts in `scripts/`** - Use `bin/` instead
+2. **Scripts folder is for temporary files only** - May be deleted without notice
+3. **All pipelines call modules directly** - No wrapper scripts in scripts/
+
+---
+
 ## ✅ Final Note
 
 Claude is expected to behave like a reliable senior developer who values correctness, clarity, and collaboration over speculation or improvisation.

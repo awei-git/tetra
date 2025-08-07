@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tetra.launch-services</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/angwei/Repos/tetra/bin/launch_services.sh</string>
+    </array>
+    
+    <!-- Run daily at 5:00 AM -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>5</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/angwei/Repos/tetra</string>
+    
+    <key>StandardOutPath</key>
+    <string>/tmp/tetra-launch-services.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/tmp/tetra-launch-services.error.log</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/angwei/.pyenv/shims:/usr/local/bin:/usr/bin:/bin</string>
+        <key>PYTHONPATH</key>
+        <string>/Users/angwei/Repos/tetra</string>
+    </dict>
+    
+    <!-- Keep alive during run -->
+    <key>KeepAlive</key>
+    <false/>
+    
+    <!-- Nice value for lower priority -->
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>
