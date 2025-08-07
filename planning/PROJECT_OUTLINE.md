@@ -10,7 +10,7 @@ The goal is to build a comprehensive quant trading platform
 5. **News & Sentiment** - NewsAPI and AlphaVantage integration
 6. **Frontend Dashboard** - Vue.js monitor with real-time coverage stats
 7. **LLM Chat Interface** - Natural language SQL queries with GPT-4
-8. **Daily Automation** - launchd scheduling for 5 AM updates
+8. **Daily Automation** - macOS launchd scheduling for 7 PM updates (uses com.tetra.daily-pipeline.plist, NOT cron)
 9. **Backtesting Engine** - Complete backtesting framework with simulator integration
 10. **Strategy Framework** - Base classes and multiple strategy implementations
 11. **Portfolio Management** - Position tracking, P&L calculation, risk metrics
@@ -111,7 +111,7 @@ The goal is to build a comprehensive quant trading platform
     - ML Infrastructure: MLflow for model tracking, Ray for distributed training (planned)
     - Message Queue: Kafka for event-driven architecture (planned)
     - Monitoring: Prometheus + Grafana for system metrics (planned)
-    - Scheduling: macOS launchd for daily updates ✓
+    - Scheduling: macOS launchd for daily updates (NOT cron) ✓
 
   Current Architecture:
   [Data Sources] → [Python Pipeline] → [TimescaleDB/PostgreSQL]
@@ -203,7 +203,7 @@ src/pipelines/
 │       └── data_quality.py   # Coverage & quality checks
 │
 └── scripts/
-    └── run_daily_pipeline.sh  # Cron job wrapper (5 AM daily)
+    └── run_daily_pipeline.sh  # launchd job wrapper (7 PM daily, NOT cron)
 ```
 
 ### Key Features Implemented
@@ -228,11 +228,13 @@ src/pipelines/
    - ~10 years of historical data
 
 4. **Production Deployment**
-   - ✓ launchd job scheduled at 5 AM daily (macOS)
+   - ✓ macOS launchd job scheduled at 7 PM daily (~/Library/LaunchAgents/com.tetra.daily-pipeline.plist)
+   - ✓ NOT using cron - using launchd for better macOS integration
    - ✓ Simple daily_update.py script for reliability
    - ✓ Comprehensive logging with rotation
    - ✓ Error handling with automatic retries
    - Docker-ready configuration
+   - To change schedule: modify StartCalendarInterval in the plist file
 
 5. **Current Data Status**
    - 153 symbols tracked (ETFs and stocks)

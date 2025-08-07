@@ -84,10 +84,12 @@ class HistoricalSimulator(BaseSimulator):
         )
         
         # Initialize result
+        initial_value = portfolio.get_total_value({})
         result = SimulationResult(
             start_date=start_date,
             end_date=end_date,
-            initial_value=portfolio.get_total_value({})
+            initial_value=initial_value,
+            final_value=initial_value  # Will be updated at the end
         )
         
         # Check for overlapping events

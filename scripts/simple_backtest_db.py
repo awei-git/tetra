@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.backtesting.engine import BacktestEngine, BacktestConfig
-from src.strategies.base import BaseStrategy, PositionSide
+from src.strats.base import BaseStrategy, PositionSide
 from src.signals.base.signal_computer import SignalComputer
 from src.signals.base.config import SignalConfig
 from src.signals.technical.momentum import RSISignal

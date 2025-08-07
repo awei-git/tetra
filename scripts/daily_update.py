@@ -32,7 +32,10 @@ async def run_daily_update():
         logger.info(f"Today ({today}) is not a trading day. Checking for previous trading day data...")
         end_date = calendar.previous_trading_day(today)
     else:
-        end_date = today
+        # For free tier Polygon, we can't fetch current day data
+        # So always fetch previous trading day
+        end_date = calendar.previous_trading_day(today)
+        logger.info(f"Using previous trading day ({end_date}) to avoid API restrictions")
     
     logger.info(f"Target date for data: {end_date}")
     

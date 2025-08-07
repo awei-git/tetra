@@ -153,6 +153,81 @@ When designing features, Claude must always ask: "Is this raw data that needs to
 
 ---
 
+## 🗄️ Database Architecture
+
+Claude must understand the Tetra platform's database infrastructure and design patterns:
+
+### Infrastructure Setup
+- **Database**: PostgreSQL 15 with TimescaleDB extension
+- **Container**: Docker using `timescale/timescaledb:latest-pg15`
+- **Port**: 5432 (standard PostgreSQL)
+- **Container Name**: `tetra-postgres`
+- **Connection**: `postgresql://tetra_user:tetra_password@localhost:5432/tetra`
+
+### Schema Organization
+```
+market_data/              -- Primary market data
+├── ohlcv                -- Daily OHLCV data (hypertable)
+├── symbols              -- Symbol metadata
+└── exchanges            -- Exchange information
+
+economic_data/           -- Economic indicators
+├── economic_data       -- FRED data (GDP, CPI, etc.)
+└── releases           -- Economic data releases
+
+events/                  -- Financial events
+├── event_data          -- Earnings, dividends, economic calendar
+├── earnings            -- Earnings announcements
+└── dividends           -- Dividend payments
+
+news/                    -- News and sentiment
+├── news_articles       -- News articles
+└── sentiment           -- Sentiment scores
+
+derived/                 -- Calculated metrics (computed, not stored)
+strategies/              -- Strategy definitions and backtests
+execution/               -- Trade execution records
+```
+
+### TimescaleDB Features Used
+1. **Hypertables**: OHLCV table with 7-day chunks for time-series optimization
+2. **Compression**: Automatic compression for data older than 30 days
+3. **Continuous Aggregates**: Pre-computed views for common queries
+4. **Retention Policies**: Configurable data retention (default 2 years)
+
+### Key Design Patterns
+- **Bulk Inserts**: Use `INSERT ... ON CONFLICT DO UPDATE` for upserts
+- **Async Operations**: All DB operations use async SQLAlchemy
+- **Connection Pooling**: asyncpg with pool_size=20, max_overflow=10
+- **Indexes**: Multi-column indexes on (symbol, timestamp) for all time-series tables
+
+### Data Integrity
+- **Constraints**: OHLC validation (high >= low, high >= open/close, etc.)
+- **Unique Keys**: (symbol, timestamp) prevents duplicates
+- **Volume Scaling**: Polygon data stored in millions (volume / 1,000,000)
+
+### Performance Considerations
+- Use `time_bucket()` for time-based aggregations
+- Always include timestamp in WHERE clauses
+- Leverage continuous aggregates for repeated queries
+- Batch operations for high-volume inserts
+
+### Docker Management
+```bash
+# Start database
+docker-compose up -d postgres
+
+# Check health
+docker exec tetra-postgres pg_isready -U postgres
+
+# Connect to database
+docker exec -it tetra-postgres psql -U tetra_user -d tetra
+```
+
+When working with the database, Claude must respect these patterns and leverage TimescaleDB features for optimal performance.
+
+---
+
 ## ❓ Clarification Behavior
 
 If Claude is unsure:

@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-from ..strategies.base import BaseStrategy, StrategyResult, Trade, PositionSide
+from ..strats.base import BaseStrategy, StrategyResult, Trade, PositionSide
 from ..signals.base.signal_computer import SignalComputer
 from .portfolio import Portfolio, PortfolioState
 from .execution import ExecutionEngine, Order, OrderType

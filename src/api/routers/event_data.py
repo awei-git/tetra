@@ -7,8 +7,8 @@ from datetime import datetime, date
 from typing import List, Optional
 
 from src.db.base import get_session
-from src.db.models import EventDataModel, EarningsEventModel, EconomicEventModel
-from src.models.event_data import EventType, EventImpact, EventStatus
+from src.models.sqlalchemy import EventDataModel
+from src.models import EventType, EventImpact, EventStatus
 from src.utils.logging import logger
 
 router = APIRouter()

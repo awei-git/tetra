@@ -176,7 +176,13 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <p class="text-sm text-gray-400">Last Run</p>
-            <p class="text-gray-200 font-medium">{{ formatLastRun(dailyUpdateSummary.last_run) }}</p>
+            <p class="text-gray-200 font-medium">
+              {{ formatLastRun(dailyUpdateSummary.last_run) }}
+              <span v-if="dailyUpdateSummary.run_type" class="text-xs ml-2" 
+                    :class="dailyUpdateSummary.run_type === 'manual' ? 'text-yellow-400' : 'text-blue-400'">
+                ({{ dailyUpdateSummary.run_type }})
+              </span>
+            </p>
           </div>
           <div>
             <p class="text-sm text-gray-400">Status</p>
@@ -542,8 +548,9 @@ const handleWebSocketMessage = (data) => {
 
 // Format helpers for daily update summary
 const formatLastRun = (lastRun) => {
-  if (!lastRun) return 'Never'
+  if (!lastRun || lastRun === 'None' || lastRun === null) return 'Never'
   const date = new Date(lastRun)
+  if (isNaN(date.getTime())) return 'Never'
   const now = new Date()
   const diffMs = now - date
   const diffMins = Math.floor(diffMs / 60000)

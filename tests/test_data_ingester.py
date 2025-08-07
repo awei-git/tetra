@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from unittest.mock import Mock, patch, AsyncMock
 
 from src.ingestion.data_ingester import DataIngester
-from src.models.market_data import OHLCVData
+from src.models import OHLCVData
 from decimal import Decimal
 
 

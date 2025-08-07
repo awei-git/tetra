@@ -7,8 +7,8 @@ from sqlalchemy.dialects.postgresql import insert
 
 from src.clients.market_data_client import MarketDataClient
 from src.db.base import get_session, engine
-from src.db.models import OHLCVModel
-from src.models.market_data import OHLCVData
+from src.models.sqlalchemy import OHLCVModel
+from src.models import OHLCVData
 from src.utils.logging import logger
 from config import settings
 
@@ -76,7 +76,36 @@ class DataIngester:
                             stats["symbols_processed"] += 1
                             logger.info(f"Ingested {len(bars)} records for {symbol}")
                         else:
-                            logger.warning(f"No data found for {symbol}")
+                            logger.warning(f"No data found for {symbol} from {self.provider}, trying fallback provider")
+                            
+                            # Try fallback provider (YFinance) if primary fails
+                            if self.provider != "yfinance":
+                                try:
+                                    async with MarketDataClient("yfinance") as fallback_client:
+                                        logger.info(f"Trying YFinance for {symbol}")
+                                        
+                                        if timeframe == "1d":
+                                            bars = await fallback_client.get_daily_bars(symbol, from_date, to_date)
+                                        else:
+                                            bars = await fallback_client.get_intraday_bars(symbol, timeframe, from_date, to_date)
+                                        
+                                        if bars:
+                                            stats["total_records"] += len(bars)
+                                            
+                                            # Save to database
+                                            if db_session:
+                                                await self._save_ohlcv_data(bars, db_session, stats)
+                                            else:
+                                                async for session in get_session():
+                                                    await self._save_ohlcv_data(bars, session, stats)
+                                                    break
+                                            
+                                            stats["symbols_processed"] += 1
+                                            logger.info(f"Ingested {len(bars)} records for {symbol} from YFinance fallback")
+                                        else:
+                                            logger.warning(f"No data found for {symbol} from any provider")
+                                except Exception as e:
+                                    logger.error(f"Fallback provider failed for {symbol}: {e}")
                         
                         # Small delay between symbols to avoid rate limits
                         await asyncio.sleep(0.1)

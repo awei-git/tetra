@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     retry_delay: int = 5  # seconds
     
     # Rate limits (calls per minute)
-    polygon_rate_limit: int = 5
+    polygon_rate_limit: int = 5000  # Basic tier
     finnhub_rate_limit: int = 60
     fred_rate_limit: int = 120
     news_rate_limit: int = 500
@@ -72,7 +72,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False
+        case_sensitive=False,
+        extra="ignore"
     )
     
     def __init__(self, **data):

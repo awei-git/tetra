@@ -6,8 +6,8 @@ from typing import List, Optional
 from decimal import Decimal
 
 from src.db.base import get_session
-from src.db.models import OHLCVModel
-from src.models.market_data import OHLCVData
+from src.models.sqlalchemy import OHLCVModel
+from src.models import OHLCVData
 from src.utils.logging import logger
 
 router = APIRouter()

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 import numpy as np
 
-from ..strategies.base import Position, PositionSide
+from ..strats.base import Position, PositionSide
 
 logger = logging.getLogger(__name__)
 

@@ -12,7 +12,7 @@ from typing import List, Dict, Tuple, Optional
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.backtesting.engine import BacktestEngine, BacktestConfig
-from src.strategies.base import BaseStrategy, PositionSide
+from src.strats.base import BaseStrategy, PositionSide
 from src.signals.technical import TechnicalIndicators
 
 # Configure logging

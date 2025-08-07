@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, AsyncMock, patch
 
-from src.models.event_data import (
+from src.models import (
     EventData, EconomicEvent, EarningsEvent, MarketHolidayEvent,
     EventType, EventImpact, EventStatus, create_event
 )

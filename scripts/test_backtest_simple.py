@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.backtesting.engine import BacktestEngine, BacktestConfig
-from src.strategies.base import BaseStrategy, PositionSide, Trade
+from src.strats.base import BaseStrategy, PositionSide, Trade
 from src.backtesting.portfolio import Portfolio
 from src.backtesting.data_handler import DataHandler
 
@@ -70,7 +70,7 @@ class MockDataHandler(DataHandler):
         return pd.DataFrame()
 
 
-from src.strategies.base import StrategyState
+from src.strats.base import StrategyState
 
 class SimpleTestStrategy(BaseStrategy):
     """Simple test strategy for verification."""

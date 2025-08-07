@@ -7,7 +7,7 @@ import pandas as pd
 
 from config import settings
 from src.clients.base_client import BaseAPIClient, RateLimiter
-from src.models.market_data import OHLCVData, TickData, Quote
+from src.models import OHLCVData, TickData, Quote
 from src.utils.logging import logger
 
 
