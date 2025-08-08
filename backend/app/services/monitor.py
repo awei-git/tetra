@@ -478,10 +478,12 @@ class MonitorService:
                 logger.info(f"Reading pipeline summary from {most_recent_log['type']} log: {most_recent_log['path']}")
                 summary["run_type"] = "automatic" if most_recent_log['type'] == 'launchd' else "manual"
                 
+                # Import re module at the beginning of the method
+                import re
+                
                 # For individual pipeline logs, extract timestamp from filename
                 if most_recent_log['type'] == 'manual' and 'filename' in most_recent_log:
                     # Extract timestamp from filename like daily_20250804_200005.log
-                    import re
                     match = re.search(r'daily_(\d{8})_(\d{6})\.log', most_recent_log['filename'])
                     if match:
                         date_str = match.group(1)
@@ -523,7 +525,8 @@ class MonitorService:
                             line = lines[i].strip()
                             
                             # Look for completion status
-                            if "Daily pipeline completed" in line or "Daily update completed" in line or "Daily Update Complete" in line:
+                            if ("Daily pipeline completed" in line or "Daily update completed" in line or 
+                                "Daily Update Complete" in line or "exit code: 0" in line):
                                 summary["status"] = "success"
                                 # Extract duration if available
                                 duration_match = re.search(r'Duration: ([\d.]+)s', line)
@@ -575,6 +578,16 @@ class MonitorService:
                                     summary["details"]["news"] = {
                                         "articles": int(match.group(1))
                                     }
+                            
+                            # Also look for patterns in manual run logs
+                            elif "Ingested" in line and "records for" in line:
+                                records_match = re.search(r'Ingested (\d+) records', line)
+                                if records_match:
+                                    summary["records_processed"] += int(records_match.group(1))
+                            
+                            elif "Processing batch" in line and "symbols" in line:
+                                # Track that we're processing symbols
+                                summary["status"] = "running" if summary["status"] == "unknown" else summary["status"]
                 
                 # If we couldn't find recent run info in logs, check database
                 if not summary["last_run"]:
@@ -603,6 +616,16 @@ class MonitorService:
                 'path': launchd_log,
                 'mtime': stat.st_mtime,
                 'type': 'launchd'
+            })
+        
+        # Check manual pipeline run log
+        manual_log = "/Users/angwei/Repos/tetra/logs/manual_pipeline_out.log"
+        if os.path.exists(manual_log):
+            stat = os.stat(manual_log)
+            log_candidates.append({
+                'path': manual_log,
+                'mtime': stat.st_mtime,
+                'type': 'manual'
             })
         
         # Check individual pipeline run logs

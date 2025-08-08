@@ -91,25 +91,56 @@ async def trigger_daily_update(db=Depends(get_db_session)):
     import subprocess
     import asyncio
     from pathlib import Path
+    import os
     
     try:
         # Get the project root directory
         project_root = Path(__file__).parent.parent.parent.parent
-        script_path = project_root / "scripts" / "daily_update.py"
+        script_path = project_root / "bin" / "run_data_pipeline.sh"
         
-        # Run the daily update script in the background
+        # Log to a specific file for manual runs
+        log_file = project_root / "logs" / "manual_pipeline_out.log"
+        error_file = project_root / "logs" / "manual_pipeline_err.log"
+        
+        # Ensure logs directory exists
+        log_file.parent.mkdir(exist_ok=True)
+        
+        # Get the virtual environment python
+        venv_python = project_root / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            venv_python = project_root / "venv" / "bin" / "python"
+        
+        # Run the data pipeline directly using Python module
         process = await asyncio.create_subprocess_exec(
-            "python", str(script_path),
+            str(venv_python), "-m", "src.pipelines.data_pipeline.main",
+            "--mode=daily",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=str(project_root)
+            cwd=str(project_root),
+            env={**os.environ, "PYTHONPATH": str(project_root)}
         )
+        
+        # Write the output to log files in the background
+        async def write_logs():
+            from datetime import datetime
+            with open(log_file, 'w') as out_f, open(error_file, 'w') as err_f:
+                out_f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting daily data pipeline - manual trigger\n")
+                stdout, stderr = await process.communicate()
+                if stdout:
+                    out_f.write(stdout.decode())
+                if stderr:
+                    err_f.write(stderr.decode())
+                out_f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Daily update completed with exit code: {process.returncode}\n")
+        
+        # Start logging task
+        asyncio.create_task(write_logs())
         
         # Don't wait for completion - just start it
         return {
             "status": "started",
-            "message": "Daily update job has been triggered. Check the summary in a few moments.",
-            "pid": process.pid
+            "message": "Data pipeline has been triggered. Check the summary in a few moments.",
+            "pid": process.pid,
+            "log_file": str(log_file)
         }
         
     except Exception as e:
