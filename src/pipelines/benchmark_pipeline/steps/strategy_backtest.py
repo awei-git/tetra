@@ -263,9 +263,9 @@ class StrategyBacktestStep(PipelineStep[Dict[str, Any]]):
                 "strategy_name": name,
                 "symbol": symbol,
                 "backtest_time": round(backtest_time, 2),
-                "final_value": results.final_portfolio_value,
+                "final_value": results.final_value,
                 "total_return": results.total_return,
-                "annualized_return": results.annualized_return,
+                "annualized_return": results.annual_return,  # Fixed: was annualized_return
                 "sharpe_ratio": results.sharpe_ratio,
                 "max_drawdown": results.max_drawdown,
                 "volatility": results.volatility,
@@ -274,8 +274,8 @@ class StrategyBacktestStep(PipelineStep[Dict[str, Any]]):
                 "profit_factor": results.profit_factor,
                 "avg_win": results.avg_win,
                 "avg_loss": results.avg_loss,
-                "best_trade": results.best_trade,
-                "worst_trade": results.worst_trade,
+                "best_trade": getattr(results, 'best_trade', None),
+                "worst_trade": getattr(results, 'worst_trade', None),
                 "equity_curve": results.equity_curve.to_dict() if hasattr(results, 'equity_curve') else None,
                 "trades": results.trades if hasattr(results, 'trades') else []
             }

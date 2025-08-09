@@ -39,8 +39,8 @@ class StrategyCollectionStep(PipelineStep[Dict[str, Any]]):
                 except ValueError as e:
                     logger.warning(f"Strategy {name} not found: {e}")
         elif mode == "daily":
-            # Daily run - use core benchmarks
-            strategies = get_core_benchmarks()
+            # Daily run - use all benchmarks for comprehensive testing
+            strategies = get_all_benchmarks()
         else:
             # Full backtest - use all strategies
             strategies = get_all_benchmarks()

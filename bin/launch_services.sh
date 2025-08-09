@@ -1,6 +1,6 @@
 #!/bin/bash
 # Launch Tetra backend and frontend services
-# Scheduled to run daily at 5:00 AM
+# Can be run manually or scheduled
 
 set -e
 
@@ -16,18 +16,34 @@ is_running() {
 
 # Kill existing processes
 echo "Stopping any existing services..."
-pkill -f "uvicorn backend.main:app" || true
-pkill -f "npm.*run dev.*webgui" || true
-pkill -f "next-server" || true
+pkill -f "uvicorn backend.app.main:app" || true
+pkill -f "npm.*run dev.*frontend" || true
+pkill -f "next dev" || true
 
 # Wait for processes to stop
 sleep 2
 
 # Start backend
 echo "Starting backend service..."
-cd "$PROJECT_ROOT"
-source .venv/bin/activate
-nohup python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/tetra-backend.log 2>&1 &
+cd "$PROJECT_ROOT/backend"
+
+# Check if venv exists in backend directory, otherwise use project root venv
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+elif [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/.venv/bin/activate"
+elif [ -f "$PROJECT_ROOT/venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/venv/bin/activate"
+else
+    echo "Error: No virtual environment found"
+    echo "Checked:"
+    echo "  - $PWD/venv/bin/activate"
+    echo "  - $PROJECT_ROOT/.venv/bin/activate"
+    echo "  - $PROJECT_ROOT/venv/bin/activate"
+    exit 1
+fi
+
+nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/tetra-backend.log 2>&1 &
 BACKEND_PID=$!
 
 # Wait for backend to start
@@ -37,12 +53,24 @@ for i in {1..30}; do
         echo "Backend started successfully"
         break
     fi
+    if [ $i -eq 30 ]; then
+        echo "Backend failed to start. Check logs at /tmp/tetra-backend.log"
+        tail -20 /tmp/tetra-backend.log
+        exit 1
+    fi
     sleep 1
 done
 
 # Start frontend
 echo "Starting frontend service..."
-cd "$PROJECT_ROOT/webgui"
+cd "$PROJECT_ROOT/frontend"
+
+# Check if node_modules exists
+if [ ! -d "node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    npm install
+fi
+
 nohup npm run dev > /tmp/tetra-frontend.log 2>&1 &
 FRONTEND_PID=$!
 
@@ -53,9 +81,23 @@ for i in {1..30}; do
         echo "Frontend started successfully"
         break
     fi
+    if [ $i -eq 30 ]; then
+        echo "Frontend failed to start. Check logs at /tmp/tetra-frontend.log"
+        tail -20 /tmp/tetra-frontend.log
+        exit 1
+    fi
     sleep 1
 done
 
-echo "[$(date)] Tetra services launched successfully"
-echo "Backend PID: $BACKEND_PID (logs: /tmp/tetra-backend.log)"
-echo "Frontend PID: $FRONTEND_PID (logs: /tmp/tetra-frontend.log)"
+echo ""
+echo "[$(date)] Tetra services launched successfully!"
+echo "================================================"
+echo "Backend:  http://localhost:8000 (PID: $BACKEND_PID)"
+echo "Frontend: http://localhost:3000 (PID: $FRONTEND_PID)"
+echo ""
+echo "Logs:"
+echo "  Backend:  /tmp/tetra-backend.log"
+echo "  Frontend: /tmp/tetra-frontend.log"
+echo ""
+echo "To stop services, run: pkill -f 'uvicorn|next dev'"
+echo "================================================"

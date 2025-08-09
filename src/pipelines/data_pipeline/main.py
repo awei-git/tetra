@@ -30,11 +30,13 @@ async def run_pipeline(args):
             "mode": "daily",
             "start_date": target_date,
             "end_date": target_date,
-            "symbols": args.symbols,  # None means use default symbols
             "news_provider": args.news_provider or "newsapi",
             "parallel": not args.sequential,
             "skip_steps": args.skip_steps,
         }
+        # Only add symbols if explicitly provided
+        if args.symbols:
+            config["symbols"] = args.symbols
         logger.info(f"Running daily update for {target_date}")
         
     else:  # backfill mode
@@ -59,11 +61,13 @@ async def run_pipeline(args):
             "mode": "backfill",
             "start_date": start_date,
             "end_date": end_date,
-            "symbols": args.symbols,
             "news_provider": args.news_provider or "alphavantage",
             "parallel": not args.sequential,
             "skip_steps": args.skip_steps,
         }
+        # Only add symbols if explicitly provided
+        if args.symbols:
+            config["symbols"] = args.symbols
         logger.info(f"Running backfill from {start_date} to {end_date}")
     
     # Create and run pipeline

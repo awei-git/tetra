@@ -24,6 +24,9 @@ class Settings(BaseSettings):
         "http://localhost:5173",  # Vue dev server
         "http://localhost:5174",  # Vue preview
         "http://localhost:3000",  # Alternative frontend
+        "http://localhost:5175",  # Additional Vite ports
+        "http://localhost:5176",
+        "http://localhost:5177",
     ]
     
     # LLM settings - will be overridden by secrets.yml

@@ -6,17 +6,14 @@ Build a comprehensive quantitative trading platform that combines data ingestion
 ## Quick Links
 - [Database Infrastructure](DATABASE.md)
 - [Data Pipeline](DATA_PIPELINE.md) 
-- [Web GUI & Monitoring](WEBGUI.md)
+- [Frontend & Web GUI](FRONTEND.md)
 - [Market Simulator](SIMULATOR.md)
 - [Signals Module](SIGNALS.md)
 - [Trading Strategies](STRATEGIES.md)
 - [Performance Assessment](PERFORMANCE.md)
-- [Machine Learning](ML_MODELS.md)
-- [Reporting System](REPORTING.md)
-- [Trade Execution](EXECUTION.md)
-- [Risk Management](RISK_MANAGEMENT.md)
-- [System Architecture](ARCHITECTURE.md)
-- [Deployment Guide](DEPLOYMENT.md)
+- [Backtesting Framework](BACKTESTING.md)
+- [Benchmark Pipeline](BENCHMARK_PIPELINE.md)
+- [Project Outline](PROJECT_OUTLINE.md)
 
 ## Implementation Status
 

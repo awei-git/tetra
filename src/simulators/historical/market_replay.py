@@ -248,34 +248,39 @@ class MarketReplay:
         query_date: date
     ) -> List[Dict]:
         """Get dividends for given date."""
-        query = text("""
-            SELECT 
-                symbol,
-                ex_date,
-                amount,
-                payment_date
-            FROM market_data.dividends
-            WHERE symbol = ANY(:symbols)
-                AND ex_date = :query_date
-        """)
+        # TODO: Implement dividends table in database
+        # For now, return empty list as dividends are not yet implemented
+        return []
         
-        async with async_session_maker() as session:
-            result = await session.execute(
-                query,
-                {"symbols": symbols, "query_date": query_date}
-            )
-            
-            rows = result.fetchall()
-            
-        return [
-            {
-                'symbol': row.symbol,
-                'ex_date': row.ex_date,
-                'amount': float(row.amount),
-                'payment_date': row.payment_date
-            }
-            for row in rows
-        ]
+        # Future implementation:
+        # query = text("""
+        #     SELECT 
+        #         symbol,
+        #         ex_date,
+        #         amount,
+        #         payment_date
+        #     FROM market_data.dividends
+        #     WHERE symbol = ANY(:symbols)
+        #         AND ex_date = :query_date
+        # """)
+        # 
+        # async with async_session_maker() as session:
+        #     result = await session.execute(
+        #         query,
+        #         {"symbols": symbols, "query_date": query_date}
+        #     )
+        #     
+        #     rows = result.fetchall()
+        #     
+        # return [
+        #     {
+        #         'symbol': row.symbol,
+        #         'ex_date': row.ex_date,
+        #         'amount': float(row.amount),
+        #         'payment_date': row.payment_date
+        #     }
+        #     for row in rows
+        # ]
     
     async def get_splits(
         self,
@@ -283,32 +288,37 @@ class MarketReplay:
         query_date: date
     ) -> List[Dict]:
         """Get stock splits for given date."""
-        query = text("""
-            SELECT 
-                symbol,
-                split_date,
-                split_ratio
-            FROM market_data.splits
-            WHERE symbol = ANY(:symbols)
-                AND split_date = :query_date
-        """)
+        # TODO: Implement splits table in database
+        # For now, return empty list as splits are not yet implemented
+        return []
         
-        async with async_session_maker() as session:
-            result = await session.execute(
-                query,
-                {"symbols": symbols, "query_date": query_date}
-            )
-            
-            rows = result.fetchall()
-            
-        return [
-            {
-                'symbol': row.symbol,
-                'split_date': row.split_date,
-                'ratio': float(row.split_ratio)
-            }
-            for row in rows
-        ]
+        # Future implementation:
+        # query = text("""
+        #     SELECT 
+        #         symbol,
+        #         split_date,
+        #         split_ratio
+        #     FROM market_data.splits
+        #     WHERE symbol = ANY(:symbols)
+        #         AND split_date = :query_date
+        # """)
+        # 
+        # async with async_session_maker() as session:
+        #     result = await session.execute(
+        #         query,
+        #         {"symbols": symbols, "query_date": query_date}
+        #     )
+        #     
+        #     rows = result.fetchall()
+        #     
+        # return [
+        #     {
+        #         'symbol': row.symbol,
+        #         'split_date': row.split_date,
+        #         'ratio': float(row.split_ratio)
+        #     }
+        #     for row in rows
+        # ]
     
     def clear_cache(self) -> None:
         """Clear all cached data."""

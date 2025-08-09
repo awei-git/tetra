@@ -28,6 +28,9 @@ class EventDataStep(PipelineStep[Dict[str, Any]]):
         start_date = context.data.get("start_date")
         end_date = context.data.get("end_date")
         
+        logger.debug(f"EventDataStep context keys: {list(context.data.keys())}")
+        logger.debug(f"EventDataStep symbols count: {len(symbols) if symbols else 0}")
+        
         # For events, we look both backward and forward
         if mode == "daily":
             # Look back 7 days for recent events, forward 30 days for upcoming
@@ -49,7 +52,8 @@ class EventDataStep(PipelineStep[Dict[str, Any]]):
             "total_records": 0
         }
         
-        async with EventDataClient(provider="yahoo") as client:
+        client = EventDataClient(provider="yahoo")
+        try:
                 
                 # 1. Fetch earnings calendar
                 try:
@@ -129,6 +133,9 @@ class EventDataStep(PipelineStep[Dict[str, Any]]):
                     except Exception as e:
                         logger.error(f"Failed to fetch economic calendar: {e}")
                         results["economic_calendar"]["failed"] = 1
+        except Exception as e:
+            logger.error(f"EventDataStep failed: {e}", exc_info=True)
+            raise
         
         # Update metrics
         context.set_metric("event_earnings_records", results["earnings"]["success"])

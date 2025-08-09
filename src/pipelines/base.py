@@ -235,6 +235,7 @@ class ParallelStep(PipelineStep[List[Any]]):
         
     async def execute(self, context: PipelineContext) -> List[Any]:
         """Execute all steps in parallel"""
+        logger.info(f"ParallelStep executing {len(self.steps)} steps: {[step.name for step in self.steps]}")
         tasks = [step.execute(context) for step in self.steps]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         

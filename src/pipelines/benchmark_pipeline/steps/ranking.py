@@ -194,20 +194,30 @@ class RankingStep(PipelineStep[Dict[str, Any]]):
         
         # High volatility markets - prefer low volatility strategies
         if "volatility" in df.columns:
-            low_vol = df.nsmallest(5, "volatility")
-            market_rankings["high_volatility_markets"] = [
-                (name, round(row["sharpe_ratio"], 2)) 
-                for name, row in low_vol.iterrows()
-                if pd.notna(row["sharpe_ratio"])
-            ]
+            # Convert volatility to numeric, handling any non-numeric values
+            df["volatility_numeric"] = pd.to_numeric(df["volatility"], errors='coerce')
+            valid_vol = df[df["volatility_numeric"].notna()]
+            
+            if not valid_vol.empty:
+                low_vol = valid_vol.nsmallest(5, "volatility_numeric")
+                market_rankings["high_volatility_markets"] = [
+                    (name, round(row["sharpe_ratio"], 2)) 
+                    for name, row in low_vol.iterrows()
+                    if pd.notna(row["sharpe_ratio"])
+                ]
         
         # Bear markets - prefer strategies with low drawdown
         if "max_drawdown" in df.columns:
-            low_dd = df.nsmallest(5, "max_drawdown")
-            market_rankings["bear_markets"] = [
-                (name, round(abs(row["max_drawdown"]), 2))
-                for name, row in low_dd.iterrows()
-            ]
+            # Convert max_drawdown to numeric, handling any non-numeric values
+            df["max_drawdown_numeric"] = pd.to_numeric(df["max_drawdown"], errors='coerce')
+            valid_dd = df[df["max_drawdown_numeric"].notna()]
+            
+            if not valid_dd.empty:
+                low_dd = valid_dd.nsmallest(5, "max_drawdown_numeric")
+                market_rankings["bear_markets"] = [
+                    (name, round(abs(row["max_drawdown_numeric"]), 2))
+                    for name, row in low_dd.iterrows()
+                ]
         
         # Trending markets - prefer trend following strategies
         trend_strategies = [

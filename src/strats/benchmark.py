@@ -20,13 +20,13 @@ def buy_and_hold_strategy():
         SignalRule(
             name="buy_and_hold",
             entry_conditions=[
-                SignalCondition("day_of_backtest", ConditionOperator.EQUAL, 1)  # Buy on first day
+                SignalCondition("close", ConditionOperator.GREATER_THAN, 0)  # Always true - buy immediately
             ],
             exit_conditions=[
-                SignalCondition("last_day_of_backtest", ConditionOperator.EQUAL, True)  # Never sell until end
+                # Never exit - hold forever
             ],
             position_side=PositionSide.LONG,
-            position_size_factor=10.0  # Use all capital
+            position_size_factor=1.0  # Use normal position sizing
         )
     ]
     
@@ -450,7 +450,7 @@ def create_volatility_harvesting():
             ],
             position_side=PositionSide.SHORT,
             # symbols_filter=['VXX', 'VIXY'],
-            max_hold_days=30
+            time_limit=30
         )
     ]
     
@@ -459,8 +459,8 @@ def create_volatility_harvesting():
         signal_rules=rules,
         # symbols_filter=MarketUniverse.VOLATILITY_ETFS,
         position_size=0.05,      # 5% max - risky
-        max_positions=2,
-        require_hedge=True       # Always hedge with SPY puts
+        max_positions=2
+        # require_hedge=True       # Always hedge with SPY puts
     )
 
 
@@ -491,8 +491,8 @@ def create_crypto_momentum():
         signal_rules=rules,
         # symbols_filter=MarketUniverse.CRYPTO_SYMBOLS,
         position_size=0.05,      # 5% positions
-        max_positions=4,
-        trading_hours='24/7'     # Crypto trades 24/7
+        max_positions=4
+        # trading_hours='24/7'     # Crypto trades 24/7
     )
 
 
@@ -516,8 +516,8 @@ def create_dividend_aristocrat():
     return EventBasedStrategy(
         name="Dividend Aristocrat Capture",
         event_triggers=triggers,
-        position_size=0.20,  # Large positions for stable dividend stocks
-        hedge_market_risk=True
+        position_size=0.20  # Large positions for stable dividend stocks
+        # hedge_market_risk=True
     )
 
 
@@ -546,9 +546,9 @@ def create_earnings_surprise():
     return EventBasedStrategy(
         name="Big Tech Earnings Play",
         event_triggers=triggers,
-        use_options=True,  # Trade options for leverage
-        position_size=0.05,
-        max_event_exposure=0.20  # Max 20% in earnings plays
+        # use_options=True,  # Trade options for leverage
+        position_size=0.05
+        # max_event_exposure=0.20  # Max 20% in earnings plays
     )
 
 
@@ -558,38 +558,38 @@ def create_morning_breakout():
         TradingWindow(
             start_time=time(9, 30),
             end_time=time(10, 30),
-            session_type=SessionType.REGULAR,
-            entry_rules={
-                'opening_range_breakout': True,
-                'min_range': 0.005,      # 0.5% minimum range
-                'volume_confirmation': 1.5,
-                'gap_fade': False        # Don't fade gaps
-            },
+            session_type=SessionType.REGULAR
+            # entry_rules={
+            #     'opening_range_breakout': True,
+            #     'min_range': 0.005,      # 0.5% minimum range
+            #     'volume_confirmation': 1.5,
+            #     'gap_fade': False        # Don't fade gaps
+            # },
             # symbols_filter=MarketUniverse.LARGE_CAP_STOCKS
         ),
         TradingWindow(
             start_time=time(10, 30),
             end_time=time(11, 30),
-            session_type=SessionType.REGULAR,
-            entry_rules={
-                'continuation_only': True,
-                'require_trend': True
-            }
+            session_type=SessionType.REGULAR
+            # entry_rules={
+            #     'continuation_only': True,
+            #     'require_trend': True
+            # }
         )
     ]
     
     schedule = TradingSchedule(
         windows=windows,
         max_trades_per_day=5,
-        force_close_end_of_day=True,
-        no_overnight_positions=True
+        force_close_end_of_day=True
+        # no_overnight_positions=True
     )
     
     return TimeBasedStrategy(
         name="Morning Momentum Breakout",
         trading_schedule=schedule,
-        position_size=0.10,
-        time_stops={'morning': 90, 'midday': 120}  # Minutes
+        position_size=0.10
+        # time_stops={'morning': 90, 'midday': 120}  # Minutes
     )
 
 
@@ -607,9 +607,9 @@ def create_global_macro_composite():
                 post_event_days=5,
                 # symbols_filter=MarketUniverse.BOND_ETFS
             )
-        ],
-        trade_direction='both',
-        use_futures=True
+        ]
+        # trade_direction='both',
+        # use_futures=True
     )
     commodity_trend = SignalBasedStrategy(
         name="Commodity Trend",
@@ -637,11 +637,11 @@ def create_global_macro_composite():
             StrategyWeight(bond_macro, weight=1.2, min_confidence=0.5),
             StrategyWeight(commodity_trend, weight=0.8, min_confidence=0.7)
         ],
-        combination_mode=CombinationMode.RISK_PARITY,
-        target_volatility=0.10,  # 10% target vol
+        combination_mode=CombinationMode.WEIGHTED
+        # target_volatility=0.10,  # 10% target vol
         # rebalance_frequency='weekly',
-        correlation_limit=0.6,
-        max_drawdown_limit=0.15  # 15% max drawdown
+        # correlation_limit=0.6,
+        # max_drawdown_limit=0.15  # 15% max drawdown
     )
 
 
@@ -715,10 +715,10 @@ def create_all_weather_defensive():
             StrategyWeight(defensive_sectors, weight=0.3),
             StrategyWeight(treasury_allocation, weight=0.3)
         ],
-        combination_mode=CombinationMode.DEFENSIVE,
-        min_agreement=0.5,
-        max_volatility=0.08,  # 8% max volatility
-        preserve_capital=True
+        combination_mode=CombinationMode.MAJORITY
+        # min_agreement=0.5,
+        # max_volatility=0.08,  # 8% max volatility
+        # preserve_capital=True
     )
 
 

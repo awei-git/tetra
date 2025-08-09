@@ -201,6 +201,85 @@ EVENT_PERIODS = {
         },
         affected_symbols=["VIAC", "DISCA", "BIDU", "TME", "CS", "NMR"],
         volatility_multiplier=2.0
+    ),
+    
+    # Bull market scenarios
+    "post_covid_rally": EventPeriod(
+        name="Post-COVID Recovery Rally",
+        start_date=date(2020, 3, 24),
+        end_date=date(2021, 1, 8),
+        description="Massive liquidity-driven rally from COVID bottom",
+        key_dates={
+            date(2020, 3, 24): "Fed unlimited QE announcement",
+            date(2020, 11, 9): "Vaccine announcement",
+            date(2020, 12, 21): "Stimulus package passed"
+        },
+        volatility_multiplier=2.0
+    ),
+    
+    "trump_rally": EventPeriod(
+        name="Trump Tax Cut Rally",
+        start_date=date(2017, 1, 1),
+        end_date=date(2018, 1, 26),
+        description="Tax reform anticipation and passage rally",
+        key_dates={
+            date(2017, 12, 22): "Tax Cuts and Jobs Act signed",
+            date(2018, 1, 26): "Market peak before volatility"
+        },
+        volatility_multiplier=0.8
+    ),
+    
+    "ai_boom_2023": EventPeriod(
+        name="AI/ChatGPT Boom",
+        start_date=date(2023, 1, 1),
+        end_date=date(2023, 7, 31),
+        description="AI euphoria driven by ChatGPT and NVDA",
+        key_dates={
+            date(2023, 1, 23): "Microsoft announces ChatGPT investment",
+            date(2023, 5, 24): "NVDA earnings blowout",
+            date(2023, 6, 13): "Tech enters bull market"
+        },
+        affected_symbols=["NVDA", "MSFT", "GOOGL", "META", "AMZN"],
+        volatility_multiplier=1.5
+    ),
+    
+    "qe_rally_2013": EventPeriod(
+        name="QE Infinity Rally",
+        start_date=date(2013, 1, 1),
+        end_date=date(2013, 12, 31),
+        description="Fed QE3 drives market to new highs",
+        key_dates={
+            date(2013, 5, 22): "Bernanke taper talk",
+            date(2013, 9, 18): "No taper surprise"
+        },
+        volatility_multiplier=0.9
+    ),
+    
+    "recovery_2009": EventPeriod(
+        name="Financial Crisis Recovery",
+        start_date=date(2009, 3, 10),
+        end_date=date(2009, 12, 31),
+        description="Recovery from financial crisis bottom",
+        key_dates={
+            date(2009, 3, 10): "Market bottom",
+            date(2009, 3, 23): "Geithner plan announced",
+            date(2009, 7, 24): "DOW breaks 9000"
+        },
+        volatility_multiplier=2.2
+    ),
+    
+    "tech_boom_2024": EventPeriod(
+        name="Tech Mega-Cap Boom 2024",
+        start_date=date(2024, 10, 1),
+        end_date=date(2025, 4, 30),
+        description="Magnificent 7 drive market to new highs",
+        key_dates={
+            date(2024, 10, 30): "Big tech earnings beat",
+            date(2025, 1, 15): "Soft landing confirmed",
+            date(2025, 4, 1): "AI productivity gains"
+        },
+        affected_symbols=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"],
+        volatility_multiplier=1.2
     )
 }
 

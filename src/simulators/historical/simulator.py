@@ -151,6 +151,11 @@ class HistoricalSimulator(BaseSimulator):
         
         # Final calculations
         result.final_value = portfolio.get_total_value(market_prices)
+        
+        # Add trades from portfolio transactions
+        result.trades = self._extract_trades_from_transactions(portfolio.transactions)
+        
+        # Calculate all metrics including trade statistics
         result.calculate_metrics(self.config.risk_free_rate)
         
         # Add benchmark comparison if available
@@ -158,6 +163,62 @@ class HistoricalSimulator(BaseSimulator):
             await self._calculate_benchmark_metrics(result)
         
         return result
+    
+    def _extract_trades_from_transactions(self, transactions: List[Any]) -> List[Dict[str, Any]]:
+        """Extract completed trades from transactions."""
+        trades = []
+        position_tracker = {}  # Track open positions by symbol
+        
+        for tx in transactions:
+            symbol = tx.symbol
+            
+            if tx.transaction_type.name == "BUY":
+                # Track opening position
+                if symbol not in position_tracker:
+                    position_tracker[symbol] = []
+                position_tracker[symbol].append({
+                    'entry_time': tx.timestamp,
+                    'entry_price': tx.price,
+                    'quantity': tx.quantity,
+                    'entry_commission': tx.commission
+                })
+            
+            elif tx.transaction_type.name == "SELL":
+                # Match with open positions (FIFO)
+                if symbol in position_tracker and position_tracker[symbol]:
+                    # Close positions FIFO
+                    remaining_qty = tx.quantity
+                    while remaining_qty > 0 and position_tracker[symbol]:
+                        position = position_tracker[symbol][0]
+                        
+                        # Calculate how much to close
+                        close_qty = min(remaining_qty, position['quantity'])
+                        
+                        # Create trade record
+                        trade = {
+                            'symbol': symbol,
+                            'entry_date': position['entry_time'],
+                            'exit_date': tx.timestamp,
+                            'quantity': close_qty,
+                            'entry_price': position['entry_price'],
+                            'exit_price': tx.price,
+                            'entry_commission': position['entry_commission'] * (close_qty / position['quantity']),
+                            'exit_commission': tx.commission * (close_qty / tx.quantity),
+                            'pnl': (tx.price - position['entry_price']) * close_qty - 
+                                   (position['entry_commission'] * (close_qty / position['quantity']) + 
+                                    tx.commission * (close_qty / tx.quantity))
+                        }
+                        trades.append(trade)
+                        
+                        # Update position
+                        position['quantity'] -= close_qty
+                        remaining_qty -= close_qty
+                        
+                        # Remove if fully closed
+                        if position['quantity'] <= 0:
+                            position_tracker[symbol].pop(0)
+        
+        return trades
     
     async def simulate_event(
         self,
@@ -222,14 +283,19 @@ class HistoricalSimulator(BaseSimulator):
         """Execute trading strategy."""
         # Get historical data for indicators
         historical_data = {}
-        for symbol in strategy.universe:
-            series = await self.market_replay.get_price_series(
+        # Get all symbols from market data if strategy universe is empty or small
+        symbols_to_load = set(strategy.universe) if hasattr(strategy, 'universe') else set()
+        symbols_to_load.update(market_data.keys())
+        
+        for symbol in symbols_to_load:
+            # Get full OHLCV data, not just price series
+            df = await self.market_replay._load_symbol_data(
                 symbol,
                 trading_day - timedelta(days=252),  # 1 year of history
                 trading_day
             )
-            if not series.empty:
-                historical_data[symbol] = series
+            if not df.empty:
+                historical_data[symbol] = df
         
         # Calculate indicators
         if hasattr(strategy, 'calculate_indicators'):
@@ -241,13 +307,15 @@ class HistoricalSimulator(BaseSimulator):
                 signals = await strategy.generate_signals(
                     market_data,
                     portfolio,
-                    trading_day
+                    trading_day,
+                    historical_data
                 )
             else:
                 signals = strategy.generate_signals(
                     market_data,
                     portfolio,
-                    trading_day
+                    trading_day,
+                    historical_data
                 )
             return signals
         
@@ -261,58 +329,63 @@ class HistoricalSimulator(BaseSimulator):
         trading_day: date
     ) -> None:
         """Execute a trading signal."""
-        if signal.symbol not in market_data:
+        # Handle both dict and object signals
+        symbol = signal.get('symbol') if isinstance(signal, dict) else signal.symbol
+        direction = signal.get('direction') if isinstance(signal, dict) else signal.direction
+        quantity = signal.get('quantity', 100) if isinstance(signal, dict) else (signal.quantity or 100)
+        
+        if symbol not in market_data:
             return
             
-        market_info = market_data[signal.symbol]
+        market_info = market_data[symbol]
         
         # Apply slippage
         execution_price = self.apply_slippage(
             market_info['close'],
-            signal.direction == "BUY"
+            direction == "BUY"
         )
         
         # Calculate commission
         commission = self.calculate_commission(
-            signal.quantity or 100,
+            quantity,
             execution_price
         )
         
         # Determine quantity if not specified
-        if not signal.quantity:
-            if signal.direction == "BUY":
+        if not quantity:
+            if direction == "BUY":
                 # Calculate based on available cash and position limits
                 available_cash = portfolio.cash - commission
                 max_position_value = portfolio.get_total_value(market_data) * self.config.max_position_size
                 position_value = min(available_cash, max_position_value)
-                signal.quantity = int(position_value / execution_price)
+                quantity = int(position_value / execution_price)
             else:
                 # Sell entire position
-                position = portfolio.get_position(signal.symbol)
+                position = portfolio.get_position(symbol)
                 if position:
-                    signal.quantity = abs(position.quantity)
+                    quantity = abs(position.quantity)
                 else:
                     return
         
         # Execute trade
         try:
-            if signal.direction == "BUY":
+            if direction == "BUY":
                 portfolio.add_position(
-                    symbol=signal.symbol,
-                    quantity=signal.quantity,
+                    symbol=symbol,
+                    quantity=quantity,
                     price=execution_price,
                     timestamp=datetime.combine(trading_day, datetime.min.time()),
                     commission=commission,
-                    order_id=getattr(signal, 'order_id', None)
+                    order_id=signal.get('order_id') if isinstance(signal, dict) else getattr(signal, 'order_id', None)
                 )
-            elif signal.direction == "SELL":
+            elif direction == "SELL":
                 portfolio.add_position(
-                    symbol=signal.symbol,
-                    quantity=-signal.quantity,
+                    symbol=symbol,
+                    quantity=-quantity,
                     price=execution_price,
                     timestamp=datetime.combine(trading_day, datetime.min.time()),
                     commission=commission,
-                    order_id=getattr(signal, 'order_id', None)
+                    order_id=signal.get('order_id') if isinstance(signal, dict) else getattr(signal, 'order_id', None)
                 )
         except ValueError as e:
             # Log failed trades

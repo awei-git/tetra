@@ -8,6 +8,9 @@ from src.pipelines.base import PipelineStep, PipelineContext
 from src.clients.news_sentiment_client import NewsSentimentClient
 from src.db.base import get_session
 from src.utils.logging import logger
+from src.models.sqlalchemy.news_sentiment import NewsArticleModel
+from sqlalchemy.dialects.postgresql import insert
+from datetime import datetime, timezone
 
 
 class NewsSentimentStep(PipelineStep[Dict[str, Any]]):
@@ -67,7 +70,12 @@ class NewsSentimentStep(PipelineStep[Dict[str, Any]]):
                                 limit=100
                             )
                             
-                            # For now, just count articles
+                            # Save articles to database
+                            if articles:
+                                async for db in get_session():
+                                    await self._save_articles(articles, db)
+                                    break
+                            
                             results["articles"] += len(articles)
                             results["symbols_processed"] += len(chunk)
                             
@@ -126,3 +134,47 @@ class NewsSentimentStep(PipelineStep[Dict[str, Any]]):
         )
         
         return results
+    
+    async def _save_articles(self, articles, db):
+        """Save news articles to database with upsert logic"""
+        try:
+            # Prepare values for insert
+            values = []
+            for article in articles:
+                values.append({
+                    "url": article.url,
+                    "title": article.title,
+                    "author": article.author,
+                    "source": article.source,
+                    "source_category": "news",
+                    "published_at": article.published_at,
+                    "content": article.content,
+                    "description": getattr(article, 'description', None),
+                    "fetched_at": datetime.now(timezone.utc),
+                    "symbols": article.symbols if hasattr(article, 'symbols') else [],  # List of symbols
+                })
+            
+            # Batch insert to avoid parameter limits
+            batch_size = 100
+            for i in range(0, len(values), batch_size):
+                batch = values[i:i + batch_size]
+                
+                # Use PostgreSQL upsert
+                stmt = insert(NewsArticleModel).values(batch)
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uq_news_articles_url",
+                    set_={
+                        "title": stmt.excluded.title,
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                )
+                
+                await db.execute(stmt)
+            
+            await db.commit()
+            logger.info(f"Saved {len(articles)} news articles to database")
+            
+        except Exception as e:
+            logger.error(f"Error saving news articles: {e}")
+            await db.rollback()
+            raise

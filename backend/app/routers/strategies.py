@@ -7,10 +7,114 @@ import asyncpg
 import logging
 
 from ..services.database import get_db_session
+from ..services.strategies import StrategyService
 from ..models.responses import StandardResponse
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/strategies", tags=["strategies"])
+router = APIRouter()
+
+
+@router.get("/list")
+async def get_strategies_list(
+    category: Optional[str] = None,
+    db: asyncpg.Connection = Depends(get_db_session)
+) -> StandardResponse:
+    """Get list of all strategies with latest performance."""
+    try:
+        strategy_service = StrategyService(db)
+        strategies = await strategy_service.get_strategies_list(category)
+        return StandardResponse(
+            success=True,
+            data={"strategies": strategies}
+        )
+    except Exception as e:
+        logger.error(f"Error getting strategies list: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{strategy_name}/performance")
+async def get_strategy_performance(
+    strategy_name: str,
+    symbol: str = Query("SPY", description="Symbol to backtest on"),
+    window_size: int = Query(252, description="Lookback window in days"),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: asyncpg.Connection = Depends(get_db_session)
+) -> StandardResponse:
+    """Get historical performance for a specific strategy."""
+    try:
+        strategy_service = StrategyService(db)
+        
+        # Default to last 10 years if no date range specified
+        if not end_date:
+            end_date = date.today()
+        if not start_date:
+            start_date = end_date - timedelta(days=3650)  # ~10 years
+        
+        performance = await strategy_service.get_strategy_performance(
+            strategy_name=strategy_name,
+            symbol=symbol,
+            window_size=window_size,
+            start_date=start_date,
+            end_date=end_date
+        )
+        return StandardResponse(
+            success=True,
+            data=performance
+        )
+    except Exception as e:
+        logger.error(f"Error getting strategy performance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{strategy_name}/scenarios")
+async def get_strategy_scenarios(
+    strategy_name: str,
+    symbol: str = Query("SPY"),
+    db: asyncpg.Connection = Depends(get_db_session)
+) -> StandardResponse:
+    """Get strategy performance in different market scenarios."""
+    try:
+        strategy_service = StrategyService(db)
+        scenarios = await strategy_service.get_strategy_scenarios(
+            strategy_name=strategy_name,
+            symbol=symbol
+        )
+        return StandardResponse(
+            success=True,
+            data=scenarios
+        )
+    except Exception as e:
+        logger.error(f"Error getting strategy scenarios: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{strategy_name}/metrics")
+async def get_strategy_metrics(
+    strategy_name: str,
+    run_date: Optional[datetime] = None,
+    db: asyncpg.Connection = Depends(get_db_session)
+) -> StandardResponse:
+    """Get detailed metrics for a strategy from the latest or specific backtest run."""
+    try:
+        strategy_service = StrategyService(db)
+        metrics = await strategy_service.get_strategy_metrics(
+            strategy_name=strategy_name,
+            run_date=run_date
+        )
+        
+        if not metrics:
+            raise HTTPException(status_code=404, detail=f"No metrics found for strategy '{strategy_name}'")
+        
+        return StandardResponse(
+            success=True,
+            data=metrics
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting strategy metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/latest-results")

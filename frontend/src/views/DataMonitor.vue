@@ -156,7 +156,7 @@
     
     <!-- Daily Update Summary -->
     <div class="mt-8 bg-gray-800 border border-gray-700 rounded-lg p-6">
-      <h3 class="text-lg font-semibold mb-4 text-gray-100">Daily Update Summary</h3>
+      <h3 class="text-lg font-semibold mb-4 text-gray-100">Data Update Summary</h3>
       
       <div v-if="dailyUpdateSummary" class="space-y-3">
         <!-- Show running status prominently -->
@@ -705,13 +705,14 @@ onMounted(() => {
   // Set up WebSocket for real-time updates
   ws = createWebSocket(handleWebSocketMessage)
   
-  // Refresh every 30 seconds
-  const interval = setInterval(() => {
-    fetchCoverage()
-    fetchDailyUpdateSummary()
-  }, 30000)
+  // Auto-refresh disabled to prevent flashing
+  // To enable auto-refresh, uncomment the following:
+  // const interval = setInterval(() => {
+  //   fetchCoverage()
+  //   fetchDailyUpdateSummary()
+  // }, 30000)
   onUnmounted(() => {
-    clearInterval(interval)
+    // clearInterval(interval)  // Commented out since auto-refresh is disabled
     if (ws) ws.close()
   })
 })

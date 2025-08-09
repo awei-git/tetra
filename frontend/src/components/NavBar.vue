@@ -1,11 +1,11 @@
 <template>
-  <nav class="bg-white shadow-sm border-b">
+  <nav class="bg-gray-800 shadow-lg border-b border-gray-700">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-16">
         <div class="flex">
           <!-- Logo/Brand -->
           <div class="flex-shrink-0 flex items-center">
-            <h2 class="text-xl font-bold text-gray-900">Tetra WebGUI</h2>
+            <h2 class="text-xl font-bold text-gray-100">Tetra</h2>
           </div>
           
           <!-- Navigation Links -->
@@ -15,14 +15,21 @@
               class="nav-link"
               :class="{ 'active': $route.path === '/' }"
             >
-              Data Monitor
+              Monitor
             </router-link>
             <router-link
               to="/chat"
               class="nav-link"
               :class="{ 'active': $route.path === '/chat' }"
             >
-              Chat with DB
+              Chat
+            </router-link>
+            <router-link
+              to="/strategies"
+              class="nav-link"
+              :class="{ 'active': $route.path === '/strategies' }"
+            >
+              Strats
             </router-link>
           </div>
         </div>
@@ -55,14 +62,21 @@
             class="mobile-nav-link"
             :class="{ 'active': $route.path === '/' }"
           >
-            Data Monitor
+            Monitor
           </router-link>
           <router-link
             to="/chat"
             class="mobile-nav-link"
             :class="{ 'active': $route.path === '/chat' }"
           >
-            Chat with DB
+            Chat
+          </router-link>
+          <router-link
+            to="/strategies"
+            class="mobile-nav-link"
+            :class="{ 'active': $route.path === '/strategies' }"
+          >
+            Strats
           </router-link>
         </div>
       </div>
@@ -77,19 +91,19 @@
 <style scoped>
 .nav-link {
   @apply inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium;
-  @apply border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300;
+  @apply border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500;
 }
 
 .nav-link.active {
-  @apply border-blue-500 text-gray-900;
+  @apply border-blue-400 text-gray-100;
 }
 
 .mobile-nav-link {
   @apply block pl-3 pr-4 py-2 border-l-4 text-base font-medium;
-  @apply border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300;
+  @apply border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700 hover:border-gray-500;
 }
 
 .mobile-nav-link.active {
-  @apply bg-blue-50 border-blue-500 text-blue-700;
+  @apply bg-gray-700 border-blue-400 text-blue-300;
 }
 </style>

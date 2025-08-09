@@ -1,0 +1,254 @@
+# Comprehensive Strategy Analysis Configuration
+# This file defines all parameters for the analysis run
+
+analysis:
+  # Name for this analysis run
+  name: "comprehensive_strategy_analysis"
+  
+  # Output directory for results
+  output_dir: "/tmp/strategy_analysis"
+  
+  # Parallelization settings
+  parallel:
+    max_concurrent: 10  # Maximum concurrent tasks
+    use_multiprocessing: false  # Use asyncio instead to avoid connection issues
+  
+  # Date range for analysis
+  date_range:
+    start_year: 2023
+    end_year: 2025
+    
+  # Rolling window configuration
+  rolling_windows:
+    step_days: 14  # How often to roll the window (14 = bi-weekly)
+    
+# Symbols to analyze
+symbols:
+  # Core symbols for testing
+  test:
+    - SPY
+    - QQQ
+    - IWM
+  
+  # Full symbol list
+  full:
+    - SPY
+    - QQQ
+    - IWM
+    - DIA
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - NVDA
+    - TSLA
+    - JPM
+    - BAC
+    - XLF
+    - XLK
+    - GLD
+    - TLT
+    - BTC-USD
+    - ETH-USD
+
+# Strategies to test
+strategies:
+  # Quick test strategies
+  test:
+    - buy_and_hold
+    - golden_cross
+    - momentum_factor
+  
+  # Core strategies
+  core:
+    - buy_and_hold
+    - golden_cross
+    - turtle_trading
+    - rsi_reversion
+    - momentum_factor
+    - macd_crossover
+    - bollinger_bands
+    - dual_momentum
+  
+  # All available strategies
+  full:
+    - buy_and_hold
+    - golden_cross
+    - turtle_trading
+    - rsi_reversion
+    - bollinger_bands
+    - momentum_factor
+    - macd_crossover
+    - donchian_breakout
+    - volume_momentum
+    - dual_momentum
+    - mega_cap_momentum
+    - ai_growth
+    - sector_rotation
+    - volatility
+    - crypto
+    - dividend
+    - earnings
+    - morning_breakout
+    - global_macro
+    - all_weather
+
+# Window sizes to test (in days)
+window_sizes:
+  test:
+    - name: "2_weeks"
+      days: 14
+    - name: "3_months"
+      days: 90
+  
+  full:
+    - name: "1_week"
+      days: 7
+    - name: "2_weeks"
+      days: 14
+    - name: "1_month"
+      days: 30
+    - name: "2_months"
+      days: 60
+    - name: "3_months"
+      days: 90
+    - name: "6_months"
+      days: 180
+    - name: "1_year"
+      days: 365
+    - name: "2_years"
+      days: 730
+
+# Market scenarios to test
+market_scenarios:
+  test:
+    - normal
+    - bull_market
+    - bear_market
+  
+  full:
+    - normal
+    - bull_market
+    - bear_market
+    - high_volatility
+    - crash
+    - recovery
+    - sideways
+    - stagflation
+    - deflation
+
+# Scenario parameters
+scenario_params:
+  bull_market:
+    annual_drift: 0.20
+    volatility_mult: 0.8
+    description: "20% annual growth with reduced volatility"
+  
+  bear_market:
+    annual_drift: -0.20
+    volatility_mult: 1.5
+    description: "20% annual decline with increased volatility"
+  
+  high_volatility:
+    annual_drift: 0.0
+    volatility_mult: 3.0
+    description: "3x normal volatility with no drift"
+  
+  crash:
+    drop_percent: -0.30
+    drop_days: 10
+    recovery_percent: 0.85
+    recovery_days: 60
+    description: "30% drop over 10 days, partial recovery"
+  
+  recovery:
+    drop_percent: -0.20
+    recovery_percent: 1.40
+    description: "V-shaped recovery pattern"
+  
+  sideways:
+    volatility: 0.01
+    mean_reversion: true
+    description: "Range-bound market with mean reversion"
+  
+  stagflation:
+    annual_drift: -0.05
+    volatility_mult: 1.2
+    description: "Slight decline with elevated volatility"
+  
+  deflation:
+    annual_drift: -0.10
+    volatility_mult: 0.7
+    description: "Gradual decline with low volatility"
+
+# Performance metrics to calculate
+metrics:
+  basic:
+    - total_return
+    - annual_return
+    - sharpe_ratio
+    - max_drawdown
+    - volatility
+    - win_rate
+    - total_trades
+  
+  advanced:
+    - sortino_ratio
+    - calmar_ratio
+    - profit_factor
+    - var_95
+    - cvar_95
+    - max_consecutive_losses
+    - max_consecutive_wins
+    - recovery_time
+    - downside_deviation
+    - upside_capture
+    - downside_capture
+
+# Analysis modes
+modes:
+  quick_test:
+    symbols: test
+    strategies: test
+    window_sizes: test
+    scenarios: test
+    description: "Quick test with minimal combinations"
+  
+  core_analysis:
+    symbols: test
+    strategies: core
+    window_sizes: full
+    scenarios: test
+    description: "Core analysis with main strategies"
+  
+  full_analysis:
+    symbols: full
+    strategies: full
+    window_sizes: full
+    scenarios: full
+    description: "Complete comprehensive analysis"
+
+# Reporting options
+reporting:
+  generate_csv: true
+  generate_excel: true
+  generate_plots: true
+  generate_html_report: true
+  
+  # Report sections
+  sections:
+    - summary_statistics
+    - strategy_rankings
+    - performance_by_window
+    - performance_by_symbol
+    - risk_analysis
+    - scenario_analysis
+    - consistency_metrics
+    - correlation_matrix
+    - recommendations
+
+# Logging configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  log_file: "strategy_analysis.log"
+  console_output: true

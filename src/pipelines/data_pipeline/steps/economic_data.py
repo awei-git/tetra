@@ -94,27 +94,35 @@ class EconomicDataStep(PipelineStep[Dict[str, Any]]):
     async def _save_economic_data(self, data, db):
         """Save economic data to database with upsert logic"""
         try:
-            # Prepare values for insert
-            values = []
-            for item in data:
-                values.append({
-                    "symbol": item.symbol,
-                    "date": item.date,
-                    "value": item.value,
-                    "source": item.source,
-                })
+            # Batch the data to avoid exceeding PostgreSQL parameter limit
+            batch_size = 1000  # Safe batch size for 5 fields per record
             
-            # Use PostgreSQL upsert
-            stmt = insert(EconomicIndicatorModel).values(values)
-            stmt = stmt.on_conflict_do_update(
-                constraint="uq_econ_symbol_date",
-                set_={
-                    "value": stmt.excluded.value,
-                    "updated_at": datetime.now(timezone.utc),
-                }
-            )
+            for i in range(0, len(data), batch_size):
+                batch = data[i:i + batch_size]
+                
+                # Prepare values for insert
+                values = []
+                for item in batch:
+                    values.append({
+                        "symbol": item.symbol,
+                        "date": item.date,
+                        "value": float(item.value),  # Convert Decimal to float
+                        "source": item.source,
+                        "is_preliminary": False,  # FRED data is typically final
+                    })
+                
+                # Use PostgreSQL upsert
+                stmt = insert(EconomicIndicatorModel).values(values)
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uq_econ_symbol_date",
+                    set_={
+                        "value": stmt.excluded.value,
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                )
+                
+                await db.execute(stmt)
             
-            await db.execute(stmt)
             await db.commit()
             
         except Exception as e:

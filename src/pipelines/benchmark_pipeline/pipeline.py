@@ -28,7 +28,7 @@ class BenchmarkPipeline(Pipeline):
             StrategyBacktestStep(),
             MetricsCalculationStep(),
             RankingStep(),
-            ResultStorageStep()
+            # ResultStorageStep()  # Temporarily disabled due to async DB issues
         ]
     
     async def setup(self) -> None:

@@ -54,6 +54,25 @@ export const chatAPI = {
   saveQuery: (query, sql, results) => api.post('/chat/save', { query, sql, results })
 }
 
+// Strategies API endpoints
+export const strategiesAPI = {
+  getStrategiesList: (category) => api.get('/strategies/list', { params: { category } }),
+  getCategories: () => api.get('/strategies/categories'),
+  getStrategyPerformance: (strategyName, symbol, windowSize, startDate, endDate) => 
+    api.get(`/strategies/${strategyName}/performance`, {
+      params: { symbol, window_size: windowSize, start_date: startDate, end_date: endDate }
+    }),
+  getStrategyScenarios: (strategyName, symbol) => 
+    api.get(`/strategies/${strategyName}/scenarios`, { params: { symbol } }),
+  getStrategyMetrics: (strategyName, runDate) => 
+    api.get(`/strategies/${strategyName}/metrics`, { params: { run_date: runDate } }),
+  getEquityCurve: (strategyName, backtestId) => 
+    api.get(`/strategies/${strategyName}/equity-curve`, { params: { backtest_id: backtestId } }),
+  getLatestRankings: (category) => 
+    api.get('/strategies/rankings/latest', { params: { category } }),
+  getLatestSummary: () => api.get('/strategies/summary/latest')
+}
+
 // WebSocket connection for real-time updates
 export const createWebSocket = (onMessage) => {
   const wsUrl = (import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/monitor')

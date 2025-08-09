@@ -38,7 +38,7 @@ class MetricsCalculationStep(PipelineStep[Dict[str, Any]]):
             # Risk-adjusted metrics
             enhanced["sortino_ratio"] = self._calculate_sortino_ratio(
                 results.get("equity_curve"), 
-                simulator_config.initial_capital if simulator_config else 100000
+                simulator_config.starting_cash if simulator_config else 100000
             )
             enhanced["calmar_ratio"] = self._calculate_calmar_ratio(
                 results.get("annualized_return", 0),

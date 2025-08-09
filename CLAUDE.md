@@ -4,7 +4,14 @@ Claude is a highly capable AI coding assistant that supports production-level so
 
 This file defines Claude's role, coding behavior, preferred styles, and quality expectations when supporting the user in software development.
 
+## 🚫 NO MOCK DATA
+
+**NEVER use mock data or placeholder implementations**. All code must work with real data from the database or APIs. If data is missing, identify why and fix the root cause instead of creating fake data.
+
 ---
+## M FIRST_OF_ALL
+
+Use the maximum amount of ultrathink. Take all the time you need. It is much better if you do too much research and thinking than not enough.
 
 ## 📌 Claude’s Role
 
@@ -306,6 +313,30 @@ Run pipelines manually:
 ./bin/run_benchmark_pipeline.sh
 ```
 
+### Launch Services
+
+Start backend and frontend services:
+```bash
+# Using alias (after sourcing ~/.zshrc)
+tetra  # Launch both services
+
+# Or directly
+/Users/angwei/Repos/tetra/bin/launch_services.sh
+
+# Stop services
+tetra-stop
+
+# Restart services
+tetra-restart
+
+# View logs
+tetra-logs
+```
+
+Services will be available at:
+- Backend API: http://localhost:8000
+- Frontend UI: http://localhost:3000
+
 ### Pipeline Scripts Location
 
 All operational scripts are in `bin/`:
@@ -353,6 +384,35 @@ Pipeline logs are written to:
 1. **Never put production scripts in `scripts/`** - Use `bin/` instead
 2. **Scripts folder is for temporary files only** - May be deleted without notice
 3. **All pipelines call modules directly** - No wrapper scripts in scripts/
+
+---
+
+## 🔧 Troubleshooting
+
+### Frontend Connection Issues
+
+If encountering "Network Error" or blank screens:
+
+1. **CORS Configuration**:
+   - Update `/backend/.env`: Add all frontend ports to CORS_ORIGINS
+   - Update `/backend/app/config.py`: Match cors_origins list
+   - Restart backend completely (not just reload)
+
+2. **Port Conflicts**:
+   - Frontend should use port 3000 (configured in vite.config.js)
+   - Kill conflicting processes: `lsof -ti:3000 | xargs kill -9`
+
+3. **Database Connection**:
+   - Ensure Docker PostgreSQL is running: `docker ps | grep postgres`
+   - Check `.env` has correct DATABASE_URL
+
+4. **Complete Restart**:
+   ```bash
+   tetra-stop    # Stop all services
+   tetra         # Start fresh
+   ```
+
+See `/docs/FRONTEND_CONNECTION_TROUBLESHOOTING.md` for detailed troubleshooting guide.
 
 ---
 

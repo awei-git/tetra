@@ -24,7 +24,15 @@ class MarketDataStep(PipelineStep[Dict[str, Any]]):
     async def execute(self, context: PipelineContext) -> Dict[str, Any]:
         """Execute market data fetching"""
         mode = context.data.get("mode", "daily")
-        symbols = context.data.get("symbols", [])
+        symbols = context.data.get("symbols")
+        
+        logger.debug(f"MarketDataStep context keys: {list(context.data.keys())}")
+        logger.debug(f"Symbols in context: {symbols[:5] if symbols else 'None'}...")
+        
+        if symbols is None or len(symbols) == 0:
+            logger.error(f"No symbols provided to MarketDataStep. Context keys: {list(context.data.keys())}")
+            return {"success": {}, "failed": {}, "total_records": 0}
+        
         start_date = context.data.get("start_date")
         end_date = context.data.get("end_date")
         

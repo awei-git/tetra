@@ -42,18 +42,25 @@ class DataPipeline(Pipeline):
         all_steps = []
         
         if "market_data" not in skip_steps:
+            logger.info("Adding MarketDataStep")
             all_steps.append(MarketDataStep())
+        else:
+            logger.info("Skipping MarketDataStep")
             
         if "economic_data" not in skip_steps:
+            logger.info("Adding EconomicDataStep")
             all_steps.append(EconomicDataStep())
             
         if "event_data" not in skip_steps:
+            logger.info("Adding EventDataStep")
             all_steps.append(EventDataStep())
             
         if "news_sentiment" not in skip_steps:
+            logger.info("Adding NewsSentimentStep")
             all_steps.append(NewsSentimentStep())
         
         # Add steps based on execution mode
+        logger.info(f"Total steps configured: {len(all_steps)} - {[step.name for step in all_steps]}")
         if parallel and len(all_steps) > 1:
             # Run data ingestion steps in parallel
             self.add_step(ParallelStep(all_steps, name="ParallelDataIngestion"))

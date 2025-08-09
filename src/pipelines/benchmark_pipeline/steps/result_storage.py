@@ -111,7 +111,7 @@ class ResultStorageStep(PipelineStep[Dict[str, Any]]):
                     "start_date": context_data.get("backtest_start"),
                     "end_date": context_data.get("backtest_end"),
                     "universe": context_data.get("universe_filter", "core"),
-                    "initial_capital": context_data.get("simulator_config", {}).initial_capital if context_data.get("simulator_config") else 100000,
+                    "initial_capital": context_data.get("simulator_config").starting_cash if context_data.get("simulator_config") else 100000,
                     "final_value": result.get("final_value"),
                     "total_return": result.get("total_return"),
                     "annualized_return": result.get("annualized_return"),
