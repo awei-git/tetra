@@ -2,30 +2,36 @@
 
 This directory is for **temporary and experimental scripts only**.
 
-## Important Notes
+## ⚠️ IMPORTANT: This folder is regularly cleaned
 
-- Do NOT put production scripts here
-- All operational scripts should go in `bin/`
-- Database migrations go in `backend/alembic/versions/`
-- Pipeline code goes in `src/pipelines/`
+All files in this directory (except this README) may be deleted at any time without notice.
 
-## What belongs here
+## ❌ What does NOT belong here
+
+- Production scripts → Use `bin/` instead
+- Database migrations → Use `backend/alembic/versions/`
+- Pipeline code → Use `src/pipelines/`
+- Any script that other code depends on → Move to appropriate `src/` module
+
+## ✅ What belongs here
 
 - Quick test scripts for debugging
 - One-off data exploration scripts
 - Temporary fixes or patches
 - Experimental code that will be deleted
+- Scripts for testing new ideas
 
-## Cleanup Policy
+## 📁 Where to put production code
 
-Files in this directory may be deleted at any time without notice.
-If you have a script that needs to be preserved, move it to the appropriate location:
-
-- `bin/` - Operational scripts (startup, monitoring, etc.)
-- `src/` - Production Python code
-- `backend/` - Backend-specific scripts
+- `bin/` - Operational scripts (startup, pipelines, monitoring)
+- `src/` - Production Python modules and packages
+- `backend/` - Backend API specific code
 - `config/` - Configuration files
 
-## Archive
+## 🗄️ Archive
 
-A backup of previous scripts is kept in `archive/scripts_backup/` for reference.
+Previously used scripts are archived in `archive/scripts_backup/` for historical reference only.
+
+## 🧹 Last cleaned: August 2025
+
+All experimental scripts were removed as they had no dependencies.
