@@ -6,6 +6,53 @@
       <p class="text-gray-400 mt-2">Symbol-specific trades with returns, prices, and execution instructions</p>
     </div>
 
+    <!-- Filters -->
+    <div class="mb-6 flex gap-4 flex-wrap">
+      <!-- Strategy Filter -->
+      <select v-model="selectedStrategy" @change="filterTrades"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100">
+        <option value="">All Strategies</option>
+        <option v-for="strategy in strategies" :key="strategy" :value="strategy">
+          {{ strategy }} ({{ getStrategyCount(strategy) }})
+        </option>
+      </select>
+      
+      <!-- Asset Class Filter -->
+      <select v-model="selectedAssetClass" @change="filterTrades"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100">
+        <option value="">All Asset Classes</option>
+        <option v-for="ac in assetClasses" :key="ac" :value="ac">
+          {{ ac }} ({{ getAssetClassCount(ac) }})
+        </option>
+      </select>
+      
+      <!-- Signal Filter -->
+      <select v-model="selectedSignal" @change="filterTrades"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100">
+        <option value="">All Signals</option>
+        <option value="BUY">BUY Only ({{ getSignalCount('BUY') }})</option>
+        <option value="SELL">SELL Only ({{ getSignalCount('SELL') }})</option>
+        <option value="HOLD">HOLD Only ({{ getSignalCount('HOLD') }})</option>
+      </select>
+      
+      <!-- Refresh Button -->
+      <button @click="fetchTrades" 
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        Refresh
+      </button>
+      
+      <!-- Active Filters Display -->
+      <div v-if="activeFiltersCount > 0" class="flex items-center gap-2 text-sm">
+        <span class="text-gray-400">Active filters: {{ activeFiltersCount }}</span>
+        <button @click="clearFilters" class="text-blue-400 hover:text-blue-300">
+          Clear all
+        </button>
+      </div>
+    </div>
+    
     <!-- Scoring Formula Display -->
     <div class="mb-6 bg-gray-800 border border-gray-700 rounded-lg p-4">
       <h2 class="text-lg font-semibold text-yellow-400 mb-2">📊 Scoring Formula</h2>
@@ -51,6 +98,9 @@
                 </h3>
                 <p class="text-lg text-blue-400 font-medium">
                   {{ trade.symbol }}
+                  <span v-if="trade.asset_class" class="text-sm text-gray-400 ml-2">
+                    ({{ trade.asset_class }})
+                  </span>
                 </p>
               </div>
               
@@ -284,13 +334,86 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { strategiesAPI } from '../services/api'
 
 // State
+const allTrades = ref([])
 const trades = ref([])
 const loading = ref(true)
 const selectedScenarios = reactive({})
+const selectedStrategy = ref('')
+const selectedAssetClass = ref('')
+const selectedSignal = ref('')
+
+// Computed properties
+const strategies = computed(() => {
+  const strats = new Set()
+  allTrades.value.forEach(trade => {
+    if (trade.strategy) {
+      strats.add(trade.strategy)
+    }
+  })
+  return Array.from(strats).sort()
+})
+
+const assetClasses = computed(() => {
+  const classes = new Set()
+  allTrades.value.forEach(trade => {
+    if (trade.asset_class) {
+      classes.add(trade.asset_class)
+    }
+  })
+  return Array.from(classes).sort()
+})
+
+const activeFiltersCount = computed(() => {
+  let count = 0
+  if (selectedStrategy.value) count++
+  if (selectedAssetClass.value) count++
+  if (selectedSignal.value) count++
+  return count
+})
+
+// Get count functions
+const getStrategyCount = (strategy) => {
+  return allTrades.value.filter(t => t.strategy === strategy).length
+}
+
+const getAssetClassCount = (assetClass) => {
+  return allTrades.value.filter(t => t.asset_class === assetClass).length
+}
+
+const getSignalCount = (signal) => {
+  return allTrades.value.filter(t => t.trade_type === signal).length
+}
+
+// Filter trades based on selections
+const filterTrades = () => {
+  let filtered = [...allTrades.value]
+  
+  if (selectedStrategy.value) {
+    filtered = filtered.filter(t => t.strategy === selectedStrategy.value)
+  }
+  
+  if (selectedAssetClass.value) {
+    filtered = filtered.filter(t => t.asset_class === selectedAssetClass.value)
+  }
+  
+  if (selectedSignal.value) {
+    filtered = filtered.filter(t => t.trade_type === selectedSignal.value)
+  }
+  
+  trades.value = filtered
+}
+
+// Clear all filters
+const clearFilters = () => {
+  selectedStrategy.value = ''
+  selectedAssetClass.value = ''
+  selectedSignal.value = ''
+  filterTrades()
+}
 
 // Fetch trades on mount
 onMounted(async () => {
@@ -304,6 +427,7 @@ const fetchTrades = async () => {
     const response = await strategiesAPI.getStrategyTrades()
     
     if (response && response.data && response.data.trades) {
+      allTrades.value = response.data.trades
       trades.value = response.data.trades
       
       // Initialize scenario dropdowns
@@ -311,10 +435,12 @@ const fetchTrades = async () => {
         selectedScenarios[`${trade.strategy}-${trade.symbol}`] = 'summary'
       })
     } else {
+      allTrades.value = []
       trades.value = []
     }
   } catch (error) {
     console.error('Error fetching trades:', error)
+    allTrades.value = []
     trades.value = []
   } finally {
     loading.value = false

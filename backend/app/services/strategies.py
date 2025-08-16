@@ -29,7 +29,7 @@ class StrategyService:
                 return_2w, return_1m, return_3m, trade_type, position_size, 
                 execution_instructions, signal_strength, scenario_returns, scenario_prices,
                 expected_return, volatility, sharpe_ratio, max_drawdown, win_probability,
-                composite_score, score_components, rank, last_signal_date
+                composite_score, score_components, rank, last_signal_date, asset_class
             FROM strategies.strategy_trades
             ORDER BY composite_score DESC
             LIMIT 100
@@ -66,7 +66,8 @@ class StrategyService:
                 "score": float(row["composite_score"]),
                 "score_breakdown": json.loads(row["score_components"]) if row["score_components"] else {},
                 "rank": row["rank"],
-                "last_signal": row["last_signal_date"].isoformat() if row["last_signal_date"] else None
+                "last_signal": row["last_signal_date"].isoformat() if row["last_signal_date"] else None,
+                "asset_class": row["asset_class"] if row["asset_class"] else "Unknown"
             })
         
         return trades

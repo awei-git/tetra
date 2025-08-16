@@ -25,13 +25,6 @@
               Chat
             </router-link>
             <router-link
-              to="/strategies"
-              class="nav-link"
-              :class="{ 'active': $route.path === '/strategies' }"
-            >
-              Strats
-            </router-link>
-            <router-link
               to="/trades"
               class="nav-link"
               :class="{ 'active': $route.path === '/trades' }"
@@ -77,13 +70,6 @@
             :class="{ 'active': $route.path === '/chat' }"
           >
             Chat
-          </router-link>
-          <router-link
-            to="/strategies"
-            class="mobile-nav-link"
-            :class="{ 'active': $route.path === '/strategies' }"
-          >
-            Strats
           </router-link>
           <router-link
             to="/trades"
