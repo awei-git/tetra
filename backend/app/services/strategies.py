@@ -21,58 +21,292 @@ class StrategyService:
     def __init__(self, db_connection):
         self.db = db_connection
     
-    async def get_strategies_list(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get list of all strategies with their latest performance metrics."""
+    async def get_strategy_trades(self, strategy: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get detailed trade recommendations with all metrics."""
         query = """
-            WITH latest_results AS (
-                SELECT DISTINCT ON (strategy_name)
-                    strategy_name,
-                    run_date,
-                    total_return,
-                    annualized_return,
-                    sharpe_ratio,
-                    max_drawdown,
-                    volatility,
-                    win_rate,
-                    total_trades,
-                    metadata
-                FROM strategies.backtest_results
-                ORDER BY strategy_name, run_date DESC
-            ),
-            latest_rankings AS (
-                SELECT DISTINCT ON (strategy_name)
-                    strategy_name,
-                    overall_rank,
-                    composite_score,
-                    rank_by_sharpe,
-                    rank_by_return,
-                    rank_by_consistency,
-                    category
-                FROM strategies.strategy_rankings
-                ORDER BY strategy_name, run_date DESC
-            )
             SELECT 
-                lr.strategy_name,
-                COALESCE(lrank.category, 'unknown') as category,
-                NULL as description,
-                lr.total_return,
-                lr.annualized_return,
-                lr.sharpe_ratio,
-                lr.max_drawdown,
-                lr.volatility,
-                lr.win_rate,
-                lr.total_trades,
-                lr.run_date as last_run,
-                lr.metadata,
-                lrank.overall_rank,
-                lrank.composite_score
-            FROM latest_results lr
-            LEFT JOIN latest_rankings lrank ON lr.strategy_name = lrank.strategy_name
-            WHERE ($1::text IS NULL OR lrank.category = $1)
-            ORDER BY lrank.overall_rank ASC NULLS LAST
+                strategy_name, symbol, current_price, target_price, exit_price, stop_loss_price,
+                return_2w, return_1m, return_3m, trade_type, position_size, 
+                execution_instructions, signal_strength, scenario_returns, scenario_prices,
+                expected_return, volatility, sharpe_ratio, max_drawdown, win_probability,
+                composite_score, score_components, rank, last_signal_date
+            FROM strategies.strategy_trades
+            ORDER BY composite_score DESC
+            LIMIT 100
         """
         
-        rows = await self.db.fetch(query, category)
+        rows = await self.db.fetch(query)
+        trades = []
+        for row in rows:
+            trades.append({
+                "strategy": row["strategy_name"],
+                "symbol": row["symbol"],
+                "current_price": float(row["current_price"]),
+                "target_price": float(row["target_price"]),
+                "exit_price": float(row["exit_price"]),
+                "stop_loss": float(row["stop_loss_price"]),
+                "returns": {
+                    "2W": float(row["return_2w"]),
+                    "1M": float(row["return_1m"]),
+                    "3M": float(row["return_3m"])
+                },
+                "trade_type": row["trade_type"],
+                "position_size": float(row["position_size"]),
+                "execution": row["execution_instructions"],
+                "signal_strength": float(row["signal_strength"]),
+                "scenarios": json.loads(row["scenario_returns"]) if row["scenario_returns"] else {},
+                "scenario_prices": json.loads(row["scenario_prices"]) if row["scenario_prices"] else {},
+                "metrics": {
+                    "expected_return": float(row["expected_return"]),
+                    "volatility": float(row["volatility"]),
+                    "sharpe_ratio": float(row["sharpe_ratio"]),
+                    "max_drawdown": float(row["max_drawdown"]),
+                    "win_probability": float(row["win_probability"])
+                },
+                "score": float(row["composite_score"]),
+                "score_breakdown": json.loads(row["score_components"]) if row["score_components"] else {},
+                "rank": row["rank"],
+                "last_signal": row["last_signal_date"].isoformat() if row["last_signal_date"] else None
+            })
+        
+        return trades
+    
+    async def get_strategies_list(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get list of all strategies with their latest performance metrics."""
+        # First check if we have data in the strategies schema (from new pipeline)
+        strategies_check = await self.db.fetchval("""
+            SELECT COUNT(*) FROM strategies.strategy_metadata
+        """)
+        
+        if strategies_check > 0:
+            # Use strategies.strategy_metadata table (simplified)
+            if category and category != "":
+                query = """
+                    SELECT 
+                        strategy_name,
+                        category,
+                        description,
+                        comprehensive_metrics->>'total_return' as total_return,
+                        comprehensive_metrics->>'sharpe_ratio' as sharpe_ratio,
+                        comprehensive_metrics->>'max_drawdown' as max_drawdown,
+                        comprehensive_metrics->>'volatility' as volatility,
+                        comprehensive_metrics->>'win_rate' as win_rate,
+                        comprehensive_metrics->>'total_trades' as total_trades,
+                        current_assessment->>'current_signal' as current_signal,
+                        overall_rank,
+                        ranking_score as composite_score,
+                        created_at as last_run
+                    FROM strategies.strategy_metadata
+                    WHERE category = $1
+                    ORDER BY overall_rank
+                """
+                rows = await self.db.fetch(query, category)
+            else:
+                query = """
+                    SELECT 
+                        strategy_name,
+                        category,
+                        description,
+                        comprehensive_metrics->>'total_return' as total_return,
+                        comprehensive_metrics->>'sharpe_ratio' as sharpe_ratio,
+                        comprehensive_metrics->>'max_drawdown' as max_drawdown,
+                        comprehensive_metrics->>'volatility' as volatility,
+                        comprehensive_metrics->>'win_rate' as win_rate,
+                        comprehensive_metrics->>'total_trades' as total_trades,
+                        current_assessment->>'current_signal' as current_signal,
+                        overall_rank,
+                        ranking_score as composite_score,
+                        created_at as last_run
+                    FROM strategies.strategy_metadata
+                    ORDER BY overall_rank
+                """
+                rows = await self.db.fetch(query)
+            
+            strategies = []
+            for row in rows:
+                strategies.append({
+                    "strategy_name": row["strategy_name"],
+                    "category": row["category"],
+                    "description": row["description"],
+                    "total_return": float(row["total_return"]) if row["total_return"] else 0.0,
+                    "annualized_return": float(row["total_return"]) if row["total_return"] else 0.0,
+                    "sharpe_ratio": float(row["sharpe_ratio"]) if row["sharpe_ratio"] else 0.0,
+                    "max_drawdown": float(row["max_drawdown"]) if row["max_drawdown"] else 0.0,
+                    "volatility": float(row["volatility"]) if row["volatility"] else 0.0,
+                    "win_rate": float(row["win_rate"]) if row["win_rate"] else 0.0,
+                    "total_trades": int(row["total_trades"]) if row["total_trades"] else 0,
+                    "current_signal": row["current_signal"],
+                    "overall_rank": row["overall_rank"],
+                    "composite_score": float(row["composite_score"]) if row["composite_score"] else 0.0,
+                    "last_run": row["last_run"].isoformat() if row["last_run"] else None
+                })
+            
+            return strategies
+        
+        elif False:  # Old assessment schema code (disabled)
+            if category and category != "":
+                query = f"""
+                    WITH latest_run AS (
+                        SELECT MAX(run_date) as max_date FROM assessment.backtest_results
+                    ),
+                    aggregated_results AS (
+                        SELECT 
+                            br.strategy_name,
+                            br.strategy_category as category,
+                            AVG(br.total_return) as total_return,
+                            AVG(br.annual_return) as annualized_return,
+                            AVG(br.sharpe_ratio) as sharpe_ratio,
+                            AVG(br.max_drawdown) as max_drawdown,
+                            AVG(br.volatility) as volatility,
+                            AVG(br.win_rate) as win_rate,
+                            AVG(br.total_trades) as total_trades,
+                            AVG(br.score) as composite_score,
+                            MAX(br.run_date) as last_run
+                        FROM assessment.backtest_results br
+                        WHERE br.run_date = (SELECT max_date FROM latest_run)
+                        AND br.strategy_category = '{category}'
+                        GROUP BY br.strategy_name, br.strategy_category
+                    ),
+                    ranked AS (
+                        SELECT 
+                            *,
+                            ROW_NUMBER() OVER (ORDER BY composite_score DESC NULLS LAST) as overall_rank
+                        FROM aggregated_results
+                    )
+                    SELECT * FROM ranked ORDER BY overall_rank
+                """
+            else:
+                query = """
+                    WITH latest_run AS (
+                        SELECT MAX(run_date) as max_date FROM assessment.backtest_results
+                    ),
+                    aggregated_results AS (
+                        SELECT 
+                            br.strategy_name,
+                            br.strategy_category as category,
+                            AVG(br.total_return) as total_return,
+                            AVG(br.annual_return) as annualized_return,
+                            AVG(br.sharpe_ratio) as sharpe_ratio,
+                            AVG(br.max_drawdown) as max_drawdown,
+                            AVG(br.volatility) as volatility,
+                            AVG(br.win_rate) as win_rate,
+                            AVG(br.total_trades) as total_trades,
+                            AVG(br.score) as composite_score,
+                            MAX(br.run_date) as last_run
+                        FROM assessment.backtest_results br
+                        WHERE br.run_date = (SELECT max_date FROM latest_run)
+                        GROUP BY br.strategy_name, br.strategy_category
+                    ),
+                    ranked AS (
+                        SELECT 
+                            *,
+                            ROW_NUMBER() OVER (ORDER BY composite_score DESC NULLS LAST) as overall_rank
+                        FROM aggregated_results
+                    )
+                    SELECT * FROM ranked ORDER BY overall_rank
+                """
+            rows = await self.db.fetch(query)
+        else:
+            # Fall back to strategies schema (old pipeline data)
+            if category and category != "":
+                query = f"""
+                    WITH latest_results AS (
+                        SELECT DISTINCT ON (strategy_name)
+                            strategy_name,
+                            run_date,
+                            total_return,
+                            annualized_return,
+                            sharpe_ratio,
+                            max_drawdown,
+                            volatility,
+                            win_rate,
+                            total_trades,
+                            metadata
+                        FROM strategies.backtest_results
+                        ORDER BY strategy_name, run_date DESC
+                    ),
+                    latest_rankings AS (
+                        SELECT DISTINCT ON (strategy_name)
+                            strategy_name,
+                            overall_rank,
+                            composite_score,
+                            rank_by_sharpe,
+                            rank_by_return,
+                            rank_by_consistency,
+                            category
+                        FROM strategies.strategy_rankings
+                        ORDER BY strategy_name, run_date DESC
+                    )
+                    SELECT 
+                        lr.strategy_name,
+                        COALESCE(lrank.category, 'unknown') as category,
+                        NULL as description,
+                        lr.total_return,
+                        lr.annualized_return,
+                        lr.sharpe_ratio,
+                        lr.max_drawdown,
+                        lr.volatility,
+                        lr.win_rate,
+                        lr.total_trades,
+                        lr.run_date as last_run,
+                        lr.metadata,
+                        lrank.overall_rank,
+                        lrank.composite_score
+                    FROM latest_results lr
+                    LEFT JOIN latest_rankings lrank ON lr.strategy_name = lrank.strategy_name
+                    WHERE lrank.category = '{category}'
+                    ORDER BY lrank.overall_rank ASC NULLS LAST
+                """
+                rows = await self.db.fetch(query)
+            else:
+                query = """
+                    WITH latest_results AS (
+                        SELECT DISTINCT ON (strategy_name)
+                            strategy_name,
+                            run_date,
+                            total_return,
+                            annualized_return,
+                            sharpe_ratio,
+                            max_drawdown,
+                            volatility,
+                            win_rate,
+                            total_trades,
+                            metadata
+                        FROM strategies.backtest_results
+                        ORDER BY strategy_name, run_date DESC
+                    ),
+                    latest_rankings AS (
+                        SELECT DISTINCT ON (strategy_name)
+                            strategy_name,
+                            overall_rank,
+                            composite_score,
+                            rank_by_sharpe,
+                            rank_by_return,
+                            rank_by_consistency,
+                            category
+                        FROM strategies.strategy_rankings
+                        ORDER BY strategy_name, run_date DESC
+                    )
+                    SELECT 
+                        lr.strategy_name,
+                        COALESCE(lrank.category, 'unknown') as category,
+                        NULL as description,
+                        lr.total_return,
+                        lr.annualized_return,
+                        lr.sharpe_ratio,
+                        lr.max_drawdown,
+                        lr.volatility,
+                        lr.win_rate,
+                        lr.total_trades,
+                        lr.run_date as last_run,
+                        lr.metadata,
+                        lrank.overall_rank,
+                        lrank.composite_score
+                    FROM latest_results lr
+                    LEFT JOIN latest_rankings lrank ON lr.strategy_name = lrank.strategy_name
+                    ORDER BY lrank.overall_rank ASC NULLS LAST
+                """
+                rows = await self.db.fetch(query)
         
         strategies = []
         for row in rows:
@@ -194,7 +428,7 @@ class StrategyService:
         
         # Calculate rolling performance metrics
         equity_curve = results.get('equity_curve', {})
-        if not equity_curve:
+        if not equity_curve or not equity_curve.get('dates') or not equity_curve.get('values'):
             return {
                 'strategy_name': strategy_name,
                 'symbol': symbol,
@@ -204,12 +438,13 @@ class StrategyService:
                 'error': 'No data available for backtest'
             }
         
-        # Convert equity curve to time series
-        dates = sorted(equity_curve.keys())
-        values = [equity_curve[d] for d in dates]
+        # Use the already processed dates and values
+        dates = equity_curve['dates']
+        values = equity_curve['values']
         
-        # Calculate rolling returns
-        returns = np.diff(values) / values[:-1]
+        # Convert values to numpy array and calculate rolling returns
+        values_array = np.array(values, dtype=float)
+        returns = np.diff(values_array) / values_array[:-1]
         
         # Calculate rolling metrics (252-day windows)
         rolling_window = min(252, len(returns) // 4)
@@ -233,7 +468,7 @@ class StrategyService:
             rolling_sharpe.append(sharpe)
             
             # Max drawdown in window
-            window_values = values[i-rolling_window:i+1]
+            window_values = values_array[i-rolling_window:i+1]
             peak = np.maximum.accumulate(window_values)
             drawdown = (window_values - peak) / peak
             max_dd = np.min(drawdown)
@@ -250,13 +485,13 @@ class StrategyService:
             'end_date': str(end_date),
             'equity_curve': {
                 'dates': [str(d) for d in dates],
-                'values': values
+                'values': values_array.tolist() if isinstance(values_array, np.ndarray) else list(values_array)
             },
             'rolling_metrics': {
                 'dates': [str(d) for d in metric_dates],
-                'returns': rolling_returns,
-                'sharpe_ratios': rolling_sharpe,
-                'max_drawdowns': rolling_drawdown
+                'returns': [float(r) for r in rolling_returns],
+                'sharpe_ratios': [float(s) for s in rolling_sharpe],
+                'max_drawdowns': [float(d) for d in rolling_drawdown]
             },
             'summary_metrics': results.get('metrics', {})
         }
@@ -370,23 +605,70 @@ class StrategyService:
     ) -> Dict[str, Any]:
         """Get detailed metrics for a strategy from database."""
         
-        if run_date:
-            query = """
-                SELECT 
-                    br.*,
-                    sr.overall_rank,
-                    sr.rank_by_sharpe,
-                    sr.rank_by_return,
-                    sr.rank_by_consistency,
-                    sr.composite_score
-                FROM strategies.backtest_results br
-                LEFT JOIN strategies.strategy_rankings sr
-                    ON br.strategy_name = sr.strategy_name
-                    AND br.run_date = sr.run_date
-                WHERE br.strategy_name = $1
-                AND br.run_date = $2
-            """
-            result = await self.db.fetchrow(query, strategy_name, run_date)
+        # Check if we have assessment data
+        assessment_check = await self.db.fetchval("""
+            SELECT COUNT(*) FROM assessment.backtest_results
+        """)
+        
+        if assessment_check > 0:
+            # Use assessment schema
+            if run_date:
+                query = """
+                    SELECT 
+                        strategy_name,
+                        strategy_category as category,
+                        scenario_name,
+                        symbol,
+                        total_return,
+                        annual_return as annualized_return,
+                        sharpe_ratio,
+                        sortino_ratio,
+                        max_drawdown,
+                        calmar_ratio,
+                        win_rate,
+                        profit_factor,
+                        volatility,
+                        score as composite_score,
+                        total_trades,
+                        run_date,
+                        created_at
+                    FROM assessment.backtest_results
+                    WHERE strategy_name = $1
+                    AND run_date = $2
+                    ORDER BY score DESC
+                    LIMIT 1
+                """
+                result = await self.db.fetchrow(query, strategy_name, run_date)
+            else:
+                query = """
+                    SELECT 
+                        strategy_name,
+                        strategy_category as category,
+                        scenario_name,
+                        symbol,
+                        total_return,
+                        annual_return as annualized_return,
+                        sharpe_ratio,
+                        sortino_ratio,
+                        max_drawdown,
+                        calmar_ratio,
+                        win_rate,
+                        profit_factor,
+                        volatility,
+                        score as composite_score,
+                        total_trades,
+                        run_date,
+                        created_at
+                    FROM assessment.backtest_results
+                    WHERE strategy_name = $1
+                    ORDER BY run_date DESC, score DESC
+                    LIMIT 1
+                """
+                result = await self.db.fetchrow(query, strategy_name)
+            
+            if result:
+                return dict(result)
+            return None
         else:
             query = """
                 SELECT 

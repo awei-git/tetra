@@ -1,78 +1,152 @@
 # Bin Directory - Operational Scripts
 
-This directory contains production operational scripts for the Tetra platform.
+This directory contains production operational scripts for the Tetra platform, organized by function.
+
+## Directory Structure
+
+```
+bin/
+├── pipelines/          # Pipeline execution scripts
+│   ├── data.sh        # Run data ingestion pipeline
+│   ├── ml.sh          # Run ML training pipeline
+│   └── benchmark.sh   # Run benchmark analysis pipeline
+├── services/          # Service management scripts
+│   ├── launch_services.sh  # Start backend and frontend
+│   └── stop_services.sh    # Stop all services
+├── database/          # Database management scripts
+│   └── create_migration.sh # Create Alembic migrations
+└── setup_scheduled_tasks.sh # Configure launchd jobs
+```
 
 ## Scripts
 
-### Service Management
-- `launch_services.sh` - Launch backend and frontend services (5:00 AM daily)
-- `setup_scheduled_tasks.sh` - Setup all launchd scheduled tasks
+### Pipeline Scripts (`pipelines/`)
 
-### Pipeline Management
-- `run_data_pipeline.sh` - Run data ingestion pipeline (7:00 PM daily)
-- `run_benchmark_pipeline.sh` - Run benchmark pipeline (8:00 PM daily)
+#### `data.sh`
+Runs the data ingestion pipeline to fetch market data, economic indicators, events, and news.
+```bash
+./bin/pipelines/data.sh              # Daily update (default)
+./bin/pipelines/data.sh backfill     # Historical backfill
+```
 
-### Database Management
-- `create_migration.sh` - Helper script to create Alembic migrations
+#### `ml.sh`
+Runs the ML training pipeline to train trading models.
+```bash
+./bin/pipelines/ml.sh                # Comprehensive training (default)
+./bin/pipelines/ml.sh quick          # Quick training
+./bin/pipelines/ml.sh test           # Test mode with minimal data
+```
 
-## Schedule
+#### `benchmark.sh`
+Runs benchmark analysis to evaluate trading strategies.
+```bash
+./bin/pipelines/benchmark.sh         # Daily analysis (default)
+./bin/pipelines/benchmark.sh daily   # Daily analysis (2020-present)
+./bin/pipelines/benchmark.sh weekly  # Weekly full analysis (2015-present)
+```
 
-The system runs on the following schedule:
+### Service Scripts (`services/`)
 
-| Time     | Task                          | Script                    |
-|----------|-------------------------------|---------------------------|
-| 5:00 AM  | Launch services               | `launch_services.sh`      |
-| 7:00 PM  | Update market data            | `run_data_pipeline.sh`    |
-| 8:00 PM  | Run benchmark tests           | `run_benchmark_pipeline.sh`|
+#### `launch_services.sh`
+Starts the backend API and frontend UI services.
+```bash
+./bin/services/launch_services.sh
+# Backend: http://localhost:8000
+# Frontend: http://localhost:3000
+```
 
-## Setup
+#### `stop_services.sh`
+Stops all running Tetra services.
+```bash
+./bin/services/stop_services.sh
+```
 
-To install all scheduled tasks:
+### Database Scripts (`database/`)
+
+#### `create_migration.sh`
+Helper script to create Alembic database migrations.
+```bash
+./bin/database/create_migration.sh "migration_description"
+```
+
+### Setup Script
+
+#### `setup_scheduled_tasks.sh`
+Installs all launchd scheduled tasks for automated pipeline execution.
 ```bash
 ./bin/setup_scheduled_tasks.sh
 ```
 
+## Schedule
+
+The system runs on the following automated schedule:
+
+| Time     | Day | Task                          | Script                    |
+|----------|-----|-------------------------------|---------------------------|
+| 5:00 AM  | Daily | Launch services             | `services/launch_services.sh` |
+| 5:00 AM  | Saturday | Train ML models          | `pipelines/ml.sh`         |
+| 7:00 PM  | Daily | Update market data          | `pipelines/data.sh`       |
+| 8:00 PM  | Daily | Run daily benchmark         | `pipelines/benchmark.sh daily` |
+| 8:00 AM  | Saturday | Run weekly benchmark     | `pipelines/benchmark.sh weekly` |
+
 ## Manual Execution
 
-Run services manually:
+### Quick Commands
 ```bash
-# Launch backend and frontend
-./bin/launch_services.sh
+# Start services
+./bin/services/launch_services.sh
 
-# Run data pipeline
-./bin/run_data_pipeline.sh
+# Update data
+./bin/pipelines/data.sh
 
-# Run benchmark pipeline
-./bin/run_benchmark_pipeline.sh
+# Train ML models (quick mode)
+./bin/pipelines/ml.sh quick
+
+# Run benchmark analysis
+./bin/pipelines/benchmark.sh
 ```
 
-Trigger via launchd:
+### Via launchctl
 ```bash
 launchctl start com.tetra.launch-services
 launchctl start com.tetra.data-pipeline
-launchctl start com.tetra.benchmark-pipeline
+launchctl start com.tetra.ml-training
+launchctl start com.tetra.benchmark-pipeline-daily
+launchctl start com.tetra.benchmark-pipeline-weekly
 ```
 
 ## Logs
 
-Service logs:
+### Service Logs
 - `/tmp/tetra-backend.log` - Backend service output
 - `/tmp/tetra-frontend.log` - Frontend service output
 
-Pipeline logs:
-- `/tmp/tetra_data_pipeline_YYYYMMDD_HHMMSS.log` - Data pipeline logs
-- `/tmp/tetra_benchmark_pipeline_YYYYMMDD_HHMMSS.log` - Benchmark pipeline logs
+### Pipeline Logs
+- `/tmp/tetra-data-pipeline-*.log` - Data pipeline execution
+- `/tmp/tetra-ml-pipeline-*.log` - ML training execution
+- `/tmp/tetra-benchmark-*.log` - Benchmark analysis execution
 
-Launchd logs:
+### Scheduled Task Logs
 - `/tmp/tetra-launch-services.log` - Service launch logs
-- `/tmp/tetra-data-pipeline.log` - Data pipeline scheduler logs
-- `/tmp/tetra-benchmark-pipeline.log` - Benchmark pipeline scheduler logs
+- `/tmp/tetra-data-pipeline.log` - Data pipeline scheduler
+- `/tmp/tetra-ml-training-stdout.log` - ML training scheduler
+- `/tmp/tetra-benchmark-daily.log` - Daily benchmark scheduler
+- `/tmp/tetra-benchmark-weekly.log` - Weekly benchmark scheduler
 
-## Uninstall
+## Uninstall Scheduled Tasks
 
 To remove all scheduled tasks:
 ```bash
-for job in launch-services data-pipeline benchmark-pipeline; do
+for job in launch-services data-pipeline ml-training benchmark-pipeline-daily benchmark-pipeline-weekly; do
   launchctl unload ~/Library/LaunchAgents/com.tetra.$job.plist
+  rm -f ~/Library/LaunchAgents/com.tetra.$job.plist
 done
 ```
+
+## Best Practices
+
+1. **Always check logs** after running pipelines manually
+2. **Use test mode** for ML pipeline when testing changes
+3. **Monitor disk space** - ML models and data can be large
+4. **Run services check** after system restart
+5. **Update scheduled tasks** after changing script paths

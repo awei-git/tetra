@@ -7,7 +7,12 @@ from src.strats.signal_based import SignalBasedStrategy, SignalRule, SignalCondi
 from src.strats.event_based import EventBasedStrategy, EventTrigger, EventType, EventImpact
 from src.strats.time_based import TimeBasedStrategy, TradingWindow, TradingSchedule, SessionType
 from src.strats.composite import CompositeStrategy, StrategyWeight, CombinationMode
-from src.data_definitions.market_universe import MarketUniverse
+from src.definitions.market_universe import MarketUniverse
+from src.strats.ml_based import (
+    create_ml_strategies,
+    create_ml_benchmark_strategies,
+    check_ml_models_available
+)
 
 
 # ============================================================================
@@ -177,12 +182,12 @@ def momentum_factor_strategy():
         SignalRule(
             name="momentum_factor",
             entry_conditions=[
-                SignalCondition("returns_252d", ConditionOperator.GREATER_THAN, 0.20),  # 20%+ annual return
-                SignalCondition("returns_21d", ConditionOperator.GREATER_THAN, 0),  # Recent momentum positive
-                SignalCondition("volume_dollar_20d", ConditionOperator.GREATER_THAN, 1_000_000)  # Liquid
+                SignalCondition("returns_252", ConditionOperator.GREATER_THAN, 0.20),  # 20%+ annual return
+                SignalCondition("returns_20", ConditionOperator.GREATER_THAN, 0),  # Recent momentum positive
+                SignalCondition("dollar_volume_20d", ConditionOperator.GREATER_THAN, 1_000_000)  # Liquid
             ],
             exit_conditions=[
-                SignalCondition("returns_21d", ConditionOperator.LESS_THAN, -0.05)  # Exit if -5% monthly
+                SignalCondition("returns_20", ConditionOperator.LESS_THAN, -0.05)  # Exit if -5% monthly
             ],
             position_side=PositionSide.LONG
         )
@@ -256,12 +261,12 @@ def volume_weighted_momentum_strategy():
             name="volume_momentum",
             entry_conditions=[
                 SignalCondition("close", ConditionOperator.GREATER_THAN, "vwap"),
-                SignalCondition("volume", ConditionOperator.GREATER_THAN, "volume_sma_20_1.5x"),
+                SignalCondition("volume_ratio", ConditionOperator.GREATER_THAN, 1.5),  # 150% of average volume
                 SignalCondition("rsi_14", ConditionOperator.BETWEEN, [50, 70])
             ],
             exit_conditions=[
                 SignalCondition("close", ConditionOperator.CROSSES_BELOW, "vwap"),
-                SignalCondition("volume", ConditionOperator.LESS_THAN, "volume_sma_20_0.5x")
+                SignalCondition("volume_ratio", ConditionOperator.LESS_THAN, 0.5)  # 50% of average volume
             ],
             position_side=PositionSide.LONG,
             stop_loss=0.03,
@@ -284,12 +289,12 @@ def dual_momentum_strategy():
         SignalRule(
             name="dual_momentum",
             entry_conditions=[
-                SignalCondition("returns_252d", ConditionOperator.GREATER_THAN, 0),  # Absolute momentum
+                SignalCondition("returns_252", ConditionOperator.GREATER_THAN, 0),  # Absolute momentum
                 SignalCondition("relative_strength_vs_bonds", ConditionOperator.GREATER_THAN, 1.0),  # Relative momentum
                 SignalCondition("trend_filter_200d", ConditionOperator.EQUAL, "up")
             ],
             exit_conditions=[
-                SignalCondition("returns_252d", ConditionOperator.LESS_THAN, 0),
+                SignalCondition("returns_252", ConditionOperator.LESS_THAN, 0),
                 SignalCondition("relative_strength_vs_bonds", ConditionOperator.LESS_THAN, 1.0)
             ],
             position_side=PositionSide.LONG,
@@ -352,7 +357,7 @@ def create_ai_growth_strategy():
             entry_conditions=[
                 SignalCondition("price", ConditionOperator.GREATER_THAN, "high_52w_0.9"),  # Near 52w high
                 SignalCondition("rsi_14", ConditionOperator.BETWEEN, [50, 70]),
-                SignalCondition("volume", ConditionOperator.GREATER_THAN, "volume_sma_20_2x"),
+                SignalCondition("volume_ratio", ConditionOperator.GREATER_THAN, 2.0),  # 200% of average volume
                 SignalCondition("revenue_growth", ConditionOperator.GREATER_THAN, 0.20)  # 20% growth
             ],
             exit_conditions=[
@@ -470,13 +475,12 @@ def create_crypto_momentum():
         SignalRule(
             name="crypto_trend",
             entry_conditions=[
-                SignalCondition("price", ConditionOperator.GREATER_THAN, "sma_50"),
+                SignalCondition("close", ConditionOperator.GREATER_THAN, "sma_50"),
                 SignalCondition("rsi_14", ConditionOperator.BETWEEN, [40, 70]),
-                SignalCondition("volume_24h", ConditionOperator.GREATER_THAN, 1_000_000_000),  # $1B volume
-                SignalCondition("btc_correlation", ConditionOperator.LESS_THAN, 0.9)  # Not just following BTC
+                SignalCondition("dollar_volume", ConditionOperator.GREATER_THAN, 10_000_000)  # $10M daily volume
             ],
             exit_conditions=[
-                SignalCondition("price", ConditionOperator.LESS_THAN, "sma_20_0.95"),  # 5% below SMA20
+                SignalCondition("close", ConditionOperator.LESS_THAN, "sma_20"),  # Below SMA20
                 SignalCondition("rsi_14", ConditionOperator.LESS_THAN, 30)
             ],
             position_side=PositionSide.LONG,
@@ -752,6 +756,19 @@ BENCHMARK_STRATEGIES = {
     'all_weather': create_all_weather_defensive
 }
 
+# Add old signal-based ML strategies
+for ml_strategy in create_ml_strategies():
+    # Convert strategy name to lowercase with underscores
+    strategy_key = 'signal_' + ml_strategy.name.lower().replace(' ', '_')
+    BENCHMARK_STRATEGIES[strategy_key] = lambda s=ml_strategy: s
+
+# Add new ML pipeline-based strategies if models are available
+if check_ml_models_available():
+    ml_benchmark_strategies = create_ml_benchmark_strategies()
+    for ml_strategy in ml_benchmark_strategies:
+        strategy_key = ml_strategy.name.lower().replace(' ', '_')
+        BENCHMARK_STRATEGIES[strategy_key] = lambda s=ml_strategy: s
+
 
 def get_benchmark_strategy(name: str):
     """Get a benchmark strategy by name."""
@@ -769,7 +786,12 @@ def get_all_benchmarks():
 def get_core_benchmarks():
     """Get the most important benchmark strategies for comparison."""
     core_names = ['buy_and_hold', 'golden_cross', 'turtle_trading', 'momentum_factor', 'sector_rotation']
-    return {name: get_benchmark_strategy(name) for name in core_names}
+    
+    # Add ML strategies if available
+    if check_ml_models_available():
+        core_names.extend(['ml_ensemble', 'ml_xgboost_1-day'])
+        
+    return {name: get_benchmark_strategy(name) for name in core_names if name in BENCHMARK_STRATEGIES}
 
 
 def get_benchmarks_by_style():
@@ -784,7 +806,13 @@ def get_benchmarks_by_style():
         'crypto': ['crypto'],
         'event_driven': ['dividend', 'earnings'],
         'intraday': ['morning_breakout'],
-        'multi_asset': ['global_macro', 'all_weather']
+        'multi_asset': ['global_macro', 'all_weather'],
+        'machine_learning': [
+            # Signal-based ML
+            'signal_ml_basic', 'signal_ml_anomaly', 'signal_ml_high_confidence', 'signal_ml_technical_combo',
+            # Pipeline-based ML (if available)
+            'ml_ensemble', 'ml_xgboost_1-day', 'ml_lightgbm_1-day', 'ml_multi-horizon', 'ml_high_confidence'
+        ]
     }
 
 
@@ -792,9 +820,9 @@ def get_strategies_by_risk_level():
     """Categorize strategies by risk level."""
     return {
         'conservative': ['buy_and_hold', 'all_weather', 'dividend', 'sector_rotation'],
-        'moderate': ['golden_cross', 'mega_cap_momentum', 'global_macro'],
-        'aggressive': ['ai_growth', 'crypto', 'morning_breakout', 'turtle_trading'],
-        'very_aggressive': ['volatility', 'earnings']
+        'moderate': ['golden_cross', 'mega_cap_momentum', 'global_macro', 'ml_technical_combo'],
+        'aggressive': ['ai_growth', 'crypto', 'morning_breakout', 'turtle_trading', 'ml_basic', 'ml_anomaly'],
+        'very_aggressive': ['volatility', 'earnings', 'ml_high_confidence']
     }
 
 

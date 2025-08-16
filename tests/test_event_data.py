@@ -12,7 +12,7 @@ from src.models import (
 from src.clients.event_data_client import (
     EventDataClient, YahooFinanceProvider, PolygonEventProvider, FinnhubEventProvider
 )
-from src.data_definitions.event_calendar import EventCalendar, EventFrequency
+from src.definitions.event_calendar import EventCalendar, EventFrequency
 
 
 class TestEventDataModels:

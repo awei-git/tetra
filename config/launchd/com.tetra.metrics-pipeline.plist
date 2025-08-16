@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tetra.metrics-pipeline</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/angwei/Repos/tetra/bin/pipelines/run_metrics_pipeline.sh</string>
+    </array>
+    
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>20</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <key>StandardOutPath</key>
+    <string>/tmp/tetra-metrics-pipeline.out</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/tmp/tetra-metrics-pipeline.err</string>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/angwei/Repos/tetra</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/angwei</string>
+        <key>TETRA_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>KeepAlive</key>
+    <false/>
+    
+    <!-- Don't run if on battery -->
+    <key>RequiresHardpower</key>
+    <true/>
+    
+    <!-- Nice value for lower priority -->
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>

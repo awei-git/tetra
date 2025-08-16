@@ -7,7 +7,7 @@ from unittest.mock import Mock, AsyncMock, patch
 
 from src.models import EconomicData, EconomicRelease, EconomicForecast
 from src.clients.economic_data_client import EconomicDataClient, FREDProvider
-from src.data_definitions.economic_indicators import EconomicIndicators, UpdateFrequency
+from src.definitions.economic_indicators import EconomicIndicators, UpdateFrequency
 
 
 class TestEconomicDataModels:

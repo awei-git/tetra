@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Dict, List, Optional, Any
 
 from ..portfolio import Portfolio
-from .config import SimulationConfig
+from src.definitions.trading import SimulationConfig
 from .result import SimulationResult
 
 

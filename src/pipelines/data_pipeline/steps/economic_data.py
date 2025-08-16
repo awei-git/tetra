@@ -6,7 +6,7 @@ import asyncio
 
 from src.pipelines.base import PipelineStep, PipelineContext
 from src.clients.economic_data_client import EconomicDataClient
-from src.data_definitions.economic_indicators import EconomicIndicators
+from src.definitions.economic_indicators import EconomicIndicators
 from src.utils.logging import logger
 from src.db.base import get_session
 from src.models.sqlalchemy import EconomicIndicatorModel

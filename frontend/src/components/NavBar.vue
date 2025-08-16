@@ -31,6 +31,13 @@
             >
               Strats
             </router-link>
+            <router-link
+              to="/trades"
+              class="nav-link"
+              :class="{ 'active': $route.path === '/trades' }"
+            >
+              Trades
+            </router-link>
           </div>
         </div>
         
@@ -77,6 +84,13 @@
             :class="{ 'active': $route.path === '/strategies' }"
           >
             Strats
+          </router-link>
+          <router-link
+            to="/trades"
+            class="mobile-nav-link"
+            :class="{ 'active': $route.path === '/trades' }"
+          >
+            Trades
           </router-link>
         </div>
       </div>

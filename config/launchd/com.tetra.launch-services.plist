@@ -7,7 +7,7 @@
     
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/angwei/Repos/tetra/bin/launch_services.sh</string>
+        <string>/Users/angwei/Repos/tetra/bin/services/launch_services.sh</string>
     </array>
     
     <!-- Run daily at 5:00 AM -->

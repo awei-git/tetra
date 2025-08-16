@@ -1,0 +1,81 @@
+# Composite strategy configuration example
+# This strategy combines multiple sub-strategies with different weights
+
+strategy_type: composite
+name: Multi-Strategy Portfolio
+description: Combines trend following, mean reversion, and event strategies
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.05  # 5% base size (will be split among strategies)
+  max_positions: 20
+  commission: 0.001
+
+# How to combine strategy signals
+combination_mode: WEIGHTED  # UNANIMOUS, MAJORITY, WEIGHTED, SEQUENTIAL, ADAPTIVE
+min_agreement: 0.6  # For MAJORITY mode, need 60% agreement
+adapt_weights: true  # Dynamically adjust weights based on performance
+performance_window: 100  # Look back 100 periods for performance
+
+# Component strategies with weights
+strategies:
+  - strategy_name: golden_cross_trend
+    strategy_config: golden_cross.yaml  # Reference to another config file
+    weight: 0.3
+    min_confidence: 0.6
+    enabled: true
+    performance_weight: 0.0  # Will be calculated if adapt_weights=true
+    
+  - strategy_name: rsi_mean_reversion
+    strategy_config: signal_based.yaml  # RSI mean reversion strategy
+    weight: 0.3
+    min_confidence: 0.5
+    enabled: true
+    performance_weight: 0.0
+    
+  - strategy_name: earnings_momentum
+    strategy_config: event_based.yaml  # Earnings momentum strategy
+    weight: 0.2
+    min_confidence: 0.7
+    enabled: true
+    performance_weight: 0.0
+    
+  - strategy_name: ml_predictions
+    strategy_config: ml_based.yaml  # ML prediction strategy
+    weight: 0.2
+    min_confidence: 0.65
+    enabled: true
+    performance_weight: 0.0
+
+# Risk management for composite
+risk_parameters:
+  max_correlation: 0.7  # Max correlation between strategies
+  min_sharpe_ratio: 0.5  # Minimum required Sharpe ratio
+  max_drawdown: 0.15  # 15% maximum drawdown
+  rebalance_frequency: weekly  # Rebalance strategy weights
+
+# Voting rules for different market conditions
+market_regimes:
+  - regime: trending
+    condition:
+      adx_14: [">", 25]
+      trend_strength: [">", 0.6]
+    weight_adjustments:
+      golden_cross_trend: 1.5  # Increase weight in trends
+      rsi_mean_reversion: 0.5  # Decrease mean reversion
+  
+  - regime: ranging
+    condition:
+      adx_14: ["<", 20]
+      atr_ratio: ["<", 0.8]
+    weight_adjustments:
+      golden_cross_trend: 0.5
+      rsi_mean_reversion: 1.5  # Increase mean reversion in ranges
+  
+  - regime: high_volatility
+    condition:
+      vix: [">", 25]
+      market_fear: [">", 0.7]
+    weight_adjustments:
+      all: 0.5  # Reduce all positions in high volatility

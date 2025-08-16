@@ -1,0 +1,146 @@
+# Turtle Trading System
+# Classic trend-following breakout strategy
+
+strategy_type: signal_based
+name: Turtle Trading
+description: 20/55 day breakout system with 2 ATR stops
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.1  # 10% base size (Turtles used 1% risk per trade)
+  max_positions: 4  # Maximum 4 pyramid positions
+  commission: 0.001
+  confirmation_required: 1
+
+# Signal rules with two systems
+signal_rules:
+  # System 1: 20-day breakout (shorter-term)
+  - name: turtle_system1_entry
+    position_side: LONG
+    position_size_factor: 0.5  # Half size for System 1
+    stop_loss: 0.02  # 2 ATR stop (simplified to 2%)
+    take_profit: null  # No fixed target
+    time_limit: null
+    require_all: true
+    
+    entry_conditions:
+      # Price breaks above 20-day high
+      - signal_name: close
+        operator: GREATER_THAN
+        value: highest_20
+        lookback: 1
+        weight: 1.0
+      
+      # Volatility present (ATR check)
+      - signal_name: atr_14
+        operator: GREATER_THAN
+        value: 0  # ATR must be positive
+        lookback: 1
+        weight: 1.0
+      
+      # Trend filter (optional)
+      - signal_name: sma_50
+        operator: GREATER_THAN
+        value: sma_200
+        lookback: 1
+        weight: 0.5
+    
+    exit_conditions:
+      # Exit on 10-day low
+      - signal_name: close
+        operator: LESS_THAN
+        value: lowest_10
+        lookback: 1
+        weight: 1.0
+  
+  # System 2: 55-day breakout (longer-term, stronger signal)
+  - name: turtle_system2_entry
+    position_side: LONG
+    position_size_factor: 1.0  # Full size for System 2
+    stop_loss: 0.02  # 2 ATR stop
+    take_profit: null
+    time_limit: null
+    require_all: true
+    
+    entry_conditions:
+      # Price breaks above 55-day high
+      - signal_name: close
+        operator: GREATER_THAN
+        value: highest_55
+        lookback: 1
+        weight: 1.0
+      
+      # Volatility check
+      - signal_name: atr_14
+        operator: GREATER_THAN
+        value: 0
+        lookback: 1
+        weight: 1.0
+    
+    exit_conditions:
+      # Exit on 20-day low
+      - signal_name: close
+        operator: LESS_THAN
+        value: lowest_20
+        lookback: 1
+        weight: 1.0
+  
+  # Pyramid addition (add to winning positions)
+  - name: turtle_pyramid_add
+    position_side: LONG
+    position_size_factor: 0.5  # Add half size
+    stop_loss: 0.02
+    require_all: true
+    
+    entry_conditions:
+      # Price moves 0.5 ATR above entry (simplified to 1% move)
+      - signal_name: position_profit
+        operator: GREATER_THAN
+        value: 0.01  # 1% profit
+        lookback: 1
+        weight: 1.0
+      
+      # Still in uptrend
+      - signal_name: close
+        operator: GREATER_THAN
+        value: highest_10
+        lookback: 1
+        weight: 1.0
+      
+      # Max 4 units check (would need custom implementation)
+      - signal_name: position_count
+        operator: LESS_THAN
+        value: 4
+        lookback: 1
+        weight: 1.0
+    
+    exit_conditions:
+      # Same exit as main position
+      - signal_name: close
+        operator: LESS_THAN
+        value: lowest_10
+        lookback: 1
+        weight: 1.0
+
+# Turtle-specific parameters
+turtle_params:
+  # Position sizing (original Turtle formula)
+  risk_per_trade: 0.01  # 1% account risk per trade
+  atr_multiplier: 2  # 2 ATR for stops
+  
+  # Breakout periods
+  entry_breakout_s1: 20  # System 1 entry
+  exit_breakout_s1: 10   # System 1 exit
+  entry_breakout_s2: 55  # System 2 entry
+  exit_breakout_s2: 20   # System 2 exit
+  
+  # Pyramiding rules
+  max_units: 4  # Maximum 4 units per market
+  pyramid_spacing: 0.5  # Add every 0.5 ATR move
+  
+  # Markets (original Turtles traded multiple markets)
+  markets:
+    - futures  # Commodities, bonds, currencies
+    - forex
+    - indices

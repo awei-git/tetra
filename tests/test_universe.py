@@ -1,7 +1,7 @@
 """Test the universe module"""
 
 import pytest
-from src.data_definitions.market_universe import MarketUniverse as Universe
+from src.definitions.market_universe import MarketUniverse as Universe
 
 
 class TestUniverse:

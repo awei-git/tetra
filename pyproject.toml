@@ -12,14 +12,12 @@ dependencies = [
     "uvicorn[standard]==0.24.0",
     "pydantic==2.5.0",
     "pydantic-settings==2.1.0",
-    
     # Database
     "sqlalchemy==2.0.23",
     "asyncpg==0.29.0",
     "psycopg2-binary==2.9.9",
     "alembic==1.12.1",
     "greenlet==3.2.4",
-    
     # Data clients
     "httpx==0.25.2",
     "tenacity==8.2.3",
@@ -27,22 +25,33 @@ dependencies = [
     "numpy==1.26.2",
     "yfinance==0.2.33",
     "pandas-market-calendars==5.1.1",
-    
     # Messaging
     "aiokafka==0.10.0",
     "confluent-kafka==2.3.0",
-    
     # Utilities
     "python-dotenv==1.0.0",
     "loguru==0.7.2",
     "python-json-logger==2.0.7",
     "redis==5.0.1",
-    
+    "aiohttp==3.12.15",
+    "pyyaml==6.0.1",
     # Monitoring
     "prometheus-client==0.19.0",
-    
     # Scheduling
     "apscheduler==3.10.4",
+    # Machine Learning
+    "scikit-learn==1.5.1",
+    "joblib==1.4.2",
+    "xgboost==2.1.0",
+    "lightgbm==4.5.0",
+    "catboost==1.2.5",
+    "tensorflow==2.16.1",
+    "hmmlearn==0.3.2",
+    "imbalanced-learn==0.12.3",
+    "statsmodels==0.14.2",
+    "matplotlib==3.9.0",
+    "seaborn==0.13.2",
+    "pyarrow>=21.0.0",
 ]
 
 [tool.uv]

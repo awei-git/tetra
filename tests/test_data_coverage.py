@@ -4,8 +4,8 @@ import pytest
 from datetime import datetime, date, timedelta
 from sqlalchemy import text
 from src.db.base import get_session
-from src.data_definitions.market_universe import MarketUniverse
-from src.data_definitions.economic_indicators import EconomicIndicators
+from src.definitions.market_universe import MarketUniverse
+from src.definitions.economic_indicators import EconomicIndicators
 
 
 class TestDataCoverage:

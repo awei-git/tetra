@@ -1,0 +1,87 @@
+# Time-based strategy configuration example
+# This strategy trades based on time constraints and market sessions
+
+strategy_type: time_based
+name: Morning Momentum Breakout
+description: Trade opening range breakouts in the first hour
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.10  # 10% per position
+  max_positions: 5
+  commission: 0.001
+
+# Trading schedule configuration
+trading_schedule:
+  # Force close all positions before market close
+  force_close_end_of_day: true
+  force_close_time: "15:45"  # 15 minutes before close
+  
+  # Maximum trades per period
+  max_trades_per_day: 10
+  max_trades_per_window: 3
+  
+  # Blackout dates (holidays, special events)
+  blackout_dates:
+    - "2024-01-01"  # New Year's Day
+    - "2024-07-04"  # Independence Day
+    - "2024-12-25"  # Christmas
+  
+  # Trading windows
+  windows:
+    - name: opening_range
+      start_time: "09:30"
+      end_time: "10:30"
+      timezone: "America/New_York"
+      session_type: REGULAR
+      days_of_week: [0, 1, 2, 3, 4]  # Monday to Friday
+      
+      # Entry rules specific to this window
+      entry_rules:
+        opening_range_breakout: true
+        min_range: 0.005  # 0.5% minimum range
+        volume_confirmation: 1.5  # 150% of average volume
+        gap_fade: false  # Don't fade gaps
+      
+      # Exit rules for this window
+      exit_rules:
+        time_stop: 60  # Exit after 60 minutes
+        profit_target: 0.02  # 2% profit target
+        stop_loss: 0.01  # 1% stop loss
+    
+    - name: midday_continuation
+      start_time: "10:30"
+      end_time: "11:30"
+      timezone: "America/New_York"
+      session_type: REGULAR
+      days_of_week: [0, 1, 2, 3, 4]
+      
+      entry_rules:
+        continuation_only: true  # Only trade in trend direction
+        require_trend: true
+        min_volume: 1000000  # Minimum dollar volume
+      
+      exit_rules:
+        time_stop: 90
+        trailing_stop: 0.005  # 0.5% trailing stop
+    
+    - name: power_hour
+      start_time: "15:00"
+      end_time: "15:45"
+      timezone: "America/New_York"
+      session_type: REGULAR
+      days_of_week: [0, 1, 2, 3, 4]
+      
+      entry_rules:
+        momentum_only: true
+        min_intraday_move: 0.01  # Stock must have moved 1%
+        volume_surge: 2.0  # 200% of average
+      
+      exit_rules:
+        eod_close: true  # Close before end of day
+        quick_profit: 0.005  # Take quick 0.5% profits
+
+# Optional: Custom entry/exit strategies
+entry_strategy: null  # Or name of custom function
+exit_strategy: null  # Or name of custom function

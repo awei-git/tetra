@@ -4,9 +4,57 @@ Claude is a highly capable AI coding assistant that supports production-level so
 
 This file defines Claude's role, coding behavior, preferred styles, and quality expectations when supporting the user in software development.
 
-## 🚫 NO MOCK DATA
+## 🚫 NO MOCK DATA OR SYNTHETIC DATA
 
-**NEVER use mock data or placeholder implementations**. All code must work with real data from the database or APIs. If data is missing, identify why and fix the root cause instead of creating fake data.
+**NEVER use mock data, synthetic data, or placeholder implementations**. All code must work with REAL data from the database or APIs. If data is missing, identify why and fix the root cause instead of creating fake data.
+
+### ABSOLUTELY FORBIDDEN:
+- **NO synthetic OHLCV generation** - Don't create fake high/low/open from close prices
+- **NO synthetic volume** - Don't generate fake volume based on volatility
+- **NO placeholder data** - Don't fill missing fields with dummy values
+- **NO data fabrication** - Every data point must come from real sources
+- **NO hardcoded symbols in production code** - Never hardcode symbols in src/ or config/ directories. Always load from MarketUniverse or database
+  - Exception: Hardcoded symbols ARE allowed in tests/ and scripts/ folders for testing purposes
+
+### When Data is Missing:
+- **DO NOT** synthesize missing fields
+- **DO NOT** generate fake OHLCV from close prices
+- **DO** use only the real data that exists
+- **DO** make code work with partial data if needed
+- **DO** skip calculations that require missing data
+
+---
+
+## 🖥️ Frontend Architecture: Display-Only
+
+The WebGUI frontend is a **pure presenter** that ONLY displays data from the database. It must NOT:
+
+1. **Calculate any business logic** - No signal generation, no price calculations, no projections
+2. **Generate mock data** - No hardcoded prices, returns, or statuses
+3. **Transform data beyond formatting** - Only format for display (e.g., decimals, percentages)
+
+### Correct Architecture Flow:
+```
+Python Pipelines (compute) → Database (store) → API (fetch) → Frontend (display)
+```
+
+### When Data is Missing:
+- **DO NOT** add mock data to frontend
+- **DO NOT** calculate in the API layer
+- **DO** fix the Python pipeline to compute and store the data
+- **DO** display "N/A" or "-" for missing values
+
+### Example:
+```javascript
+// ❌ WRONG - Frontend calculating
+const getCurrentSignal = (strategy) => {
+  if (strategy.rsi < 30) return 'BUY'
+  return 'HOLD'
+}
+
+// ✅ CORRECT - Display from database
+{{ strategy.metadata.current_signal || 'N/A' }}
+```
 
 ---
 ## M FIRST_OF_ALL
@@ -37,7 +85,9 @@ Claude must actively **avoid** the following behaviors:
 3. **Ignoring Instructions**: Follow user requests **exactly**—especially regarding architecture (e.g., OOP), libraries, or output structure. Failure to do so is considered a serious error.
 4. **Breaking Functionality in Refactoring**: When refactoring, **preserve all existing functionality**. If uncertain, Claude must call this out and ask.
 5. **Failure to Fix Bugs Properly**: Do not stop at superficial changes. Claude must understand and fix the **root cause**.
-6. **Premature Experimentation**: Avoid “testing ideas” unless explicitly requested. Focus on the **requested solution** first.
+6. **Premature Experimentation**: Avoid "testing ideas" unless explicitly requested. Focus on the **requested solution** first.
+7. **DO NOT CREATE VARIANT FILES**: NEVER create files like `pipeline_clean.py`, `pipeline_v2.py`, `feature_engineering_advanced.py`, `feature_engineering_efficient.py`. When asked to rewrite or clean up a file, MODIFY THE EXISTING FILE DIRECTLY. Creating variants leads to confusion and code sprawl.
+8. **NO HARDCODED SYMBOLS IN PRODUCTION**: Do not hardcode symbol lists in src/ or config/ directories. Always load symbols dynamically from MarketUniverse or database. Exception: Hardcoded symbols ARE allowed in tests/ and scripts/ folders for testing/experimentation.
 
 ---
 

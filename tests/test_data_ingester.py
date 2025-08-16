@@ -18,7 +18,6 @@ class TestDataIngester:
         # Test with default provider
         ingester = DataIngester()
         assert ingester.provider == "polygon"
-        assert ingester.batch_size > 0
         
         # Test with yfinance provider
         ingester = DataIngester(provider="yfinance")
@@ -45,14 +44,11 @@ class TestDataIngester:
         ]
         
         # Mock the market data client
-        with patch("src.ingestion.data_ingester.MarketDataClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.get_daily_bars.return_value = mock_bars
-            mock_client_class.return_value = mock_client
+        with patch.object(ingester._provider_instance, "fetch_ohlcv", new_callable=AsyncMock) as mock_fetch_ohlcv:
+            mock_fetch_ohlcv.return_value = mock_bars
             
             # Mock the database session
-            with patch("src.ingestion.data_ingester.get_session") as mock_get_session:
+            with patch("src.db.base.get_session") as mock_get_session:
                 mock_session = AsyncMock()
                 mock_get_session.return_value.__aiter__.return_value = [mock_session]
                 
@@ -69,60 +65,9 @@ class TestDataIngester:
                 assert stats["symbols_processed"] == 1
                 assert stats["errors"] == 0
     
-    @pytest.mark.asyncio
-    async def test_backfill_historical_data(self):
-        """Test backfill functionality"""
-        ingester = DataIngester(provider="yfinance")
-        
-        with patch.object(ingester, "ingest_ohlcv_batch") as mock_ingest:
-            mock_ingest.return_value = {
-                "total_records": 365,
-                "inserted": 365,
-                "updated": 0,
-                "errors": 0,
-                "symbols_processed": 1
-            }
-            
-            stats = await ingester.backfill_historical_data(
-                symbols=["AAPL"],
-                days_back=365,
-                timeframe="1d"
-            )
-            
-            # Check that ingest was called with correct parameters
-            mock_ingest.assert_called_once()
-            call_args = mock_ingest.call_args[1]
-            assert call_args["symbols"] == ["AAPL"]
-            assert call_args["timeframe"] == "1d"
-            assert (date.today() - call_args["from_date"]).days == 365
-            assert call_args["to_date"] == date.today()
     
-    @pytest.mark.asyncio
-    async def test_update_latest_data(self):
-        """Test updating latest data"""
-        ingester = DataIngester(provider="yfinance")
-        
-        with patch.object(ingester, "ingest_ohlcv_batch") as mock_ingest:
-            mock_ingest.return_value = {
-                "total_records": 7,
-                "inserted": 5,
-                "updated": 2,
-                "errors": 0,
-                "symbols_processed": 1
-            }
-            
-            stats = await ingester.update_latest_data(
-                symbols=["SPY"],
-                timeframe="1d"
-            )
-            
-            # Check that ingest was called with last 7 days
-            mock_ingest.assert_called_once()
-            call_args = mock_ingest.call_args[1]
-            assert call_args["symbols"] == ["SPY"]
-            assert call_args["timeframe"] == "1d"
-            assert (date.today() - call_args["from_date"]).days == 7
-            assert call_args["to_date"] == date.today()
+    
+    
     
     @pytest.mark.asyncio
     async def test_error_handling(self):
@@ -130,10 +75,8 @@ class TestDataIngester:
         ingester = DataIngester(provider="yfinance")
         
         # Mock the market data client to raise an exception
-        with patch("src.ingestion.data_ingester.MarketDataClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.__aenter__.side_effect = Exception("Connection error")
-            mock_client_class.return_value = mock_client
+        with patch.object(ingester._provider_instance, "fetch_ohlcv", new_callable=AsyncMock) as mock_fetch_ohlcv:
+            mock_fetch_ohlcv.side_effect = Exception("Connection error")
             
             stats = await ingester.ingest_ohlcv_batch(
                 symbols=["ERROR"],

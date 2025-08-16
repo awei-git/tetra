@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from .config import settings
-from .routers import monitor, chat, strategies
+from .routers import monitor, chat, strategies, recommendations, pipeline
 from .services.database import init_db
 
 # Configure logging
@@ -47,6 +47,8 @@ app.add_middleware(
 app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(strategies.router, prefix="/api/strategies", tags=["strategies"])
+app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
+app.include_router(pipeline.router, prefix="/api/pipeline", tags=["pipeline"])
 
 # Health check endpoint
 @app.get("/health")

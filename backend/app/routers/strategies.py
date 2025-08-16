@@ -14,6 +14,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/trades")
+async def get_strategy_trades(
+    strategy: Optional[str] = None,
+    db: asyncpg.Connection = Depends(get_db_session)
+) -> StandardResponse:
+    """Get detailed trade recommendations with all metrics."""
+    try:
+        strategy_service = StrategyService(db)
+        trades = await strategy_service.get_strategy_trades(strategy)
+        return StandardResponse(
+            success=True,
+            data={"trades": trades, "count": len(trades)}
+        )
+    except Exception as e:
+        logger.error(f"Error getting strategy trades: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/list")
 async def get_strategies_list(
     category: Optional[str] = None,
@@ -384,15 +401,47 @@ async def get_equity_curve(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/market-prices")
+async def get_market_prices(
+    symbols: List[str] = Query(default=["SPY", "QQQ", "IWM", "IWF"]),
+    db: asyncpg.Connection = Depends(get_db_session)
+) -> StandardResponse:
+    """Get latest market prices for symbols."""
+    try:
+        query = """
+            SELECT DISTINCT ON (symbol) 
+                symbol, 
+                close as price,
+                timestamp
+            FROM market_data.ohlcv
+            WHERE symbol = ANY($1::text[])
+            ORDER BY symbol, timestamp DESC
+        """
+        
+        prices = await db.fetch(query, symbols)
+        
+        price_map = {row["symbol"]: float(row["price"]) for row in prices}
+        
+        return StandardResponse(
+            success=True,
+            data={"prices": price_map}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching market prices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/categories")
 async def get_strategy_categories(
     db: asyncpg.Connection = Depends(get_db_session)
 ) -> StandardResponse:
     """Get all available strategy categories."""
     try:
+        # Get categories from strategy_rankings which has actual data
         query = """
-            SELECT DISTINCT category, COUNT(*) as count
-            FROM strategies.strategy_metadata
+            SELECT DISTINCT category, COUNT(DISTINCT strategy_name) as count
+            FROM strategies.strategy_rankings
             WHERE category IS NOT NULL
             GROUP BY category
             ORDER BY category

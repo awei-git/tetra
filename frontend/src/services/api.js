@@ -58,6 +58,7 @@ export const chatAPI = {
 export const strategiesAPI = {
   getStrategiesList: (category) => api.get('/strategies/list', { params: { category } }),
   getCategories: () => api.get('/strategies/categories'),
+  getStrategyTrades: (strategy) => api.get('/strategies/trades', { params: { strategy } }),
   getStrategyPerformance: (strategyName, symbol, windowSize, startDate, endDate) => 
     api.get(`/strategies/${strategyName}/performance`, {
       params: { symbol, window_size: windowSize, start_date: startDate, end_date: endDate }

@@ -1,0 +1,73 @@
+# Event-based strategy configuration example
+# This strategy trades around market events like earnings, FOMC, dividends
+
+strategy_type: event_based
+name: Earnings Momentum
+description: Trade earnings announcements with positive surprises
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.05  # 5% per position (smaller due to event risk)
+  max_positions: 10
+  commission: 0.001
+
+# Event triggers that generate trades
+event_triggers:
+  - event_type: EARNINGS
+    impact: HIGH  # HIGH, MEDIUM, LOW, UNKNOWN
+    pre_event_days: 3  # Enter 3 days before earnings
+    post_event_days: 2  # Hold 2 days after earnings
+    
+    # Conditions to enter before event
+    entry_conditions:
+      analyst_revision_trend: positive  # Recent analyst upgrades
+      implied_volatility_percentile: 0.7  # High IV (>70th percentile)
+      technical_setup: bullish
+      earnings_streak: 3  # Beat last 3 quarters
+      min_market_cap: 10000000000  # $10B minimum
+    
+    # Conditions to exit after event
+    exit_conditions:
+      earnings_reaction: complete  # After initial price move
+      iv_crush: true  # Exit after IV drops
+      price_target_hit: true
+    
+    # Additional metadata
+    metadata:
+      symbols_filter: ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]  # Optional: specific symbols
+      max_position_size: 0.03  # Override for this event type
+
+  - event_type: DIVIDEND
+    impact: MEDIUM
+    pre_event_days: 5
+    post_event_days: 2
+    
+    entry_conditions:
+      dividend_yield: 0.03  # Min 3% yield
+      payout_consistency: 0.90  # 90% consistent payouts
+      price_above_support: true
+      debt_to_equity: 1.0  # Max debt/equity ratio
+    
+    exit_conditions:
+      ex_dividend_date_passed: true
+      stop_loss_hit: true
+
+  - event_type: FOMC
+    impact: HIGH
+    pre_event_days: 2
+    post_event_days: 5
+    
+    entry_conditions:
+      market_expectation: dovish  # Market expects dovish stance
+      vix_level: 20  # VIX above 20
+      treasury_yield_trend: declining
+    
+    exit_conditions:
+      announcement_digested: true  # Market has processed news
+      volatility_normalized: true
+
+# Optional: Custom pre/post event strategies
+# These would be Python functions referenced by name
+pre_event_strategy: null  # Or name of custom function
+post_event_strategy: null  # Or name of custom function

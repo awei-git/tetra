@@ -1,0 +1,77 @@
+# Signal-based strategy configuration example
+# This strategy trades based on technical indicators and signals
+
+strategy_type: signal_based
+name: RSI Mean Reversion
+description: Trade oversold/overbought conditions using RSI indicator
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.1  # 10% per position
+  max_positions: 5
+  commission: 0.001
+  confirmation_required: 1  # Number of confirmations needed
+
+# Trading rules based on signals
+signal_rules:
+  - name: rsi_oversold_long
+    position_side: LONG
+    position_size_factor: 1.0
+    stop_loss: 0.05  # 5% stop loss
+    take_profit: 0.10  # 10% take profit
+    time_limit: null  # No time limit
+    require_all: true  # All conditions must be met
+    
+    entry_conditions:
+      - signal_name: rsi_14
+        operator: LESS_THAN
+        value: 30
+        lookback: 1
+        weight: 1.0
+      
+      - signal_name: close
+        operator: GREATER_THAN
+        value: sma_200  # Must be above 200-day SMA
+        lookback: 1
+        weight: 1.0
+    
+    exit_conditions:
+      - signal_name: rsi_14
+        operator: GREATER_THAN
+        value: 50  # Exit when RSI returns to neutral
+        lookback: 1
+        weight: 1.0
+
+  - name: rsi_overbought_short
+    position_side: SHORT
+    position_size_factor: 1.0
+    stop_loss: 0.05
+    take_profit: 0.10
+    require_all: true
+    
+    entry_conditions:
+      - signal_name: rsi_14
+        operator: GREATER_THAN
+        value: 70
+        lookback: 1
+        weight: 1.0
+      
+      - signal_name: volume
+        operator: GREATER_THAN
+        value: volume_sma_20  # Volume confirmation
+        lookback: 1
+        weight: 1.0
+    
+    exit_conditions:
+      - signal_name: rsi_14
+        operator: LESS_THAN
+        value: 50
+        lookback: 1
+        weight: 1.0
+
+# Optional: Weight different signals for importance
+signal_weights:
+  rsi_14: 2.0
+  close: 1.0
+  volume: 0.5

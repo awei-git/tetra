@@ -26,6 +26,58 @@ The goal is to build a comprehensive quant trading platform
 4. **Mobile App** - iOS/Android monitoring app
 5. **Crypto Integration** - Binance and CoinGecko APIs
 
+## Pipeline Architecture
+
+The Tetra platform uses a 4-stage pipeline architecture for systematic data processing and strategy evaluation:
+
+### Stage 1: Data Pipeline
+- **Purpose**: Ingest raw market data, economic indicators, events, and news from external sources
+- **Schedule**: Daily at 7 PM via macOS launchd (configurable)
+- **Data Sources**: Polygon.io, FRED API, NewsAPI, AlphaVantage
+- **Output**: Raw data stored in PostgreSQL/TimescaleDB (market_data, economic_data, events schemas)
+
+### Stage 2: Scenarios Pipeline
+- **Purpose**: Generate different market scenarios for comprehensive strategy testing
+- **Scenario Types**:
+  - Historical events (COVID crash, SVB collapse, GME squeeze, etc.)
+  - Market regimes (bull/bear markets, high/low volatility periods)
+  - Stochastic simulations (Monte Carlo, bootstrap resampling)
+  - Stress scenarios (custom volatility, correlation breaks)
+- **Output**: Scenario definitions with metadata, time ranges, and parameters
+
+### Stage 3: Metrics Pipeline
+- **Purpose**: Pre-calculate all technical indicators and features per scenario
+- **Metric Categories**:
+  - Technical indicators (200+ indicators: SMA, RSI, MACD, Bollinger Bands, etc.)
+  - Statistical metrics (returns, volatility, correlations, distributions)
+  - ML features (engineered features, embeddings, predictions)
+  - Market microstructure (volume patterns, spreads, liquidity metrics)
+- **Benefits**: Eliminates redundant computation, ensures consistency, enables fast backtesting
+- **Output**: Cached metrics linked to scenarios in derived schema
+
+### Stage 4: Assessment Pipeline
+- **Purpose**: Evaluate strategies across all scenarios using pre-calculated metrics
+- **Features**:
+  - Load strategies from YAML configurations
+  - Parallel backtesting across scenarios
+  - Performance metrics calculation (Sharpe, Sortino, max drawdown, etc.)
+  - Strategy ranking and comparison
+  - Regime-specific performance analysis
+- **Output**: Comprehensive backtest results, rankings, and reports
+
+### Data Flow
+```
+External APIs → [Data Pipeline] → Raw Database → [Scenarios Pipeline] → Scenario Definitions
+                                                           ↓
+                                                   [Metrics Pipeline]
+                                                           ↓
+                                                    Calculated Metrics
+                                                           ↓
+                                                  [Assessment Pipeline]
+                                                           ↓
+                                                   Strategy Performance
+```
+
 ## Components:
 1. database
     * daily OHLCV

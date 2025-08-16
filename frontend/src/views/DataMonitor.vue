@@ -154,6 +154,59 @@
       </div>
     </div>
     
+    <!-- Pipeline Status Section -->
+    <div class="mt-8 bg-gray-800 border border-gray-700 rounded-lg p-6">
+      <h3 class="text-lg font-semibold mb-4 text-gray-100">Pipeline Status</h3>
+      
+      <div v-if="loadingPipelines" class="flex justify-center items-center h-32">
+        <div class="spinner"></div>
+      </div>
+      
+      <div v-else-if="pipelineStatuses" class="space-y-4">
+        <div v-for="(status, name) in pipelineStatuses" :key="name" 
+             class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <h4 class="font-medium text-gray-100">{{ formatPipelineName(name) }}</h4>
+              <div class="mt-2 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-gray-400">Status:</span>
+                  <span class="ml-2 font-medium" :class="getPipelineStatusClass(status.status)">
+                    {{ status.status }}
+                  </span>
+                </div>
+                <div>
+                  <span class="text-gray-400">Last Run:</span>
+                  <span class="ml-2 text-gray-200">{{ formatLastRun(status.last_run) }}</span>
+                </div>
+                <div>
+                  <span class="text-gray-400">Next Run:</span>
+                  <span class="ml-2 text-gray-200">{{ formatNextRun(status.next_run) }}</span>
+                </div>
+                <div>
+                  <span class="text-gray-400">Duration:</span>
+                  <span class="ml-2 text-gray-200">{{ formatDuration(status.duration_seconds) }}</span>
+                </div>
+              </div>
+              <div v-if="status.error_message" class="mt-2 text-sm text-red-400">
+                Error: {{ status.error_message }}
+              </div>
+            </div>
+            <button @click="triggerPipeline(name)" 
+                    :disabled="status.status === 'running' || triggeringPipeline[name]"
+                    class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed">
+              <span v-if="triggeringPipeline[name]">Running...</span>
+              <span v-else>Run Now</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div v-else class="text-sm text-gray-400">
+        No pipeline status information available
+      </div>
+    </div>
+    
     <!-- Daily Update Summary -->
     <div class="mt-8 bg-gray-800 border border-gray-700 rounded-lg p-6">
       <h3 class="text-lg font-semibold mb-4 text-gray-100">Data Update Summary</h3>
@@ -389,6 +442,9 @@ const loadingSymbols = ref(false)
 const dailyUpdateSummary = ref(null)
 const triggeringUpdate = ref(false)
 const notification = ref(null)
+const pipelineStatuses = ref(null)
+const loadingPipelines = ref(false)
+const triggeringPipeline = ref({})
 
 let ws = null
 
@@ -607,6 +663,126 @@ const formatDetailValue = (detail) => {
   return JSON.stringify(detail)
 }
 
+// Fetch pipeline status
+const fetchPipelineStatus = async () => {
+  try {
+    loadingPipelines.value = true
+    const response = await fetch('/api/pipeline/status')
+    const data = await response.json()
+    if (data.success) {
+      pipelineStatuses.value = data.data.pipelines
+    }
+  } catch (err) {
+    console.error('Error fetching pipeline status:', err)
+  } finally {
+    loadingPipelines.value = false
+  }
+}
+
+// Trigger specific pipeline
+const triggerPipeline = async (pipelineName) => {
+  if (triggeringPipeline.value[pipelineName]) return
+  
+  triggeringPipeline.value[pipelineName] = true
+  
+  try {
+    const response = await fetch(`/api/pipeline/trigger/${pipelineName}`, {
+      method: 'POST'
+    })
+    const data = await response.json()
+    
+    if (data.success) {
+      notification.value = {
+        type: 'success',
+        title: 'Pipeline Started',
+        message: `${formatPipelineName(pipelineName)} has been triggered`
+      }
+      setTimeout(() => notification.value = null, 5000)
+      
+      // Poll for status updates
+      const pollInterval = setInterval(async () => {
+        await fetchPipelineStatus()
+        if (pipelineStatuses.value[pipelineName]?.status !== 'running') {
+          clearInterval(pollInterval)
+          triggeringPipeline.value[pipelineName] = false
+        }
+      }, 5000)
+      
+      // Stop polling after 10 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval)
+        triggeringPipeline.value[pipelineName] = false
+      }, 600000)
+    } else {
+      throw new Error(data.message || 'Failed to trigger pipeline')
+    }
+  } catch (err) {
+    console.error('Error triggering pipeline:', err)
+    notification.value = {
+      type: 'error',
+      title: 'Pipeline Error',
+      message: err.message || 'Failed to trigger pipeline'
+    }
+    setTimeout(() => notification.value = null, 8000)
+    triggeringPipeline.value[pipelineName] = false
+  }
+}
+
+// Format pipeline name
+const formatPipelineName = (name) => {
+  const names = {
+    'data': 'Data Pipeline',
+    'scenarios': 'Scenarios Pipeline',
+    'metrics': 'Metrics Pipeline',
+    'assessment': 'Assessment Pipeline'
+  }
+  return names[name] || name
+}
+
+// Get pipeline status class
+const getPipelineStatusClass = (status) => {
+  switch (status) {
+    case 'success':
+      return 'text-green-400'
+    case 'running':
+      return 'text-blue-400'
+    case 'failed':
+      return 'text-red-400'
+    case 'idle':
+      return 'text-gray-400'
+    default:
+      return 'text-gray-400'
+  }
+}
+
+// Format next run time
+const formatNextRun = (nextRun) => {
+  if (!nextRun) return 'Not scheduled'
+  const date = new Date(nextRun)
+  const now = new Date()
+  const diffMs = date - now
+  
+  if (diffMs < 0) return 'Overdue'
+  
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffMins = Math.floor((diffMs % 3600000) / 60000)
+  
+  if (diffHours > 0) {
+    return `in ${diffHours}h ${diffMins}m`
+  } else {
+    return `in ${diffMins}m`
+  }
+}
+
+// Format duration
+const formatDuration = (seconds) => {
+  if (!seconds) return '-'
+  if (seconds < 60) return `${seconds}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}m ${secs}s`
+}
+
 // Trigger daily update
 const triggerDailyUpdate = async () => {
   if (triggeringUpdate.value) return
@@ -702,6 +878,7 @@ const triggerDailyUpdate = async () => {
 onMounted(() => {
   fetchCoverage()
   fetchDailyUpdateSummary()
+  fetchPipelineStatus()
   // Set up WebSocket for real-time updates
   ws = createWebSocket(handleWebSocketMessage)
   

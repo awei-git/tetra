@@ -142,16 +142,18 @@ class NewsSentimentStep(PipelineStep[Dict[str, Any]]):
             values = []
             for article in articles:
                 values.append({
-                    "url": article.url,
+                    "url": str(article.url),  # Convert Url object to string
                     "title": article.title,
                     "author": article.author,
                     "source": article.source,
+                    "source_id": getattr(article, 'source_id', str(article.url)),  # Use URL as source_id if not provided
                     "source_category": "news",
                     "published_at": article.published_at,
                     "content": article.content,
                     "description": getattr(article, 'description', None),
                     "fetched_at": datetime.now(timezone.utc),
                     "symbols": article.symbols if hasattr(article, 'symbols') else [],  # List of symbols
+                    "updated_at": datetime.now(timezone.utc),  # Add updated_at
                 })
             
             # Batch insert to avoid parameter limits
@@ -159,15 +161,9 @@ class NewsSentimentStep(PipelineStep[Dict[str, Any]]):
             for i in range(0, len(values), batch_size):
                 batch = values[i:i + batch_size]
                 
-                # Use PostgreSQL upsert
+                # Simple insert without conflict handling for now
+                # TODO: Add unique constraint on url column in database
                 stmt = insert(NewsArticleModel).values(batch)
-                stmt = stmt.on_conflict_do_update(
-                    constraint="uq_news_articles_url",
-                    set_={
-                        "title": stmt.excluded.title,
-                        "updated_at": datetime.now(timezone.utc),
-                    }
-                )
                 
                 await db.execute(stmt)
             

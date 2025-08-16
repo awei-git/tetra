@@ -1,0 +1,98 @@
+# Bollinger Bands Mean Reversion Strategy
+# Trade bounces off Bollinger Band extremes
+
+strategy_type: signal_based
+name: Bollinger Bands Reversion
+description: Buy at lower band, sell at upper band
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.1  # 10% per position
+  max_positions: 5
+  commission: 0.001
+  confirmation_required: 1
+
+# Signal rules for both long and short trades
+signal_rules:
+  # Buy when price touches lower band
+  - name: bb_oversold_bounce
+    position_side: LONG
+    position_size_factor: 1.0
+    stop_loss: 0.03  # 3% stop loss
+    take_profit: null  # Exit at middle band
+    require_all: true
+    
+    entry_conditions:
+      # Price at or below lower band
+      - signal_name: close
+        operator: LESS_THAN
+        value: bb_lower
+        lookback: 1
+        weight: 1.0
+      
+      # RSI oversold confirmation
+      - signal_name: rsi_14
+        operator: LESS_THAN
+        value: 40
+        lookback: 1
+        weight: 1.0
+      
+      # Not in strong downtrend
+      - signal_name: sma_20
+        operator: GREATER_THAN
+        value: sma_50
+        lookback: 1
+        weight: 0.5
+    
+    exit_conditions:
+      # Exit when price reaches middle band
+      - signal_name: close
+        operator: GREATER_THAN
+        value: bb_middle
+        lookback: 1
+        weight: 1.0
+  
+  # Sell when price touches upper band
+  - name: bb_overbought_reversal
+    position_side: SHORT
+    position_size_factor: 1.0
+    stop_loss: 0.03  # 3% stop loss
+    take_profit: null  # Exit at middle band
+    require_all: true
+    
+    entry_conditions:
+      # Price at or above upper band
+      - signal_name: close
+        operator: GREATER_THAN
+        value: bb_upper
+        lookback: 1
+        weight: 1.0
+      
+      # RSI overbought confirmation
+      - signal_name: rsi_14
+        operator: GREATER_THAN
+        value: 60
+        lookback: 1
+        weight: 1.0
+      
+      # Volume spike (potential reversal)
+      - signal_name: volume_ratio
+        operator: GREATER_THAN
+        value: 1.5  # 150% of average
+        lookback: 1
+        weight: 0.5
+    
+    exit_conditions:
+      # Exit when price reaches middle band
+      - signal_name: close
+        operator: LESS_THAN
+        value: bb_middle
+        lookback: 1
+        weight: 1.0
+
+# Bollinger Band parameters (for reference)
+indicator_params:
+  bb_period: 20  # 20-day moving average
+  bb_std: 2  # 2 standard deviations
+  rsi_period: 14  # 14-day RSI

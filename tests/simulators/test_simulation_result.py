@@ -41,7 +41,7 @@ class TestSimulationResult:
         )
         
         # Simulate linear growth
-        for i, date in enumerate(dates):
+        for i, current_date in enumerate(dates):
             value = 100000 + (10000 * i / len(dates))
             snapshot = SimulationSnapshot(
                 timestamp=date,
@@ -77,9 +77,9 @@ class TestSimulationResult:
             freq='D'
         )
         
-        for date, value in zip(dates, values):
+        for current_date, value in zip(dates, values):
             snapshot = SimulationSnapshot(
-                timestamp=date,
+                timestamp=current_date,
                 total_value=value,
                 cash=value,
                 positions_value=0,
@@ -146,9 +146,9 @@ class TestSimulationResult:
         for ret in daily_returns[1:]:
             values.append(values[-1] * (1 + ret))
         
-        for date, value in zip(dates, values):
+        for current_date, value in zip(dates, values):
             snapshot = SimulationSnapshot(
-                timestamp=date,
+                timestamp=current_date,
                 total_value=value,
                 cash=0,
                 positions_value=value,

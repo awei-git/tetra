@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DataMonitor from '../views/DataMonitor.vue'
 import ChatInterface from '../views/ChatInterface.vue'
 import Strategies from '../views/Strategies.vue'
+import Trades from '../views/Trades.vue'
 
 const routes = [
   {
@@ -18,6 +19,11 @@ const routes = [
     path: '/strategies',
     name: 'Strategies',
     component: Strategies
+  },
+  {
+    path: '/trades',
+    name: 'Trades',
+    component: Trades
   }
 ]
 

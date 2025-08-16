@@ -12,7 +12,7 @@ from src.models import (
     NewsArticle, SentimentScore, NewsSentiment, NewsSource,
     SentimentType, NewsCategory
 )
-from src.db.models import NewsArticleModel, NewsSentimentModel
+from src.models.sqlalchemy.news_sentiment import NewsArticleModel, NewsSentimentModel
 from src.utils.logging import logger
 
 

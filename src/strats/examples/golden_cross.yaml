@@ -1,0 +1,59 @@
+# Golden Cross Strategy
+# Classic trend-following strategy using 50/200 SMA crossover
+
+strategy_type: signal_based
+name: Golden Cross
+description: Buy when 50-day SMA crosses above 200-day SMA
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.95  # Nearly fully invested when signal is active
+  max_positions: 1  # Single position strategy
+  commission: 0.001
+
+# Signal rules
+signal_rules:
+  - name: golden_cross_entry
+    position_side: LONG
+    position_size_factor: 1.0
+    stop_loss: 0.10  # 10% stop loss
+    take_profit: null  # No fixed take profit
+    require_all: true
+    
+    # Entry when golden cross occurs
+    entry_conditions:
+      - signal_name: sma_50
+        operator: CROSSES_ABOVE
+        value: sma_200
+        lookback: 1
+        weight: 1.0
+      
+      # Volume confirmation
+      - signal_name: volume
+        operator: GREATER_THAN
+        value: volume_sma_20
+        lookback: 1
+        weight: 1.0
+      
+      # Momentum confirmation
+      - signal_name: rsi_14
+        operator: GREATER_THAN
+        value: 50  # RSI above 50
+        lookback: 1
+        weight: 0.5
+    
+    # Exit when death cross occurs
+    exit_conditions:
+      - signal_name: sma_50
+        operator: CROSSES_BELOW
+        value: sma_200
+        lookback: 1
+        weight: 1.0
+
+# Signal importance weights
+signal_weights:
+  sma_50: 2.0
+  sma_200: 2.0
+  volume: 1.0
+  rsi_14: 0.5

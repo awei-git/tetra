@@ -72,7 +72,7 @@ class DataLoader:
             FROM market_data.ohlcv
             WHERE symbol = ANY(:symbols)
                 AND timestamp >= :start_date
-                AND timestamp < :end_date + INTERVAL '1 day'
+                AND timestamp <= :end_date
             ORDER BY symbol, timestamp
         """)
         

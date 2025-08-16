@@ -1,262 +1,515 @@
-import asyncio
-from datetime import datetime, date, timedelta, timezone
-from typing import List, Optional, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
+"""Generic data ingester for all data sources."""
 
-from src.clients.market_data_client import MarketDataClient
-from src.db.base import get_session, engine
+import logging
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional, Any, Union
+import asyncio
+from abc import ABC, abstractmethod
+
+from sqlalchemy import select, and_, func
+from sqlalchemy.dialects.postgresql import insert
+from src.db import async_session_maker
 from src.models.sqlalchemy import OHLCVModel
-from src.models import OHLCVData
-from src.utils.logging import logger
-from config import settings
+from src.models.sqlalchemy.economic_data import EconomicIndicatorModel
+from src.models.sqlalchemy.news_sentiment import NewsArticleModel, NewsSentimentModel
+from src.models.sqlalchemy.event_data import EventDataModel
+
+logger = logging.getLogger(__name__)
 
 
 class DataIngester:
-    """Handles data ingestion from various sources"""
+    """
+    Central data ingestion manager for all data types.
+    
+    This is the single entry point for all data ingestion into the database.
+    Supports multiple data providers and data types.
+    """
     
     def __init__(self, provider: str = "polygon"):
-        """Initialize data ingester with specified provider"""
+        """
+        Initialize data ingester with specified provider.
+        
+        Args:
+            provider: Data provider name (polygon, yfinance, alphavantage, fred, etc.)
+        """
         self.provider = provider
-        self.batch_size = settings.batch_size
+        self._provider_instance = None
+        self._initialize_provider()
+        
+    def _initialize_provider(self):
+        """Initialize the appropriate provider based on configuration."""
+        from .providers import (
+            PolygonProvider, YFinanceProvider, AlphaVantageProvider,
+            FREDProvider, NewsAPIProvider
+        )
+        
+        provider_map = {
+            'polygon': PolygonProvider,
+            'yfinance': YFinanceProvider,
+            'alphavantage': AlphaVantageProvider,
+            'fred': FREDProvider,
+            'newsapi': NewsAPIProvider
+        }
+        
+        provider_class = provider_map.get(self.provider)
+        if provider_class:
+            self._provider_instance = provider_class()
+        else:
+            logger.warning(f"Unknown provider {self.provider}, using default")
+            self._provider_instance = PolygonProvider()
+    
+    # ==================== MARKET DATA ====================
     
     async def ingest_ohlcv_batch(
         self,
         symbols: List[str],
-        from_date: date,
-        to_date: date,
-        timeframe: str = "1d",
-        db_session: Optional[AsyncSession] = None
-    ) -> Dict[str, int]:
+        from_date: Union[date, datetime],
+        to_date: Union[date, datetime],
+        timeframe: str = "1d"
+    ) -> Dict[str, Any]:
         """
-        Ingest OHLCV data for multiple symbols
+        Ingest OHLCV data for multiple symbols.
         
         Args:
-            symbols: List of symbols to ingest
-            from_date: Start date
-            to_date: End date
-            timeframe: Timeframe for bars
-            db_session: Optional database session
+            symbols: List of ticker symbols
+            from_date: Start date for data
+            to_date: End date for data
+            timeframe: Timeframe (1d, 1h, 5m, etc.)
             
         Returns:
-            Dictionary with ingestion statistics
+            Dictionary with ingestion results
         """
-        stats = {
+        logger.info(f"Ingesting OHLCV data for {len(symbols)} symbols from {from_date} to {to_date}")
+        
+        results = {
+            "success": {},
+            "failed": {},
             "total_records": 0,
-            "inserted": 0,
-            "updated": 0,
-            "errors": 0,
-            "symbols_processed": 0
+            "symbols_processed": 0,
+            "errors": 0
         }
         
-        try:
-            async with MarketDataClient(self.provider) as client:
-                for symbol in symbols:
-                    try:
-                        logger.info(f"Ingesting {timeframe} data for {symbol} from {from_date} to {to_date}")
+        # Process in batches to avoid overwhelming the API
+        batch_size = 10
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            
+            for symbol in batch:
+                try:
+                    # Fetch data from provider
+                    data = await self._provider_instance.fetch_ohlcv(
+                        symbol=symbol,
+                        from_date=from_date,
+                        to_date=to_date,
+                        timeframe=timeframe
+                    )
+                    
+                    if data:
+                        # Store in database
+                        records_stored = await self._store_ohlcv_data(symbol, data, timeframe)
+                        results["success"][symbol] = records_stored
+                        results["total_records"] += records_stored
+                        results["symbols_processed"] += 1
+                        logger.debug(f"Stored {records_stored} records for {symbol}")
+                    else:
+                        results["failed"][symbol] = "No data returned"
+                        results["errors"] += 1
                         
-                        # Fetch data based on timeframe
-                        if timeframe == "1d":
-                            bars = await client.get_daily_bars(symbol, from_date, to_date)
-                        else:
-                            bars = await client.get_intraday_bars(symbol, timeframe, from_date, to_date)
-                        
-                        if bars:
-                            stats["total_records"] += len(bars)
-                            
-                            # Save to database
-                            if db_session:
-                                await self._save_ohlcv_data(bars, db_session, stats)
-                            else:
-                                async for session in get_session():
-                                    await self._save_ohlcv_data(bars, session, stats)
-                                    break
-                            
-                            stats["symbols_processed"] += 1
-                            logger.info(f"Ingested {len(bars)} records for {symbol}")
-                        else:
-                            logger.warning(f"No data found for {symbol} from {self.provider}, trying fallback provider")
-                            
-                            # Try fallback provider (YFinance) if primary fails
-                            if self.provider != "yfinance":
-                                try:
-                                    async with MarketDataClient("yfinance") as fallback_client:
-                                        logger.info(f"Trying YFinance for {symbol}")
-                                        
-                                        if timeframe == "1d":
-                                            bars = await fallback_client.get_daily_bars(symbol, from_date, to_date)
-                                        else:
-                                            bars = await fallback_client.get_intraday_bars(symbol, timeframe, from_date, to_date)
-                                        
-                                        if bars:
-                                            stats["total_records"] += len(bars)
-                                            
-                                            # Save to database
-                                            if db_session:
-                                                await self._save_ohlcv_data(bars, db_session, stats)
-                                            else:
-                                                async for session in get_session():
-                                                    await self._save_ohlcv_data(bars, session, stats)
-                                                    break
-                                            
-                                            stats["symbols_processed"] += 1
-                                            logger.info(f"Ingested {len(bars)} records for {symbol} from YFinance fallback")
-                                        else:
-                                            logger.warning(f"No data found for {symbol} from any provider")
-                                except Exception as e:
-                                    logger.error(f"Fallback provider failed for {symbol}: {e}")
-                        
-                        # Small delay between symbols to avoid rate limits
-                        await asyncio.sleep(0.1)
-                        
-                    except Exception as e:
-                        logger.error(f"Error ingesting data for {symbol}: {e}")
-                        stats["errors"] += 1
-        except Exception as e:
-            logger.error(f"Error initializing market data client: {e}")
-            stats["errors"] += 1
+                except Exception as e:
+                    logger.error(f"Error ingesting {symbol}: {e}", exc_info=True)
+                    results["failed"][symbol] = str(e)
+                    results["errors"] += 1
+            
+            # Rate limiting
+            await asyncio.sleep(0.1)
         
-        logger.info(f"Ingestion complete: {stats}")
-        return stats
+        logger.info(f"OHLCV ingestion complete: {results['symbols_processed']} symbols, {results['total_records']} records")
+        return results
     
-    async def _save_ohlcv_data(
-        self,
-        bars: List[OHLCVData],
-        session: AsyncSession,
-        stats: Dict[str, int]
-    ):
-        """Save OHLCV data to database with upsert logic"""
-        try:
-            # Process in batches
-            for i in range(0, len(bars), self.batch_size):
-                batch = bars[i:i + self.batch_size]
+    async def _store_ohlcv_data(self, symbol: str, data: List[Dict], timeframe: str = "1d") -> int:
+        """Store OHLCV data in database."""
+        if not data:
+            return 0
+            
+        async with async_session_maker() as session:
+            records_stored = 0
+            
+            for record in data:
+                stmt = insert(OHLCVModel).values(
+                    symbol=symbol,
+                    timestamp=record['timestamp'],
+                    open=record['open'],
+                    high=record['high'],
+                    low=record['low'],
+                    close=record['close'],
+                    volume=record['volume'],
+                    vwap=record.get('vwap'),
+                    trades_count=record.get('trade_count'),
+                    timeframe=timeframe,
+                    source=self.provider
+                )
                 
-                # Prepare data for insert
-                values = []
-                for bar in batch:
-                    values.append({
-                        "symbol": bar.symbol,
-                        "timestamp": bar.timestamp,
-                        "open": bar.open,
-                        "high": bar.high,
-                        "low": bar.low,
-                        "close": bar.close,
-                        "volume": bar.volume,
-                        "vwap": bar.vwap,
-                        "trades_count": bar.trades_count,
-                        "timeframe": bar.timeframe,
-                        "source": bar.source,
-                        "created_at": datetime.now(timezone.utc),
-                    })
-                
-                # Use PostgreSQL upsert
-                stmt = insert(OHLCVModel).values(values)
+                # On conflict, update the existing record
                 stmt = stmt.on_conflict_do_update(
-                    constraint="uq_ohlcv_symbol_time",
+                    index_elements=['symbol', 'timestamp', 'timeframe'],
                     set_={
-                        "open": stmt.excluded.open,
-                        "high": stmt.excluded.high,
-                        "low": stmt.excluded.low,
-                        "close": stmt.excluded.close,
-                        "volume": stmt.excluded.volume,
-                        "vwap": stmt.excluded.vwap,
-                        "trades_count": stmt.excluded.trades_count,
-                        "updated_at": datetime.now(timezone.utc),
+                        'open': stmt.excluded.open,
+                        'high': stmt.excluded.high,
+                        'low': stmt.excluded.low,
+                        'close': stmt.excluded.close,
+                        'volume': stmt.excluded.volume,
+                        'vwap': stmt.excluded.vwap,
+                        'trades_count': stmt.excluded.trades_count,
+                        'source': stmt.excluded.source
                     }
                 )
                 
                 await session.execute(stmt)
-                await session.commit()
+                records_stored += 1
+            
+            await session.commit()
+            
+        return records_stored
+    
+    # ==================== ECONOMIC DATA ====================
+    
+    async def ingest_economic_indicators(
+        self,
+        indicators: List[str],
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None
+    ) -> Dict[str, Any]:
+        """
+        Ingest economic indicator data.
+        
+        Args:
+            indicators: List of indicator symbols (GDP, CPI, etc.)
+            from_date: Start date (optional)
+            to_date: End date (optional)
+            
+        Returns:
+            Dictionary with ingestion results
+        """
+        logger.info(f"Ingesting economic indicators: {indicators}")
+        
+        results = {
+            "success": {},
+            "failed": {},
+            "total_records": 0
+        }
+        
+        for indicator in indicators:
+            try:
+                # Fetch data from provider (e.g., FRED)
+                data = await self._provider_instance.fetch_economic_indicator(
+                    indicator=indicator,
+                    from_date=from_date,
+                    to_date=to_date
+                )
                 
-                stats["inserted"] += len(batch)
+                if data:
+                    # Store in database
+                    records_stored = await self._store_economic_data(indicator, data)
+                    results["success"][indicator] = records_stored
+                    results["total_records"] += records_stored
+                else:
+                    results["failed"][indicator] = "No data returned"
+                    
+            except Exception as e:
+                logger.error(f"Error ingesting {indicator}: {e}")
+                results["failed"][indicator] = str(e)
+        
+        logger.info(f"Economic data ingestion complete: {results['total_records']} records")
+        return results
+    
+    async def _store_economic_data(self, indicator: str, data: List[Dict]) -> int:
+        """Store economic indicator data in database."""
+        if not data:
+            return 0
+            
+        async with async_session_maker() as session:
+            records_stored = 0
+            
+            for record in data:
+                stmt = insert(EconomicIndicatorModel).values(
+                    symbol=indicator,
+                    date=record['date'],
+                    value=record['value'],
+                    previous_value=record.get('previous_value'),
+                    period=record.get('period'),
+                    unit=record.get('unit')
+                )
                 
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['symbol', 'date'],
+                    set_={
+                        'value': stmt.excluded.value,
+                        'previous_value': stmt.excluded.previous_value,
+                        'updated_at': func.now()
+                    }
+                )
+                
+                await session.execute(stmt)
+                records_stored += 1
+            
+            await session.commit()
+            
+        return records_stored
+    
+    # ==================== NEWS DATA ====================
+    
+    async def ingest_news(
+        self,
+        symbols: Optional[List[str]] = None,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+        categories: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Ingest news articles and sentiment.
+        
+        Args:
+            symbols: List of symbols to get news for
+            from_date: Start date
+            to_date: End date
+            categories: News categories to filter
+            
+        Returns:
+            Dictionary with ingestion results
+        """
+        logger.info(f"Ingesting news for symbols: {symbols}")
+        
+        results = {
+            "articles": 0,
+            "sentiments": 0,
+            "errors": 0
+        }
+        
+        try:
+            # Fetch news from provider
+            articles = await self._provider_instance.fetch_news(
+                symbols=symbols,
+                from_date=from_date,
+                to_date=to_date,
+                categories=categories
+            )
+            
+            for article in articles:
+                try:
+                    # Store article
+                    article_id = await self._store_news_article(article)
+                    results["articles"] += 1
+                    
+                    # Calculate and store sentiment
+                    if 'content' in article:
+                        sentiment = await self._calculate_sentiment(article['content'])
+                        await self._store_sentiment(article_id, sentiment)
+                        results["sentiments"] += 1
+                        
+                except Exception as e:
+                    logger.error(f"Error storing article: {e}")
+                    results["errors"] += 1
+                    
         except Exception as e:
-            logger.error(f"Error saving OHLCV data: {e}")
-            await session.rollback()
-            raise
+            logger.error(f"Error fetching news: {e}")
+            results["errors"] += 1
+        
+        logger.info(f"News ingestion complete: {results['articles']} articles, {results['sentiments']} sentiments")
+        return results
     
-    async def backfill_historical_data(
+    async def _store_news_article(self, article: Dict) -> int:
+        """Store news article in database."""
+        async with async_session_maker() as session:
+            stmt = insert(NewsArticleModel).values(
+                source=article.get('source'),
+                author=article.get('author'),
+                title=article['title'],
+                description=article.get('description'),
+                url=article['url'],
+                published_at=article['published_at'],
+                content=article.get('content'),
+                symbols=article.get('symbols', [])
+            )
+            
+            stmt = stmt.on_conflict_do_update(
+                index_elements=['url'],
+                set_={
+                    'content': stmt.excluded.content,
+                    'updated_at': func.now()
+                }
+            )
+            
+            result = await session.execute(stmt)
+            await session.commit()
+            
+            # Get the article ID
+            article_result = await session.execute(
+                select(NewsArticleModel).where(NewsArticleModel.url == article['url'])
+            )
+            article_obj = article_result.scalar_one()
+            
+            return article_obj.article_id
+    
+    async def _calculate_sentiment(self, content: str) -> Dict[str, float]:
+        """Calculate sentiment scores for content."""
+        # This would use a sentiment analysis model
+        # For now, return placeholder scores
+        return {
+            'positive': 0.3,
+            'negative': 0.2,
+            'neutral': 0.5,
+            'compound': 0.1
+        }
+    
+    async def _store_sentiment(self, article_id: int, sentiment: Dict):
+        """Store sentiment scores in database."""
+        async with async_session_maker() as session:
+            stmt = insert(NewsSentimentModel).values(
+                article_id=article_id,
+                positive_score=sentiment['positive'],
+                negative_score=sentiment['negative'],
+                neutral_score=sentiment['neutral'],
+                compound_score=sentiment['compound'],
+                analyzed_at=datetime.now()
+            )
+            
+            stmt = stmt.on_conflict_do_nothing()
+            
+            await session.execute(stmt)
+            await session.commit()
+    
+    # ==================== EVENT DATA ====================
+    
+    async def ingest_events(
         self,
-        symbols: List[str],
-        days_back: int = 365,
-        timeframe: str = "1d"
-    ) -> Dict[str, int]:
+        event_types: List[str],
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None
+    ) -> Dict[str, Any]:
         """
-        Backfill historical data for symbols
+        Ingest event data (earnings, dividends, splits, etc.).
         
         Args:
-            symbols: List of symbols
-            days_back: Number of days to backfill
-            timeframe: Timeframe for data
+            event_types: Types of events to ingest
+            from_date: Start date
+            to_date: End date
             
         Returns:
-            Ingestion statistics
+            Dictionary with ingestion results
         """
-        to_date = date.today()
-        from_date = to_date - timedelta(days=days_back)
+        logger.info(f"Ingesting events: {event_types}")
         
-        logger.info(f"Starting backfill for {len(symbols)} symbols from {from_date} to {to_date}")
+        results = {
+            "success": {},
+            "failed": {},
+            "total_records": 0
+        }
         
-        return await self.ingest_ohlcv_batch(
-            symbols=symbols,
-            from_date=from_date,
-            to_date=to_date,
-            timeframe=timeframe
-        )
+        for event_type in event_types:
+            try:
+                # Fetch events from provider
+                events = await self._provider_instance.fetch_events(
+                    event_type=event_type,
+                    from_date=from_date,
+                    to_date=to_date
+                )
+                
+                if events:
+                    # Store in database
+                    records_stored = await self._store_events(event_type, events)
+                    results["success"][event_type] = records_stored
+                    results["total_records"] += records_stored
+                else:
+                    results["failed"][event_type] = "No data returned"
+                    
+            except Exception as e:
+                logger.error(f"Error ingesting {event_type}: {e}")
+                results["failed"][event_type] = str(e)
+        
+        logger.info(f"Event ingestion complete: {results['total_records']} records")
+        return results
     
-    async def update_latest_data(
+    async def _store_events(self, event_type: str, events: List[Dict]) -> int:
+        """Store event data in database."""
+        if not events:
+            return 0
+            
+        async with async_session_maker() as session:
+            records_stored = 0
+            
+            for event in events:
+                stmt = insert(EventDataModel).values(
+                    symbol=event['symbol'],
+                    event_type=event_type,
+                    event_date=event['date'],
+                    event_time=event.get('time'),
+                    data=event.get('data', {}),
+                    importance=event.get('importance', 'medium')
+                )
+                
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['symbol', 'event_type', 'event_date'],
+                    set_={
+                        'data': stmt.excluded.data,
+                        'importance': stmt.excluded.importance,
+                        'updated_at': func.now()
+                    }
+                )
+                
+                await session.execute(stmt)
+                records_stored += 1
+            
+            await session.commit()
+            
+        return records_stored
+    
+    # ==================== BULK OPERATIONS ====================
+    
+    async def ingest_all_data_for_symbol(
         self,
-        symbols: List[str],
-        timeframe: str = "1d"
-    ) -> Dict[str, int]:
+        symbol: str,
+        from_date: date,
+        to_date: date
+    ) -> Dict[str, Any]:
         """
-        Update with the latest data for symbols
+        Ingest all available data types for a symbol.
         
         Args:
-            symbols: List of symbols
-            timeframe: Timeframe for data
+            symbol: Ticker symbol
+            from_date: Start date
+            to_date: End date
             
         Returns:
-            Ingestion statistics
+            Dictionary with results for each data type
         """
-        # Get last 7 days to ensure we don't miss anything
-        to_date = date.today()
-        from_date = to_date - timedelta(days=7)
+        logger.info(f"Ingesting all data for {symbol}")
         
-        logger.info(f"Updating latest data for {len(symbols)} symbols")
+        results = {}
         
-        return await self.ingest_ohlcv_batch(
-            symbols=symbols,
+        # OHLCV data
+        results['ohlcv'] = await self.ingest_ohlcv_batch(
+            symbols=[symbol],
             from_date=from_date,
-            to_date=to_date,
-            timeframe=timeframe
+            to_date=to_date
         )
-
-
-async def main():
-    """Example usage of DataIngester"""
-    # Example symbols
-    symbols = [
-        # ETFs
-        "SPY", "QQQ", "IWM", "DIA",
-        # Large cap stocks
-        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
-        # Crypto (if supported by provider)
-        # "BTC-USD", "ETH-USD"
-    ]
+        
+        # News
+        results['news'] = await self.ingest_news(
+            symbols=[symbol],
+            from_date=from_date,
+            to_date=to_date
+        )
+        
+        # Events
+        results['events'] = await self.ingest_events(
+            event_types=['earnings', 'dividends', 'splits'],
+            from_date=from_date,
+            to_date=to_date
+        )
+        
+        return results
     
-    ingester = DataIngester(provider="polygon")
-    
-    # Backfill historical data
-    stats = await ingester.backfill_historical_data(
-        symbols=symbols[:2],  # Start with just 2 symbols to test
-        days_back=30,  # Last 30 days
-        timeframe="1d"
-    )
-    
-    print(f"Backfill completed: {stats}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    async def close(self):
+        """Close provider connections."""
+        if self._provider_instance:
+            await self._provider_instance.close()

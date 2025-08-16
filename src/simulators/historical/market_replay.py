@@ -160,7 +160,7 @@ class MarketReplay:
             FROM market_data.ohlcv
             WHERE symbol = :symbol
                 AND timestamp >= :start_date
-                AND timestamp < CAST(:end_date AS date) + INTERVAL '1 day'
+                AND timestamp <= CAST(:end_date AS date)
             ORDER BY timestamp
         """)
         

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tetra.assessment-pipeline</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/angwei/Repos/tetra/bin/pipelines/run_assessment_pipeline.sh</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/angwei/Repos/tetra</string>
+    
+    <key>StandardOutPath</key>
+    <string>/tmp/tetra-assessment-pipeline.out</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/tmp/tetra-assessment-pipeline.err</string>
+    
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>21</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/angwei</string>
+    </dict>
+</dict>
+</plist>

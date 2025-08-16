@@ -122,6 +122,9 @@ class HistoricalSimulator(BaseSimulator):
                 )
                 
                 # Process signals
+                if signals and self.config.verbose:
+                    print(f"Day {trading_day}: Generated {len(signals)} signals")
+                    
                 for signal in signals:
                     await self._execute_signal(
                         portfolio,
@@ -154,6 +157,11 @@ class HistoricalSimulator(BaseSimulator):
         
         # Add trades from portfolio transactions
         result.trades = self._extract_trades_from_transactions(portfolio.transactions)
+        
+        # For buy and hold strategies, count open positions as trades too
+        if len(result.trades) == 0 and len(portfolio.transactions) > 0:
+            # Count transactions as trades for strategies that don't close positions
+            result.total_trades = len(portfolio.transactions)
         
         # Calculate all metrics including trade statistics
         result.calculate_metrics(self.config.risk_free_rate)
@@ -287,6 +295,9 @@ class HistoricalSimulator(BaseSimulator):
         symbols_to_load = set(strategy.universe) if hasattr(strategy, 'universe') else set()
         symbols_to_load.update(market_data.keys())
         
+        # Import technical indicators calculator
+        from src.ml.technical_indicators import TechnicalIndicators
+        
         for symbol in symbols_to_load:
             # Get full OHLCV data, not just price series
             df = await self.market_replay._load_symbol_data(
@@ -295,7 +306,9 @@ class HistoricalSimulator(BaseSimulator):
                 trading_day
             )
             if not df.empty:
-                historical_data[symbol] = df
+                # Calculate technical indicators
+                df_with_indicators = TechnicalIndicators.calculate_all_indicators(df, symbol)
+                historical_data[symbol] = df_with_indicators
         
         # Calculate indicators
         if hasattr(strategy, 'calculate_indicators'):

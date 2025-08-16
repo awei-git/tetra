@@ -7,10 +7,14 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 from src.signals.ml import (
-    ClassificationSignal, RegressionSignal, AnomalyDetectionSignal,
-    ClusteringSignal, EnsembleSignal, RandomForestClassifier,
-    XGBoostRegressor, LSTMPredictor, IsolationForestAnomaly,
-    KMeansCluster, VotingEnsemble
+    DirectionClassifierSignal as ClassificationSignal,
+    PriceRegressionSignal as RegressionSignal,
+    PriceAnomalySignal as AnomalyDetectionSignal,
+    MarketStateClusteringSignal as ClusteringSignal,
+    EnsembleDirectionSignal as EnsembleSignal,
+    MLSignalBase,
+    LSTMPredictionSignal as LSTMPredictor,
+    VotingClassifierSignal as VotingEnsemble
 )
 from src.signals.base.types import SignalType
 

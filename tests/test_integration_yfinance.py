@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 from src.ingestion.data_ingester import DataIngester
 from src.db.base import get_session
-from src.db.models import OHLCVModel
+from src.models.sqlalchemy.market_data import OHLCVModel
 from sqlalchemy import select, func
 
 

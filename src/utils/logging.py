@@ -85,7 +85,7 @@ def setup_logging(log_level: str = None) -> Any:
         rotation="1 day",
         retention="7 days",
         level=log_level,
-        format=serialize_record if settings.app_env != "development" else None,
+        format=serialize_record if settings.app_env != "development" else "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         serialize=True if settings.app_env != "development" else False,
     )
     

@@ -11,7 +11,7 @@ from src.pipelines.data_pipeline.steps import (
     NewsSentimentStep,
     DataQualityCheckStep
 )
-from src.data_definitions.market_universe import MarketUniverse
+from src.definitions.market_universe import MarketUniverse
 from src.db.base import get_session
 from src.utils.logging import logger
 from sqlalchemy import text
@@ -35,7 +35,7 @@ class DataPipeline(Pipeline):
     def _configure_steps(self, context: PipelineContext):
         """Configure pipeline steps based on mode and parameters"""
         mode = context.data.get("mode", "daily")
-        skip_steps = context.data.get("skip_steps", [])
+        skip_steps = context.data.get("skip_steps") or []
         parallel = context.data.get("parallel", True)
         
         # Create steps with appropriate configuration
@@ -104,6 +104,76 @@ class DataPipeline(Pipeline):
         context = PipelineContext()
         context.data["pipeline_start_time"] = datetime.now()
         
+        # Just return the context - configuration will happen after kwargs are added
+        return context
+    
+    async def run(self, **kwargs) -> PipelineContext:
+        """Override run to handle configuration properly"""
+        logger.info(f"Starting pipeline: {self.name}")
+        
+        # Setup context
+        try:
+            self.context = await self.setup()
+            self.context.data.update(kwargs)
+        except Exception as e:
+            logger.error(f"Pipeline setup failed: {e}")
+            context = PipelineContext()
+            context.add_error(f"Setup failed: {str(e)}")
+            context.finish(PipelineStatus.FAILED)
+            return context
+        
+        # Now configure with the populated context
+        await self._configure_pipeline(self.context)
+        
+        # Execute steps
+        failed_steps = 0
+        successful_steps = 0
+        
+        for i, step in enumerate(self.steps):
+            logger.info(f"Executing step {i+1}/{len(self.steps)}: {step.name}")
+            
+            try:
+                # Validate step
+                if not await step.validate(self.context):
+                    logger.warning(f"Step validation failed: {step.name}")
+                    self.context.add_warning(f"Step {step.name} skipped due to validation failure")
+                    continue
+                    
+                # Execute step
+                result = await step.execute(self.context)
+                
+                # Hook for step success
+                await self.on_step_success(step, self.context, result)
+                successful_steps += 1
+                
+            except Exception as e:
+                logger.error(f"Step {step.name} failed: {e}")
+                self.context.add_error(f"Step {step.name} failed: {str(e)}")
+                
+                # Hook for step failure
+                await self.on_step_failure(step, self.context, e)
+                failed_steps += 1
+                
+                # Stop on critical failure (optional)
+                if getattr(step, "critical", False):
+                    logger.error(f"Critical step {step.name} failed, stopping pipeline")
+                    break
+        
+        # Teardown
+        await self.teardown(self.context)
+        
+        # Determine final status
+        if failed_steps == 0:
+            self.context.finish(PipelineStatus.SUCCESS)
+        elif successful_steps > 0:
+            self.context.finish(PipelineStatus.PARTIAL)
+        else:
+            self.context.finish(PipelineStatus.FAILED)
+            
+        return self.context
+    
+    async def _configure_pipeline(self, context: PipelineContext):
+        """Configure the pipeline after context has been populated with kwargs"""
         # Determine mode and date range
         mode = context.data.get("mode", "daily")
         
@@ -143,13 +213,18 @@ class DataPipeline(Pipeline):
             logger.info(f"Using provided symbols: {len(context.data['symbols'])} symbols")
         
         # For news in daily mode, we might want to limit symbols due to API constraints
-        if mode == "daily" and "news_sentiment" not in context.data.get("skip_steps", []):
+        skip_steps = context.data.get("skip_steps") or []
+        if mode == "daily" and "news_sentiment" not in skip_steps:
             # Store full symbol list
             context.data["all_symbols"] = context.data["symbols"]
             
-            # For news, use high priority symbols only
-            context.data["news_symbols"] = MarketUniverse.get_high_priority_symbols()
-            logger.info(f"News will be fetched for {len(context.data['news_symbols'])} high-priority symbols")
+            # For news, use configured symbols or high priority due to API limits
+            if context.data.get("news_symbols"):
+                context.data["news_symbols"] = context.data.get("news_symbols")
+            else:
+                # News APIs have rate limits, so we use a subset
+                context.data["news_symbols"] = MarketUniverse.get_high_priority_symbols()
+            logger.info(f"News will be fetched for {len(context.data['news_symbols'])} symbols")
         
         # Configure steps based on mode
         self._configure_steps(context)
@@ -159,8 +234,6 @@ class DataPipeline(Pipeline):
             f"{context.data['start_date']} to {context.data['end_date']} "
             f"for {len(context.data['symbols'])} symbols"
         )
-        
-        return context
         
     async def teardown(self, context: PipelineContext):
         """Cleanup and report results"""

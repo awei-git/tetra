@@ -10,7 +10,13 @@ from src.signals.optimizations import (
     BatchSignalComputer, VectorizedSignals, NumbaAcceleratedSignals,
     MemoryOptimizedComputer, LazySignalEvaluator
 )
-from src.signals.technical import RSI, SMA, EMA, MACD, BollingerBands
+from src.signals.technical import (
+    RSISignal as RSI, 
+    SMASignal as SMA, 
+    EMASignal as EMA, 
+    MACDSignal as MACD, 
+    BollingerBandsSignal as BollingerBands
+)
 from src.signals.base import SignalConfig
 
 

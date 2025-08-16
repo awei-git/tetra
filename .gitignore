@@ -75,9 +75,13 @@ airflow/airflow-webserver.pid
 # ML
 mlruns/
 models/
+training/
 
 # Kafka
 kafka-logs/
 
 # Sketch folder for temporary scripts
 sketch/
+
+# Archive folder for old/unused code
+archive/

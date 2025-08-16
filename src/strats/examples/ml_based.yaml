@@ -1,0 +1,120 @@
+# ML-based strategy configuration example
+# This strategy uses machine learning models for predictions
+
+strategy_type: ml_based
+name: ML XGBoost Daily
+description: Uses XGBoost model to predict 1-day returns
+
+# Base strategy parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.1  # 10% per position
+  max_positions: 10
+  commission: 0.001
+
+# ML model configuration
+ml_config:
+  # Model source
+  model_path: output/ml_pipeline/models/xgboost_return_1d.pkl
+  model_name: xgboost_return_1d
+  
+  # Alternative: use ensemble of models
+  ensemble:
+    enabled: false
+    models_dir: output/ml_pipeline/models
+    model_names:
+      - xgboost_return_1d
+      - lightgbm_return_1d
+      - arima_return_1d
+    voting_method: weighted  # weighted, majority, average
+  
+  # Prediction thresholds
+  prediction_threshold: 0.002  # 0.2% minimum predicted return
+  confidence_threshold: 0.6  # 60% confidence required
+  
+  # Feature configuration (if model needs custom features)
+  features:
+    # Technical indicators
+    technical:
+      - rsi_14
+      - macd
+      - bollinger_bands
+      - atr_14
+      - volume_ratio
+    
+    # Price-based features
+    price:
+      - returns_1d
+      - returns_5d
+      - returns_20d
+      - log_returns
+      - price_to_sma_ratio
+    
+    # Market microstructure
+    microstructure:
+      - bid_ask_spread
+      - volume_profile
+      - order_flow_imbalance
+    
+    # Macro features (optional)
+    macro:
+      - vix
+      - dollar_index
+      - treasury_yield_10y
+
+# Trading rules based on ML predictions
+trading_rules:
+  # Long positions
+  long:
+    min_prediction: 0.002  # Minimum 0.2% predicted return
+    min_confidence: 0.6
+    max_positions: 5
+    position_sizing: kelly  # kelly, fixed, volatility_adjusted
+    
+    # Additional filters
+    filters:
+      - signal_name: volume
+        operator: GREATER_THAN
+        value: volume_sma_20
+      - signal_name: rsi_14
+        operator: BETWEEN
+        value: [30, 70]
+  
+  # Short positions
+  short:
+    enabled: false  # Set to true to enable shorting
+    min_prediction: -0.002  # Minimum -0.2% predicted return
+    min_confidence: 0.65  # Higher confidence for shorts
+    max_positions: 3
+    position_sizing: fixed
+    
+    filters:
+      - signal_name: volume
+        operator: GREATER_THAN
+        value: volume_sma_20
+
+# Risk management
+risk_management:
+  stop_loss: 0.03  # 3% stop loss
+  take_profit: 0.05  # 5% take profit
+  time_limit: 5  # Maximum 5 days holding period
+  
+  # Dynamic adjustments
+  volatility_adjustment: true  # Adjust position size by volatility
+  correlation_limit: 0.6  # Max correlation between positions
+  
+  # Model confidence decay
+  confidence_decay: 0.1  # Reduce confidence by 10% per day
+  repredict_frequency: daily  # How often to update predictions
+
+# Model retraining schedule
+retraining:
+  frequency: weekly  # daily, weekly, monthly
+  min_data_points: 500
+  validation_split: 0.2
+  
+  # Performance triggers for retraining
+  triggers:
+    accuracy_drop: 0.1  # Retrain if accuracy drops 10%
+    consecutive_losses: 5  # Retrain after 5 consecutive losses
+    market_regime_change: true  # Retrain on regime change
