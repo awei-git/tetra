@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     grafana_port: int = 3000
     
     # Storage schemas
-    storage_schemas: list = ["market_data", "events", "derived", "strategies", "execution"]
+    storage_schemas: list = ["market_data", "event", "derived", "strategies", "execution"]
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -82,15 +82,17 @@ class Settings(BaseSettings):
     
     def _load_secrets(self) -> Dict[str, Any]:
         """Load secrets from the secrets.yml file"""
-        secrets_path = Path("config/secrets.yml")
-        if not secrets_path.exists():
-            # Try alternative path from src directory
-            secrets_path = Path("../config/secrets.yml")
-        
-        if secrets_path.exists():
-            with open(secrets_path, 'r') as f:
-                return yaml.safe_load(f)
-        
+        candidates = [
+            Path("config/secrets.yml"),
+            Path(__file__).resolve().parent / "secrets.yml",
+            Path(__file__).resolve().parents[1] / "config" / "secrets.yml",
+        ]
+
+        for secrets_path in candidates:
+            if secrets_path.exists():
+                with open(secrets_path, "r") as f:
+                    return yaml.safe_load(f) or {}
+
         # Return empty dict if no secrets file found
         return {}
     
@@ -104,7 +106,10 @@ class Settings(BaseSettings):
     
     @property
     def sync_database_url(self) -> str:
-        return f"postgresql://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
+        return (
+            f"postgresql+psycopg://{self.database_user}:{self.database_password}"
+            f"@{self.database_host}:{self.database_port}/{self.database_name}"
+        )
     
     @property
     def redis_url(self) -> str:
@@ -130,6 +135,10 @@ class Settings(BaseSettings):
     @property
     def alphavantage_api_key(self) -> Optional[str]:
         return self._secrets.get("api_keys", {}).get("alphavantage")
+
+    @property
+    def sec_user_agent(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("sec_user_agent")
     
     @property
     def openai_api_key(self) -> Optional[str]:

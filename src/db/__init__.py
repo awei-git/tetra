@@ -1,21 +1,21 @@
-"""Database module."""
+"""Database helpers."""
 
-from .base import (
-    Base,
-    async_engine,
-    sync_engine,
-    async_session_maker,
-    sync_session_maker,
-    get_session,
-    engine
+from src.db.schema import (
+    economic_series,
+    economic_values,
+    event_events,
+    market_assets,
+    market_ohlcv,
+    metadata,
+    news_articles,
 )
 
 __all__ = [
-    'Base',
-    'async_engine',
-    'sync_engine',
-    'async_session_maker',
-    'sync_session_maker',
-    'get_session',
-    'engine'
+    "metadata",
+    "market_assets",
+    "market_ohlcv",
+    "event_events",
+    "economic_series",
+    "economic_values",
+    "news_articles",
 ]

@@ -1,123 +1,47 @@
-#!/usr/bin/env python3
-"""Initialize database and create TimescaleDB hypertables"""
+"""Create database schemas and tables."""
 
-import asyncio
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+from sqlalchemy import create_engine, text
 
-from sqlalchemy import text
-from src.db.base import engine, Base
-from src.db.models import *
-from config import settings
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from config.config import settings
+from src.db.schema import metadata
+
+SCHEMAS = ("market", "event", "economic", "news")
+UNIQUE_INDEXES = (
+    (
+        "event.events",
+        "event_events_source_external_id_event_time_key",
+        "source, external_id, event_time",
+    ),
+    (
+        "news.articles",
+        "news_articles_source_external_id_published_at_key",
+        "source, external_id, published_at",
+    ),
+)
 
 
-async def create_hypertables():
-    """Create TimescaleDB hypertables for time-series data"""
-    async with engine.begin() as conn:
-        # Create hypertables for time-series data
-        hypertables = [
-            ("market_data.ohlcv", "timestamp"),
-            ("market_data.ticks", "timestamp"),
-            ("market_data.quotes", "timestamp"),
-            ("events.events", "timestamp"),
-            ("derived.technical_indicators", "timestamp"),
-            ("derived.signals", "timestamp"),
-        ]
-        
-        for table, time_column in hypertables:
-            try:
-                await conn.execute(
-                    text(f"SELECT create_hypertable('{table}', '{time_column}', if_not_exists => TRUE);")
+def main() -> None:
+    engine = create_engine(settings.sync_database_url, future=True)
+    with engine.begin() as conn:
+        for schema in SCHEMAS:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+    metadata.create_all(engine)
+    with engine.begin() as conn:
+        for table_name, index_name, columns in UNIQUE_INDEXES:
+            conn.execute(
+                text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} "
+                    f"ON {table_name} ({columns})"
                 )
-                print(f"Created hypertable for {table}")
-                
-                # Set chunk time interval
-                await conn.execute(
-                    text(f"""
-                        SELECT set_chunk_time_interval('{table}', INTERVAL '{settings.timescale_chunk_interval}');
-                    """)
-                )
-                
-            except Exception as e:
-                print(f"Error creating hypertable for {table}: {e}")
-
-
-async def create_compression_policies():
-    """Set up automatic compression for old data"""
-    async with engine.begin() as conn:
-        compression_tables = [
-            "market_data.ohlcv",
-            "market_data.ticks",
-            "market_data.quotes",
-        ]
-        
-        for table in compression_tables:
-            try:
-                # Enable compression
-                await conn.execute(
-                    text(f"""
-                        ALTER TABLE {table} SET (
-                            timescaledb.compress,
-                            timescaledb.compress_segmentby = 'symbol'
-                        );
-                    """)
-                )
-                
-                # Add compression policy
-                await conn.execute(
-                    text(f"""
-                        SELECT add_compression_policy('{table}', 
-                            INTERVAL '{settings.timescale_compression_after}',
-                            if_not_exists => TRUE
-                        );
-                    """)
-                )
-                print(f"Added compression policy for {table}")
-                
-            except Exception as e:
-                print(f"Error setting compression for {table}: {e}")
-
-
-async def create_retention_policies():
-    """Set up data retention policies"""
-    async with engine.begin() as conn:
-        retention_tables = [
-            "market_data.ticks",  # Keep tick data for shorter period
-        ]
-        
-        for table in retention_tables:
-            try:
-                await conn.execute(
-                    text(f"""
-                        SELECT add_retention_policy('{table}', 
-                            INTERVAL '{settings.timescale_retention_period}',
-                            if_not_exists => TRUE
-                        );
-                    """)
-                )
-                print(f"Added retention policy for {table}")
-                
-            except Exception as e:
-                print(f"Error setting retention policy for {table}: {e}")
-
-
-async def main():
-    print("Initializing TimescaleDB features...")
-    
-    # Create hypertables
-    await create_hypertables()
-    
-    # Set up compression
-    await create_compression_policies()
-    
-    # Set up retention
-    await create_retention_policies()
-    
-    print("Database initialization complete!")
+            )
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

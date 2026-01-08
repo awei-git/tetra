@@ -1,13 +1,230 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tetra WebGUI</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetra Data Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260107-4" />
+</head>
+<body>
+  <div class="backdrop">
+    <div class="glow"></div>
+    <div class="grid"></div>
+  </div>
+
+  <main>
+    <nav class="tabs">
+      <a class="tab active" href="/">DATA</a>
+      <a class="tab" href="/strats">STRATS</a>
+    </nav>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tetra / Data Pipeline</p>
+        <h1>Tetra Data Console</h1>
+        <p class="subtitle">Monitor market, event, economic, and news ingestion. Trigger a refresh when needed.</p>
+      </div>
+      <div class="status">
+        <div class="status-pill" id="status-pill">Idle</div>
+        <p class="status-meta">Last run: <span id="last-run">—</span></p>
+        <p class="status-meta">Last error: <span id="last-error">—</span></p>
+      </div>
+    </header>
+
+    <section class="cards">
+      <article class="card">
+        <h2>Market</h2>
+        <div class="card-metric">
+          <span>Assets</span>
+          <strong id="data-assets">—</strong>
+        </div>
+        <div class="card-metric">
+          <span>OHLCV Rows</span>
+          <strong id="data-ohlcv">—</strong>
+        </div>
+        <p class="card-meta">Latest bar: <span id="latest-ohlcv">—</span></p>
+      </article>
+
+      <article class="card">
+        <h2>Events</h2>
+        <div class="card-metric">
+          <span>Total Events</span>
+          <strong id="data-events">—</strong>
+        </div>
+        <p class="card-meta">Latest event: <span id="latest-events">—</span></p>
+      </article>
+
+      <article class="card">
+        <h2>Economic</h2>
+        <div class="card-metric">
+          <span>Series</span>
+          <strong id="data-economic-series">—</strong>
+        </div>
+        <div class="card-metric">
+          <span>Values</span>
+          <strong id="data-economic-values">—</strong>
+        </div>
+        <p class="card-meta">Latest value: <span id="latest-economic">—</span></p>
+      </article>
+
+      <article class="card">
+        <h2>News</h2>
+        <div class="card-metric">
+          <span>Articles</span>
+          <strong id="data-news">—</strong>
+        </div>
+        <p class="card-meta">Latest article: <span id="latest-news">—</span></p>
+      </article>
+    </section>
+
+    <section class="actions">
+      <div class="panel">
+        <h3>Refresh Ingestion</h3>
+        <p>Run all pipelines for a custom date window. Leaving fields blank defaults to yesterday → today.</p>
+        <form id="refresh-form">
+          <label>
+            Start date
+            <input type="date" id="start-date" />
+          </label>
+          <label>
+            End date
+            <input type="date" id="end-date" />
+          </label>
+          <button type="submit">Run ingestion</button>
+        </form>
+        <p class="message" id="ingest-message">—</p>
+      </div>
+      <div class="panel accent">
+        <h3>Pipeline Notes</h3>
+        <ul>
+          <li>Daily scheduler runs at 02:00 UTC unless overridden.</li>
+          <li>Events use Polygon/Finnhub/Alpha Vantage.</li>
+          <li>Economic series sourced from FRED.</li>
+          <li>News from Finnhub + NewsAPI.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="data-grid">
+      <div class="panel coverage-panel">
+        <div class="coverage-header">
+          <div>
+            <h3>Market Coverage</h3>
+            <p>Track each symbol’s history window and source coverage.</p>
+          </div>
+          <div class="coverage-meta" id="coverage-meta">Symbols loaded: —</div>
+        </div>
+        <div class="coverage-layout">
+          <div class="coverage-table">
+            <div class="coverage-row coverage-head">
+              <span>Symbol</span>
+              <span>Rows</span>
+              <span>Start</span>
+              <span>End</span>
+              <span>Sources</span>
+            </div>
+            <div id="coverage-rows"></div>
+          </div>
+          <div class="coverage-chart">
+            <div class="chart-header">
+              <div>
+                <p class="eyebrow">Selected</p>
+                <h4 id="chart-symbol">—</h4>
+                <p class="chart-meta" id="chart-range">Pick a symbol to view history.</p>
+              </div>
+              <div class="chart-stats">
+                <div>
+                  <span>Rows</span>
+                  <strong id="chart-rows">—</strong>
+                </div>
+                <div>
+                  <span>Sources</span>
+                  <strong id="chart-sources">—</strong>
+                </div>
+              </div>
+            </div>
+            <canvas id="ohlcv-chart" width="520" height="220"></canvas>
+            <p class="chart-note">Close price (daily). Times are UTC.</p>
+          </div>
+        </div>
+      </div>
+      <div class="side-panels">
+        <div class="panel events-panel">
+          <div class="events-header">
+            <div>
+              <h3>Event Coverage</h3>
+              <p>Track event types, symbol coverage, and date ranges.</p>
+            </div>
+            <div class="events-meta" id="events-meta">Event types: —</div>
+          </div>
+          <div class="events-table">
+            <div class="events-row events-head">
+              <span>Type</span>
+              <span>Events</span>
+              <span>Symbols</span>
+              <span>Range</span>
+              <span>Sources</span>
+            </div>
+            <div id="events-rows"></div>
+          </div>
+        </div>
+        <div class="panel economic-panel">
+          <div class="economic-header">
+            <div>
+              <h3>Economic Coverage</h3>
+              <p>Series coverage, frequencies, and date ranges.</p>
+            </div>
+            <div class="economic-meta" id="economic-meta">Series loaded: —</div>
+          </div>
+          <div class="economic-table">
+            <div class="economic-row economic-head">
+              <span>Series</span>
+              <span>Frequency</span>
+              <span>Values</span>
+              <span>Range</span>
+            </div>
+            <div id="economic-rows"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="news-sentiment">
+      <div class="panel sentiment-panel">
+        <div class="sentiment-header">
+          <div>
+            <h3>News Sentiment</h3>
+            <p>Signal by symbol coverage and macro themes.</p>
+          </div>
+          <div class="sentiment-meta" id="sentiment-meta">Articles scored: —</div>
+        </div>
+        <div class="sentiment-grid">
+          <div class="sentiment-table">
+            <div class="sentiment-row sentiment-head">
+              <span>Symbol</span>
+              <span>Articles</span>
+              <span>Avg Sentiment</span>
+              <span>Range</span>
+            </div>
+            <div id="sentiment-symbol-rows"></div>
+          </div>
+          <div class="sentiment-table">
+            <div class="sentiment-row sentiment-head">
+              <span>Macro Topic</span>
+              <span>Articles</span>
+              <span>Avg Sentiment</span>
+              <span>Range</span>
+            </div>
+            <div id="sentiment-macro-rows"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/app.js?v=20260107-4"></script>
+</body>
 </html>
