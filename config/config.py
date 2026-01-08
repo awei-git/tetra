@@ -1,7 +1,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,9 +51,12 @@ class Settings(BaseSettings):
     fred_base_url: str = "https://api.stlouisfed.org/fred"
     news_api_base_url: str = "https://newsapi.org/v2"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1"
     
     # OpenAI settings
     openai_model: str = "gpt-4o"
+    deepseek_model: str = "deepseek-chat"
+    gemini_model: str = "gemini-3.0-pro"
     
     # Features
     enable_paper_trading: bool = True
@@ -151,6 +154,21 @@ class Settings(BaseSettings):
     @property
     def deepseek_api_key(self) -> Optional[str]:
         return self._secrets.get("api_keys", {}).get("deepseek")
+
+    @property
+    def gemini_api_key(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("gemini")
+
+    @property
+    def gemini_models(self) -> List[str]:
+        models = self._secrets.get("api_keys", {}).get("gemini_models")
+        if models is None:
+            models = self._secrets.get("llm", {}).get("gemini_models")
+        if isinstance(models, str):
+            return [item.strip() for item in models.split(",") if item.strip()]
+        if isinstance(models, list):
+            return [str(item).strip() for item in models if str(item).strip()]
+        return []
     
     @property
     def azure_speech_key(self) -> Optional[str]:

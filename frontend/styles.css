@@ -148,10 +148,34 @@ h1 {
   margin-bottom: 12px;
 }
 
+.status-pill.running {
+  background: rgba(255, 122, 89, 0.25);
+  color: #ffe2d9;
+}
+
+.status-pill.error {
+  background: rgba(255, 70, 70, 0.25);
+  color: #ffd1d1;
+}
+
 .status-meta {
   margin: 4px 0;
   font-size: 0.9rem;
   color: var(--muted);
+}
+
+.gpt-error {
+  min-height: 1.1rem;
+  color: rgba(255, 167, 150, 0.95);
+}
+
+.gpt-link {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+}
+
+.gpt-link:hover {
+  color: white;
 }
 
 .cards {
@@ -251,12 +275,57 @@ button {
   color: var(--ink);
   font-weight: 600;
   cursor: pointer;
+  position: relative;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 button:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 24px rgba(255, 122, 89, 0.3);
+}
+
+button.is-loading {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+button.is-loading:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-label {
+  transition: opacity 0.2s ease;
+}
+
+.btn-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(12, 19, 26, 0.25);
+  border-top-color: rgba(12, 19, 26, 0.8);
+  opacity: 0;
+  animation: spin 0.8s linear infinite;
+}
+
+button.is-loading .btn-label {
+  opacity: 0;
+}
+
+button.is-loading .btn-spinner {
+  opacity: 1;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .message {
@@ -434,6 +503,170 @@ li {
 
 .news-sentiment {
   margin-top: 32px;
+}
+
+.gpt-panel {
+  margin-top: 32px;
+}
+
+.gpt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.gpt-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.gpt-consensus-table {
+  margin-top: 16px;
+  background: rgba(8, 15, 24, 0.4);
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: clamp(360px, 62vh, 760px);
+}
+
+.gpt-consensus-row {
+  display: grid;
+  grid-template-columns: 0.4fr 0.9fr 0.7fr 0.6fr 0.6fr 0.75fr 0.75fr 0.75fr 0.8fr 0.7fr 0.8fr 1.4fr;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  align-items: center;
+}
+
+.gpt-consensus-row span {
+  color: var(--muted);
+}
+
+.gpt-consensus-group {
+  display: grid;
+  grid-template-columns: 1fr;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gpt-consensus-row .gpt-action {
+  color: #0c131a;
+}
+
+.gpt-consensus-head {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#gpt-consensus-rows {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gpt-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #0c131a;
+  background: rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+}
+
+.gpt-action.buy {
+  background: rgba(95, 240, 200, 0.9);
+}
+
+.gpt-action.sell {
+  background: rgba(255, 139, 122, 0.9);
+}
+
+.gpt-action.neutral {
+  background: rgba(243, 231, 201, 0.9);
+}
+
+.gpt-challenge-panel {
+  margin-top: 24px;
+}
+
+.gpt-challenge-table {
+  margin-top: 16px;
+  background: rgba(8, 15, 24, 0.4);
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: clamp(320px, 56vh, 680px);
+}
+
+.gpt-challenge-row {
+  display: grid;
+  grid-template-columns: 0.9fr 0.9fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr 0.9fr 0.9fr 0.9fr 1.6fr;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  align-items: center;
+}
+
+.gpt-challenge-row span {
+  color: var(--muted);
+}
+
+.gpt-challenge-head {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#gpt-challenge-rows {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gpt-change {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #0c131a;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.gpt-change.keep {
+  background: rgba(95, 240, 200, 0.8);
+}
+
+.gpt-change.adjust {
+  background: rgba(243, 231, 201, 0.9);
+}
+
+.gpt-change.replace {
+  background: rgba(255, 139, 122, 0.9);
 }
 
 .strats {

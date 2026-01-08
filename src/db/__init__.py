@@ -4,6 +4,8 @@ from src.db.schema import (
     economic_series,
     economic_values,
     event_events,
+    gpt_recommendation_challenges,
+    gpt_recommendations,
     market_assets,
     market_ohlcv,
     metadata,
@@ -18,4 +20,6 @@ __all__ = [
     "economic_series",
     "economic_values",
     "news_articles",
+    "gpt_recommendations",
+    "gpt_recommendation_challenges",
 ]

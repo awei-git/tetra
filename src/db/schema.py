@@ -122,6 +122,50 @@ news_articles = sa.Table(
 )
 
 
+gpt_recommendations = sa.Table(
+    "recommendations",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("provider", sa.String(32), nullable=False),
+    sa.Column("session", sa.String(16), nullable=False),
+    sa.Column("run_time", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("raw_text", sa.Text()),
+    sa.Column("error", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    sa.UniqueConstraint(
+        "provider",
+        "session",
+        "run_time",
+        name="gpt_recommendations_provider_session_run_time_key",
+    ),
+    schema="gpt",
+)
+
+gpt_recommendation_challenges = sa.Table(
+    "recommendation_challenges",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("provider", sa.String(32), nullable=False),
+    sa.Column("session", sa.String(16), nullable=False),
+    sa.Column("run_time", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("source_provider", sa.String(32)),
+    sa.Column("source_run_time", sa.DateTime(timezone=True)),
+    sa.Column("source_payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("raw_text", sa.Text()),
+    sa.Column("error", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    sa.UniqueConstraint(
+        "provider",
+        "session",
+        "run_time",
+        name="gpt_recommendation_challenges_provider_session_run_time_key",
+    ),
+    schema="gpt",
+)
+
+
 __all__ = [
     "metadata",
     "market_assets",
@@ -130,4 +174,6 @@ __all__ = [
     "economic_series",
     "economic_values",
     "news_articles",
+    "gpt_recommendations",
+    "gpt_recommendation_challenges",
 ]

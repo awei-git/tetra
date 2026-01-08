@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetra GPT Briefing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260108-12" />
+</head>
+<body>
+  <div class="backdrop">
+    <div class="glow"></div>
+    <div class="grid"></div>
+  </div>
+
+  <main>
+    <nav class="tabs">
+      <a class="tab" href="/">DATA</a>
+      <a class="tab active" href="/gpt">GPT</a>
+      <a class="tab" href="/strats">STRATS</a>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tetra / GPT Briefing</p>
+        <h1>LLM Trade Recommendations</h1>
+        <p class="subtitle">Daily pre- and post-close ideas from ChatGPT, DeepSeek, and Gemini.</p>
+      </div>
+      <div class="status">
+        <div class="status-pill" id="gpt-status">Idle</div>
+        <p class="status-meta">Last run: <span id="gpt-last-run">{{GPT_LAST_RUN}}</span></p>
+        <p class="status-meta">Session: <span id="gpt-session">{{GPT_SESSION}}</span></p>
+        <p class="status-meta gpt-error" id="gpt-error"></p>
+        <p class="status-meta"><a class="gpt-link" href="/api/gpt/consensus" target="_blank" rel="noreferrer">View raw JSON</a></p>
+      </div>
+    </header>
+
+    <section class="gpt-panel">
+      <div class="panel">
+        <div class="gpt-header">
+          <div>
+            <h3>Consensus Table</h3>
+            <p>Aggregated signals across providers with confidence and expected return.</p>
+            <p class="status-meta">Last run: <span id="gpt-last-run-inline">{{GPT_LAST_RUN}}</span></p>
+            <p class="status-meta">Session: <span id="gpt-session-inline">{{GPT_SESSION}}</span></p>
+          </div>
+        </div>
+        <div class="gpt-consensus-table">
+          <div class="gpt-consensus-row gpt-consensus-head">
+            <span>Rank</span>
+            <span>Category</span>
+            <span>Symbol</span>
+            <span>Last</span>
+            <span>Action</span>
+            <span>Entry</span>
+            <span>Target</span>
+            <span>Stop</span>
+            <span>Exp Return</span>
+            <span>R/R</span>
+            <span>Confidence</span>
+            <span>Providers</span>
+          </div>
+          <div id="gpt-consensus-rows">{{GPT_CONSENSUS_ROWS}}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="gpt-panel gpt-challenge-panel">
+      <div class="panel">
+        <div class="gpt-header">
+          <div>
+            <h3>Challenge Review</h3>
+            <p>Daily critique of the latest recommendations to improve portfolio fit.</p>
+          </div>
+          <div class="gpt-actions">
+            <div class="status-pill" id="gpt-challenge-status">Idle</div>
+          </div>
+        </div>
+        <p class="status-meta">Last run: <span id="gpt-challenge-last-run">—</span></p>
+        <p class="status-meta">Session: <span id="gpt-challenge-session">—</span></p>
+        <p class="status-meta gpt-error" id="gpt-challenge-error"></p>
+        <p class="status-meta"><a class="gpt-link" href="/api/gpt/challenges" target="_blank" rel="noreferrer">View raw JSON</a></p>
+        <div class="gpt-challenge-table">
+          <div class="gpt-challenge-row gpt-challenge-head">
+            <span>Provider</span>
+            <span>Category</span>
+            <span>Symbol</span>
+            <span>Last</span>
+            <span>Change</span>
+            <span>Action</span>
+            <span>Entry</span>
+            <span>Target</span>
+            <span>Stop</span>
+            <span>Horizon</span>
+            <span>Notes</span>
+          </div>
+          <div id="gpt-challenge-rows">{{GPT_CHALLENGE_ROWS}}</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/gpt.js?v=20260108-20"></script>
+</body>
+</html>
