@@ -9,7 +9,8 @@ import html
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+import random
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
@@ -22,6 +23,15 @@ from src.db.session import engine
 from src.pipelines.data.runner import run_all_pipelines
 from src.utils.gpt.challenge import normalize_challenges, run_gpt_challenge
 from src.utils.gpt.recommendations import normalize_recommendations, run_gpt_recommendations
+from src.utils.simulations.paths import (
+    STRESS_WINDOWS,
+    compute_log_returns,
+    generate_historical_paths,
+    generate_monte_carlo_paths,
+    generate_stress_paths,
+    list_stress_windows,
+    summarize_paths,
+)
 
 UTC = timezone.utc
 EASTERN = ZoneInfo("America/New_York")
@@ -90,6 +100,56 @@ def _format_est_timestamp(value: Any) -> str:
     est_value = dt_value.astimezone(EASTERN)
     tz_name = est_value.tzname() or "EST"
     return f"{est_value:%Y-%m-%d %H:%M} {tz_name}"
+
+
+async def _fetch_close_series(
+    symbol: str,
+    limit: Optional[int] = None,
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+) -> List[Tuple[datetime, float]]:
+    clauses = ["symbol = :symbol", "close IS NOT NULL"]
+    params: Dict[str, Any] = {"symbol": symbol}
+    order_desc = limit is not None and start is None and end is None
+    if start is not None:
+        clauses.append("timestamp >= :start")
+        params["start"] = start
+    if end is not None:
+        clauses.append("timestamp <= :end")
+        params["end"] = end
+    limit_sql = ""
+    if limit is not None:
+        limit_sql = "LIMIT :limit"
+        params["limit"] = limit
+    order_sql = "ORDER BY timestamp DESC" if order_desc else "ORDER BY timestamp ASC"
+    query = text(
+        f"""
+        SELECT timestamp, close
+        FROM market.ohlcv
+        WHERE {" AND ".join(clauses)}
+        {order_sql}
+        {limit_sql}
+        """
+    )
+    async with engine.begin() as conn:
+        result = await conn.execute(query, params)
+        rows = result.fetchall()
+    if order_desc:
+        rows = list(reversed(rows))
+    return [(row.timestamp, float(row.close)) for row in rows]
+
+
+def _percentile(sorted_values: List[float], pct: float) -> float:
+    if not sorted_values:
+        return 0.0
+    pct = max(0.0, min(1.0, pct))
+    idx = pct * (len(sorted_values) - 1)
+    lower = int(idx)
+    upper = min(len(sorted_values) - 1, lower + 1)
+    if lower == upper:
+        return sorted_values[lower]
+    weight = idx - lower
+    return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
 def _redact_error(value: Optional[str]) -> Optional[str]:
@@ -1100,6 +1160,90 @@ async def get_market_ohlcv(symbol: str, limit: int = 3650) -> Dict[str, Any]:
         for row in reversed(rows)
     ]
     return {"symbol": symbol, "series": series}
+
+
+@app.get("/api/market/simulations")
+async def get_market_simulations(
+    symbol: str,
+    method: str = "historical",
+    horizon: int = 252,
+    paths: int = 30,
+    lookback: int = 2520,
+    stress: Optional[str] = None,
+    mode: str = "block",
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
+    symbol = symbol.upper()
+    method = (method or "historical").lower()
+    if method not in {"historical", "stress", "monte_carlo"}:
+        raise HTTPException(status_code=400, detail="method must be historical, stress, or monte_carlo")
+    horizon = max(10, min(horizon, 2520))
+    paths = max(1, min(paths, 100))
+    lookback = max(horizon + 1, min(lookback, 6000))
+    mode = (mode or "block").lower()
+    if mode not in {"block", "bootstrap"}:
+        raise HTTPException(status_code=400, detail="mode must be block or bootstrap")
+
+    history_rows = await _fetch_close_series(symbol, limit=lookback)
+    if len(history_rows) < 2:
+        raise HTTPException(status_code=404, detail="Not enough market data for symbol")
+    timestamps, prices = zip(*history_rows)
+    last_price = prices[-1]
+    last_ts = timestamps[-1]
+    returns = compute_log_returns(prices)
+    rng = random.Random(seed)
+
+    stress_info = None
+    if method == "stress":
+        stress_key = stress or "covid_2020"
+        window = STRESS_WINDOWS.get(stress_key)
+        if not window:
+            raise HTTPException(status_code=400, detail="Unknown stress window")
+        stress_rows = await _fetch_close_series(symbol, start=window.start, end=window.end)
+        if len(stress_rows) < 2:
+            raise HTTPException(status_code=404, detail="Not enough data for stress window")
+        _, stress_prices = zip(*stress_rows)
+        stress_returns = compute_log_returns(stress_prices)
+        simulations = generate_stress_paths(stress_returns, last_price, horizon, paths, rng)
+        stress_info = {
+            "key": window.key,
+            "label": window.label,
+            "start": window.start.isoformat(),
+            "end": window.end.isoformat(),
+        }
+    elif method == "monte_carlo":
+        simulations = generate_monte_carlo_paths(returns, last_price, horizon, paths, rng)
+    else:
+        simulations = generate_historical_paths(returns, last_price, horizon, paths, mode, rng)
+
+    summary = summarize_paths(simulations, last_price)
+    end_returns = [(path[-1] / last_price) - 1 for path in simulations if path]
+    if end_returns:
+        sorted_returns = sorted(end_returns)
+        summary.update(
+            {
+                "min_return": sorted_returns[0],
+                "max_return": sorted_returns[-1],
+                "median_return": _percentile(sorted_returns, 0.5),
+                "p05_return": _percentile(sorted_returns, 0.05),
+                "p95_return": _percentile(sorted_returns, 0.95),
+                "mean_return": sum(sorted_returns) / len(sorted_returns),
+            }
+        )
+
+    return {
+        "symbol": symbol,
+        "method": method,
+        "horizon": horizon,
+        "paths": paths,
+        "as_of": _isoformat(last_ts),
+        "start_price": last_price,
+        "summary": summary,
+        "stress": stress_info,
+        "available_stress": list_stress_windows(),
+        "steps": list(range(horizon + 1)),
+        "paths_data": [{"id": idx + 1, "prices": path} for idx, path in enumerate(simulations)],
+    }
 
 
 @app.get("/api/news/sentiment")

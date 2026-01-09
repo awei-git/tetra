@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tetra Strats</title>
+  <title>Tetra Stress</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260108-12" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260108-16" />
 </head>
 <body>
   <div class="backdrop">
@@ -19,32 +19,78 @@
     <nav class="tabs">
       <a class="tab" href="/">DATA</a>
       <a class="tab" href="/gpt">GPT</a>
-      <a class="tab active" href="/strats">STRATS</a>
+      <a class="tab active" href="/strats">STRESS</a>
     </nav>
 
     <header class="hero">
       <div>
-        <p class="eyebrow">Tetra / Strategy Lab</p>
-        <h1>Strats Workspace</h1>
-        <p class="subtitle">Build, test, and monitor your selection models here.</p>
+        <p class="eyebrow">Tetra / Stress Lab</p>
+        <h1>Stress Workspace</h1>
+        <p class="subtitle">Simulate, stress test, and compare symbol behavior.</p>
       </div>
       <div class="status">
-        <div class="status-pill">Coming soon</div>
-        <p class="status-meta">Focus: screens, factors, backtests</p>
+        <div class="status-pill">Live</div>
+        <p class="status-meta">Focus: simulations, scenarios, stress tests</p>
       </div>
     </header>
 
-    <section class="strats">
-      <div class="panel strats-panel">
-        <div class="strats-header">
+    <section class="strats-grid">
+      <div class="panel sim-panel">
+        <div class="sim-header">
           <div>
-            <h3>Strategy Blocks</h3>
-            <p>Drop in your ideas, define signals, and compare results.</p>
+            <h3>Path Simulator</h3>
+            <p>Generate price paths from historical windows, stress periods, or Monte Carlo draws.</p>
           </div>
         </div>
-        <p class="strats-note">Tell me what you want to see first (e.g. screen builder, factor chart, or backtest runner).</p>
+        <form id="sim-form" class="sim-form">
+          <label>
+            Symbol
+            <input type="text" id="sim-symbol" value="SPY" />
+          </label>
+          <label>
+            Method
+            <select id="sim-method">
+              <option value="historical">Historical windows</option>
+              <option value="stress">Stress windows</option>
+              <option value="monte_carlo">Monte Carlo</option>
+            </select>
+          </label>
+          <label class="sim-stress-field">
+            Stress window
+            <select id="sim-stress"></select>
+          </label>
+          <label class="sim-mode-field">
+            Historical mode
+            <select id="sim-mode">
+              <option value="block">Block sample</option>
+              <option value="bootstrap">Bootstrap</option>
+            </select>
+          </label>
+          <label>
+            Horizon (days)
+            <input type="number" id="sim-horizon" value="252" min="10" max="2520" />
+          </label>
+          <label>
+            Paths
+            <input type="number" id="sim-paths" value="30" min="1" max="100" />
+          </label>
+          <button type="submit">Simulate</button>
+        </form>
+        <p class="message" id="sim-message">—</p>
+      </div>
+      <div class="panel sim-results">
+        <div class="sim-header">
+          <div>
+            <p class="eyebrow">Latest run</p>
+            <h3 id="sim-title">Simulation Output</h3>
+            <p class="sim-meta" id="sim-meta">Pick a symbol to begin.</p>
+          </div>
+        </div>
+        <canvas id="sim-chart" width="620" height="260"></canvas>
+        <div class="sim-summary" id="sim-summary"></div>
       </div>
     </section>
   </main>
+  <script src="/static/strats.js?v=20260108-4"></script>
 </body>
 </html>

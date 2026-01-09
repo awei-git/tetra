@@ -673,6 +673,70 @@ li {
   margin-top: 32px;
 }
 
+.strats-grid {
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(520px, 2fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.sim-panel,
+.sim-results {
+  display: grid;
+  gap: 16px;
+}
+
+.sim-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.sim-form button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.sim-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#sim-chart {
+  width: 100%;
+  height: 260px;
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  background: rgba(8, 15, 24, 0.5);
+}
+
+.sim-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  background: rgba(8, 15, 24, 0.4);
+}
+
+.sim-summary-grid span {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.sim-summary-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1rem;
+  color: white;
+}
+
 .events-panel,
 .economic-panel,
 .strats-panel {
