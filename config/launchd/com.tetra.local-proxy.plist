@@ -3,26 +3,23 @@
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.tetra.daily-ingest</string>
+    <string>com.tetra.local-proxy</string>
     <key>ProgramArguments</key>
     <array>
       <string>/Users/angwei/Repos/tetra/.venv/bin/python</string>
-      <string>/Users/angwei/Repos/tetra/scripts/run_daily_ingest.py</string>
+      <string>/Users/angwei/Repos/tetra/scripts/local_host_proxy.py</string>
+      <string>--port</string>
+      <string>8080</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/angwei/Repos/tetra</string>
-    <key>StartCalendarInterval</key>
-    <dict>
-      <key>Hour</key>
-      <integer>16</integer>
-      <key>Minute</key>
-      <integer>20</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>/Users/angwei/Library/Logs/tetra.daily-ingest.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/angwei/Library/Logs/tetra.daily-ingest.log</string>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/angwei/Library/Logs/tetra.local-proxy.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/angwei/Library/Logs/tetra.local-proxy.log</string>
   </dict>
 </plist>

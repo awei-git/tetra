@@ -12,8 +12,16 @@ const simTitle = document.getElementById("sim-title");
 const simMeta = document.getElementById("sim-meta");
 const stressField = document.querySelector(".sim-stress-field");
 const modeField = document.querySelector(".sim-mode-field");
+const simAgreedMeta = document.getElementById("sim-agreed-meta");
+const simAgreedList = document.getElementById("sim-agreed-list");
 
 let stressOptions = [];
+let agreedSymbols = [];
+
+function actionLabel(value) {
+  const action = String(value || "").toUpperCase();
+  return action || "NEUTRAL";
+}
 
 function formatPrice(value) {
   if (value === null || value === undefined) return "—";
@@ -65,6 +73,58 @@ function updateMethodFields() {
   }
   if (modeField) {
     modeField.style.display = method === "historical" ? "grid" : "none";
+  }
+}
+
+function renderAgreedSymbols() {
+  if (!simAgreedList) return;
+  simAgreedList.innerHTML = "";
+  if (!agreedSymbols.length) {
+    const empty = document.createElement("span");
+    empty.className = "sim-meta";
+    empty.textContent = "No agreed symbols available yet.";
+    simAgreedList.appendChild(empty);
+    return;
+  }
+
+  agreedSymbols.forEach((item) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "sim-agreed-chip";
+    const label = document.createElement("span");
+    label.textContent = item.symbol;
+    const action = document.createElement("span");
+    action.textContent = actionLabel(item.final_action || item.gpt_action);
+    chip.appendChild(label);
+    chip.appendChild(action);
+    chip.addEventListener("click", () => {
+      if (simSymbol) {
+        simSymbol.value = item.symbol;
+      }
+    });
+    simAgreedList.appendChild(chip);
+  });
+}
+
+async function fetchAgreedSet() {
+  if (simAgreedMeta) {
+    simAgreedMeta.textContent = "Loading final consensus...";
+  }
+  try {
+    const response = await fetch("/api/opinions/final?min_factors=3&signal_threshold=0.1");
+    if (!response.ok) throw new Error("Failed to load agreed symbols");
+    const data = await response.json();
+    agreedSymbols = data.final || [];
+    if (simAgreedMeta) {
+      simAgreedMeta.textContent = agreedSymbols.length
+        ? `Final consensus: ${agreedSymbols.length} (as of ${data.as_of || "—"}).`
+        : "No final consensus yet.";
+    }
+    renderAgreedSymbols();
+  } catch (error) {
+    if (simAgreedMeta) {
+      simAgreedMeta.textContent = "Unable to load final consensus.";
+    }
   }
 }
 
@@ -250,3 +310,4 @@ if (simForm) {
 
 updateMethodFields();
 runSimulation();
+fetchAgreedSet();

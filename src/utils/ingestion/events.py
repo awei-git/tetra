@@ -61,7 +61,11 @@ async def ingest_event_data(
     if polygon_client:
         async with engine.begin() as conn:
             for symbol in symbols:
-                earnings = await polygon_client.get_earnings(symbol, start, end)
+                try:
+                    earnings = await polygon_client.get_earnings(symbol, start, end)
+                except httpx.HTTPError as exc:
+                    print(f"Polygon earnings failed for {symbol}: {exc}")
+                    earnings = []
                 dividend_rows: List[Dict] = []
                 split_rows: List[Dict] = []
                 earnings_rows: List[Dict] = []
@@ -86,7 +90,11 @@ async def ingest_event_data(
                             }
                         )
 
-                dividends = await polygon_client.get_dividends(symbol, start, end)
+                try:
+                    dividends = await polygon_client.get_dividends(symbol, start, end)
+                except httpx.HTTPError as exc:
+                    print(f"Polygon dividends failed for {symbol}: {exc}")
+                    dividends = []
                 if dividends:
                     for dividend in dividends:
                         ex_date = dividend.get("ex_dividend_date") or dividend.get("ex_date")
@@ -110,7 +118,11 @@ async def ingest_event_data(
                             }
                         )
 
-                splits = await polygon_client.get_splits(symbol, start, end)
+                try:
+                    splits = await polygon_client.get_splits(symbol, start, end)
+                except httpx.HTTPError as exc:
+                    print(f"Polygon splits failed for {symbol}: {exc}")
+                    splits = []
                 if splits:
                     for split in splits:
                         exec_date = split.get("execution_date") or split.get("ex_date") or split.get("split_date")

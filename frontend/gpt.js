@@ -16,6 +16,17 @@ const gptChallengeError = document.getElementById("gpt-challenge-error");
 const gptChallengeStatus = document.getElementById("gpt-challenge-status");
 let lastChallengeRun = null;
 let challengeTimer = null;
+const gptFactorRows = document.getElementById("gpt-factor-rows");
+const gptFactorLastRun = document.getElementById("gpt-factor-last-run");
+const gptFactorSession = document.getElementById("gpt-factor-session");
+const gptFactorError = document.getElementById("gpt-factor-error");
+const gptFactorStatus = document.getElementById("gpt-factor-status");
+let lastFactorRun = null;
+const gptFinalRows = document.getElementById("gpt-final-rows");
+const gptFinalStatus = document.getElementById("gpt-final-status");
+const gptFinalLastRun = document.getElementById("gpt-final-last-run");
+const gptFinalAsOf = document.getElementById("gpt-final-asof");
+const gptFinalError = document.getElementById("gpt-final-error");
 const gptRefreshLabel = gptRefresh
   ? (gptRefresh.querySelector(".btn-label") || gptRefresh).textContent
   : "Refresh";
@@ -100,8 +111,15 @@ function actionClass(value) {
 function changeClass(value) {
   const change = String(value || "").toLowerCase();
   if (change === "keep") return "gpt-change keep";
-  if (change === "replace") return "gpt-change replace";
+  if (change === "replace" || change === "exit") return "gpt-change replace";
   return "gpt-change adjust";
+}
+
+function verdictClass(value) {
+  const verdict = String(value || "").toLowerCase();
+  if (verdict === "approve") return "gpt-verdict approve";
+  if (verdict === "reject") return "gpt-verdict reject";
+  return "gpt-verdict watch";
 }
 
 function setStatus(state) {
@@ -115,6 +133,20 @@ function setChallengeStatus(state) {
   gptChallengeStatus.textContent = state.toUpperCase();
   gptChallengeStatus.classList.toggle("running", state === "running");
   gptChallengeStatus.classList.toggle("error", state === "error");
+}
+
+function setFactorStatus(state) {
+  if (!gptFactorStatus) return;
+  gptFactorStatus.textContent = state.toUpperCase();
+  gptFactorStatus.classList.toggle("running", state === "running");
+  gptFactorStatus.classList.toggle("error", state === "error");
+}
+
+function setFinalStatus(state) {
+  if (!gptFinalStatus) return;
+  gptFinalStatus.textContent = state.toUpperCase();
+  gptFinalStatus.classList.toggle("running", state === "running");
+  gptFinalStatus.classList.toggle("error", state === "error");
 }
 
 function renderEmpty(message) {
@@ -242,6 +274,7 @@ function renderChallengeRows(providers) {
           symbol: item.symbol || "—",
           last: item.last_price ?? "—",
           change: item.change || "adjust",
+          replacement: item.replaces || "—",
           action: item.action || "—",
           entry: item.entry || "—",
           target: item.target || "—",
@@ -280,6 +313,7 @@ function renderChallengeRows(providers) {
     row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.symbol }));
     row.appendChild(Object.assign(document.createElement("span"), { textContent: formatPrice(rowData.last) }));
     row.appendChild(changeSpan);
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.replacement }));
     row.appendChild(actionSpan);
     row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.entry }));
     row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.target }));
@@ -288,6 +322,122 @@ function renderChallengeRows(providers) {
     row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.notes }));
 
     gptChallengeRows.appendChild(row);
+  });
+}
+
+function renderFactorRows(consensus) {
+  if (!gptFactorRows) return;
+  gptFactorRows.innerHTML = "";
+  const rows = consensus || [];
+  if (rows.length === 0) {
+    const row = document.createElement("div");
+    row.className = "gpt-factor-row";
+    const span = document.createElement("span");
+    span.textContent = "No factor reviews yet.";
+    row.appendChild(span);
+    gptFactorRows.appendChild(row);
+    return;
+  }
+
+  rows.forEach((rowData) => {
+    const row = document.createElement("div");
+    row.className = "gpt-factor-row";
+    const drivers = (rowData.drivers || [])
+      .map((driver) => `${driver.factor}:${driver.signal === null || driver.signal === undefined ? "—" : Number(driver.signal).toFixed(2)}`)
+      .join(" | ");
+    if (drivers) {
+      row.title = drivers;
+    }
+
+    const factorAction = document.createElement("span");
+    factorAction.className = actionClass(rowData.factor_action);
+    factorAction.textContent = formatAction(rowData.factor_action);
+
+    const verdict = document.createElement("span");
+    verdict.className = verdictClass(rowData.verdict);
+    verdict.textContent = String(rowData.verdict || "watch").toUpperCase();
+
+    const action = document.createElement("span");
+    action.className = actionClass(rowData.action);
+    action.textContent = formatAction(rowData.action);
+
+    const confidence = rowData.confidence;
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatCategory(rowData.category) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.symbol || "—" }));
+    row.appendChild(factorAction);
+    const scoreValue = Number(rowData.factor_score);
+    row.appendChild(
+      Object.assign(document.createElement("span"), {
+        textContent:
+          rowData.factor_score === null || rowData.factor_score === undefined || Number.isNaN(scoreValue)
+            ? "—"
+            : scoreValue.toFixed(2),
+      }),
+    );
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatPrice(rowData.last_price) }));
+    row.appendChild(verdict);
+    row.appendChild(action);
+    row.appendChild(
+      Object.assign(document.createElement("span"), {
+        textContent:
+          confidence === null || confidence === undefined ? "—" : `${(confidence * 100).toFixed(1)}%`,
+      }),
+    );
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (rowData.providers || []).join(", ") }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.replacement || "—" }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: rowData.notes || "—" }));
+
+    gptFactorRows.appendChild(row);
+  });
+}
+
+function renderFinalRows(rows) {
+  if (!gptFinalRows) return;
+  gptFinalRows.innerHTML = "";
+  const items = rows || [];
+  if (items.length === 0) {
+    const row = document.createElement("div");
+    row.className = "gpt-final-row";
+    const span = document.createElement("span");
+    span.textContent = "No consolidated verdicts yet.";
+    row.appendChild(span);
+    gptFinalRows.appendChild(row);
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "gpt-final-row";
+
+    const verdict = document.createElement("span");
+    verdict.className = actionClass(item.final_action);
+    verdict.textContent = formatAction(item.final_action);
+
+    const confidence = item.confidence;
+    const scoreValue = Number(item.score);
+
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatCategory(item.category) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.symbol || "—" }));
+    row.appendChild(verdict);
+    row.appendChild(
+      Object.assign(document.createElement("span"), {
+        textContent:
+          confidence === null || confidence === undefined ? "—" : `${(confidence * 100).toFixed(1)}%`,
+      }),
+    );
+    row.appendChild(
+      Object.assign(document.createElement("span"), {
+        textContent:
+          item.score === null || item.score === undefined || Number.isNaN(scoreValue) ? "—" : scoreValue.toFixed(2),
+      }),
+    );
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.review_verdict || "—").toUpperCase() }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.challenge_change || "—").toUpperCase() }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.providers || []).join(", ") }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.replacement || "—" }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.notes || "—" }));
+
+    gptFinalRows.appendChild(row);
   });
 }
 
@@ -366,6 +516,88 @@ async function fetchChallenges(options = {}) {
     gptChallengeRows.appendChild(row);
     setChallengeStatus("error");
     setButtonLoading(gptChallengeRefresh, gptChallengeRefreshLabel, false);
+    return null;
+  }
+}
+
+async function fetchFactorReviews(options = {}) {
+  if (!gptFactorRows) return null;
+  try {
+    const response = await fetch("/api/gpt/factor-reviews");
+    if (!response.ok) {
+      throw new Error("Failed to load factor reviews");
+    }
+    const data = await response.json();
+    lastFactorRun = data.run_time;
+    if (gptFactorError) {
+      gptFactorError.textContent = data.last_error || "";
+    }
+    if (gptFactorLastRun) {
+      gptFactorLastRun.textContent = formatDate(data.run_time);
+    }
+    if (gptFactorSession) {
+      gptFactorSession.textContent = data.session || data.last_session || "—";
+    }
+    renderFactorRows(data.consensus || []);
+    if (!options.keepStatus) {
+      const status = data.status === "running" ? "running" : data.status === "failed" ? "error" : "idle";
+      setFactorStatus(status);
+    }
+    return data;
+  } catch (error) {
+    if (gptFactorError) {
+      gptFactorError.textContent = error.message || "Unable to load factor reviews.";
+    }
+    if (gptFactorRows) {
+      const row = document.createElement("div");
+      row.className = "gpt-factor-row";
+      const span = document.createElement("span");
+      span.textContent = "Unable to load factor reviews.";
+      row.appendChild(span);
+      gptFactorRows.innerHTML = "";
+      gptFactorRows.appendChild(row);
+    }
+    setFactorStatus("error");
+    return null;
+  }
+}
+
+async function fetchSummary(options = {}) {
+  if (!gptFinalRows) return null;
+  try {
+    const response = await fetch("/api/gpt/summary");
+    if (!response.ok) {
+      throw new Error("Failed to load consolidated verdicts");
+    }
+    const data = await response.json();
+    if (gptFinalError) {
+      gptFinalError.textContent = "";
+    }
+    if (gptFinalLastRun) {
+      gptFinalLastRun.textContent = formatDate(data.run_time);
+    }
+    if (gptFinalAsOf) {
+      gptFinalAsOf.textContent = data.as_of || "—";
+    }
+    renderFinalRows(data.final || []);
+    if (!options.keepStatus) {
+      setFinalStatus("idle");
+    }
+    return data;
+  } catch (error) {
+    if (gptFinalError) {
+      gptFinalError.textContent = error.message || "Unable to load consolidated verdicts.";
+    }
+    if (gptFinalRows) {
+      const row = document.createElement("div");
+      row.className = "gpt-final-row";
+      const span = document.createElement("span");
+      span.textContent = "Unable to load consolidated verdicts.";
+      row.appendChild(span);
+      gptFinalRows.innerHTML = "";
+      gptFinalRows.appendChild(row);
+    }
+    setFinalStatus("error");
     return null;
   }
 }
@@ -516,3 +748,5 @@ window.triggerGptRefresh = refreshRecommendations;
 window.triggerGptChallengeRefresh = refreshChallenges;
 fetchRecommendations();
 fetchChallenges();
+fetchFactorReviews();
+fetchSummary();

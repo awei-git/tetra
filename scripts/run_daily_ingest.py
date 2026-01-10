@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-events", action="store_true", help="Skip event ingestion")
     parser.add_argument("--skip-economic", action="store_true", help="Skip economic ingestion")
     parser.add_argument("--skip-news", action="store_true", help="Skip news ingestion")
+    parser.add_argument("--skip-fundamentals", action="store_true", help="Skip fundamentals ingestion")
     return parser.parse_args()
 
 
@@ -64,11 +65,12 @@ def main() -> None:
     logging.info("Series: %s", args.series_ids or "default")
     logging.info("News query: %s", args.query or "default")
     logging.info(
-        "Pipelines: market=%s events=%s economic=%s news=%s",
+        "Pipelines: market=%s events=%s economic=%s news=%s fundamentals=%s",
         "off" if args.skip_market else "on",
         "off" if args.skip_events else "on",
         "off" if args.skip_economic else "on",
         "off" if args.skip_news else "on",
+        "off" if args.skip_fundamentals else "on",
     )
 
     started_at = datetime.now(tz=UTC)
@@ -78,13 +80,14 @@ def main() -> None:
                 start=start,
                 end=end,
                 symbols=parse_list(args.symbols),
-            query=args.query,
-            series_ids=parse_list(args.series_ids),
-            include_market=not args.skip_market,
-            include_events=not args.skip_events,
-            include_economic=not args.skip_economic,
-            include_news=not args.skip_news,
-        )
+                query=args.query,
+                series_ids=parse_list(args.series_ids),
+                include_market=not args.skip_market,
+                include_events=not args.skip_events,
+                include_economic=not args.skip_economic,
+                include_news=not args.skip_news,
+                include_fundamentals=not args.skip_fundamentals,
+            )
         )
     except Exception:
         logging.exception("Ingestion run failed")

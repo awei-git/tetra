@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetra Alpha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260109-2" />
+</head>
+<body>
+  <div class="backdrop">
+    <div class="glow"></div>
+    <div class="grid"></div>
+  </div>
+
+  <main class="alpha-main">
+    <nav class="tabs">
+      <a class="tab active" href="/alpha">FACTOR</a>
+      <a class="tab" href="/gpt">GPT</a>
+      <a class="tab" href="/strats">STRESS</a>
+      <a class="tab" href="/">DATA</a>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tetra / Factor Alpha</p>
+        <h1>Event-Driven Factor Signals</h1>
+        <p class="subtitle">Rank symbols using event, news, and macro signals with minimal market data.</p>
+      </div>
+      <div class="status">
+        <div class="status-pill" id="alpha-status">Idle</div>
+        <p class="status-meta">As of: <span id="alpha-asof">—</span></p>
+        <p class="status-meta">Last run: <span id="alpha-last-run">—</span></p>
+        <p class="status-meta">Symbols loaded: <span id="alpha-symbols">—</span></p>
+      </div>
+    </header>
+
+    <section class="alpha-grid">
+      <div class="panel alpha-panel alpha-pool-panel">
+        <div class="alpha-header">
+          <div>
+            <h3>Symbol Pool</h3>
+            <p>Full factor universe with sortable signals.</p>
+          </div>
+          <div class="alpha-header-actions">
+            <button id="alpha-sort">Sort: BUY -> SELL</button>
+          </div>
+        </div>
+        <p class="status-meta" id="alpha-pool-meta">Loading full symbol list...</p>
+        <div class="alpha-table alpha-symbol-table">
+          <div class="alpha-row alpha-head alpha-symbol-head">
+            <span>Symbol</span>
+            <span>Category</span>
+            <span>Signal</span>
+            <span>Action</span>
+            <span>Coverage</span>
+          </div>
+          <div id="alpha-symbol-list"></div>
+        </div>
+      </div>
+
+      <div class="panel alpha-panel alpha-detail-panel">
+        <div class="alpha-header">
+          <div>
+            <h3>Factor Details</h3>
+            <p id="alpha-detail-meta">Select a symbol to view factor signals.</p>
+          </div>
+          <div class="alpha-scorecard">
+            <span class="alpha-score-symbol" id="alpha-active-symbol">—</span>
+            <span class="alpha-score-value" id="alpha-symbol-score">—</span>
+            <span class="gpt-action neutral" id="alpha-symbol-action">Neutral</span>
+            <span class="alpha-score-coverage" id="alpha-symbol-coverage">— factors</span>
+          </div>
+        </div>
+        <div class="alpha-table alpha-factor-table">
+          <div class="alpha-row alpha-head alpha-factor-head">
+            <span>Factor</span>
+            <span>Value</span>
+            <span>Signal</span>
+            <span>Action</span>
+            <span>Description</span>
+          </div>
+          <div id="alpha-factor-rows"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/alpha.js?v=20260108-3"></script>
+</body>
+</html>

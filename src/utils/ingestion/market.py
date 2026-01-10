@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -18,6 +19,25 @@ from src.utils.ingestion.types import IngestionSummary
 from src.utils.ingestion.yfinance import fetch_yfinance_asset_info, fetch_yfinance_ohlcv, yfinance_available
 
 UTC = timezone.utc
+NY_TZ = ZoneInfo("America/New_York")
+CLOSE_HOUR = 16
+CLOSE_MINUTE = 15
+
+
+def last_market_close_date(now: Optional[datetime] = None) -> date:
+    current = now.astimezone(NY_TZ) if now else datetime.now(tz=NY_TZ)
+    local_date = current.date()
+
+    def prev_business_day(value: date) -> date:
+        while value.weekday() >= 5:
+            value -= timedelta(days=1)
+        return value
+
+    if local_date.weekday() >= 5:
+        return prev_business_day(local_date)
+    if (current.hour, current.minute) < (CLOSE_HOUR, CLOSE_MINUTE):
+        return prev_business_day(local_date - timedelta(days=1))
+    return local_date
 
 
 async def ingest_market_data(
@@ -41,11 +61,12 @@ async def ingest_market_data(
     ohlcv_yfinance = 0
     processed_symbols = 0
 
+    market_end = min(end, last_market_close_date())
     async with engine.begin() as conn:
         for symbol in symbols:
             symbol = symbol.upper()
             symbol_start = max(start, MarketUniverse.get_symbol_start_date(symbol))
-            if symbol_start > end:
+            if symbol_start > market_end:
                 continue
 
             try:
@@ -117,7 +138,7 @@ async def ingest_market_data(
             polygon_start_dt: Optional[datetime] = None
             if polygon_client and not MarketUniverse.is_crypto(symbol):
                 try:
-                    ohlcv = await polygon_client.get_daily_ohlc(symbol, symbol_start, end)
+                    ohlcv = await polygon_client.get_daily_ohlc(symbol, symbol_start, market_end)
                 except Exception:
                     ohlcv = []
                 if ohlcv:
@@ -129,7 +150,7 @@ async def ingest_market_data(
                 if polygon_start_dt and polygon_start_dt.date() > symbol_start:
                     missing_end = polygon_start_dt.date() - timedelta(days=1)
                 if not ohlcv:
-                    missing_end = end
+                    missing_end = market_end
                 yfinance_rows: List[Dict] = []
                 if missing_end and missing_end >= missing_start:
                     try:
@@ -196,5 +217,6 @@ async def ingest_market_data(
             "ohlcv_polygon": ohlcv_polygon,
             "ohlcv_yfinance": ohlcv_yfinance,
             "symbols": processed_symbols,
+            "market_end": market_end.isoformat(),
         },
     )

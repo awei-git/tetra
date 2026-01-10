@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260108-16" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260109-2" />
 </head>
 <body>
   <div class="backdrop">
@@ -17,9 +17,10 @@
 
   <main>
     <nav class="tabs">
-      <a class="tab" href="/">DATA</a>
+      <a class="tab" href="/alpha">FACTOR</a>
       <a class="tab" href="/gpt">GPT</a>
       <a class="tab active" href="/strats">STRESS</a>
+      <a class="tab" href="/">DATA</a>
     </nav>
 
     <header class="hero">
@@ -41,6 +42,14 @@
             <h3>Path Simulator</h3>
             <p>Generate price paths from historical windows, stress periods, or Monte Carlo draws.</p>
           </div>
+        </div>
+        <div class="sim-agreed">
+          <div>
+            <p class="eyebrow">Final consensus</p>
+            <h4>GPT + Signals + Review</h4>
+            <p class="sim-meta" id="sim-agreed-meta">Loading agreed symbols...</p>
+          </div>
+          <div class="sim-agreed-list" id="sim-agreed-list"></div>
         </div>
         <form id="sim-form" class="sim-form">
           <label>
@@ -91,6 +100,6 @@
       </div>
     </section>
   </main>
-  <script src="/static/strats.js?v=20260108-4"></script>
+  <script src="/static/strats.js?v=20260109-1"></script>
 </body>
 </html>

@@ -21,7 +21,22 @@ from sqlalchemy import text
 
 from src.db.session import engine
 from src.pipelines.data.runner import run_all_pipelines
+from src.pipelines.factors.daily import run_daily_factors
+from src.definitions.market_universe import MarketUniverse
+from src.utils.factors.definitions import get_factor_definitions
+from src.utils.factors.scoring import (
+    action_from_signal,
+    build_factor_stats,
+    compute_factor_signal,
+    score_factor_rows,
+    score_symbol_values,
+)
 from src.utils.gpt.challenge import normalize_challenges, run_gpt_challenge
+from src.utils.gpt.factor_review import (
+    build_factor_review_consensus,
+    normalize_factor_reviews,
+    run_gpt_factor_reviews,
+)
 from src.utils.gpt.recommendations import normalize_recommendations, run_gpt_recommendations
 from src.utils.simulations.paths import (
     STRESS_WINDOWS,
@@ -62,6 +77,20 @@ gpt_challenge_state: Dict[str, Any] = {
     "last_session": None,
 }
 
+gpt_factor_state: Dict[str, Any] = {
+    "status": "idle",
+    "last_run": None,
+    "last_error": None,
+    "last_session": None,
+}
+
+factor_state: Dict[str, Any] = {
+    "status": "idle",
+    "last_run": None,
+    "last_error": None,
+    "last_as_of": None,
+}
+
 
 class IngestRequest(BaseModel):
     start_date: Optional[date] = None
@@ -70,6 +99,20 @@ class IngestRequest(BaseModel):
 
 class GPTRefreshRequest(BaseModel):
     session: Optional[str] = None
+
+
+class GPTFactorReviewRequest(BaseModel):
+    session: Optional[str] = None
+    as_of: Optional[date] = None
+
+
+class FactorRefreshRequest(BaseModel):
+    as_of: Optional[date] = None
+
+
+class FactorSelectionRequest(BaseModel):
+    symbols: List[str]
+    as_of: Optional[date] = None
 
 
 def _isoformat(value: Any) -> Optional[str]:
@@ -100,6 +143,12 @@ def _format_est_timestamp(value: Any) -> str:
     est_value = dt_value.astimezone(EASTERN)
     tz_name = est_value.tzname() or "EST"
     return f"{est_value:%Y-%m-%d %H:%M} {tz_name}"
+
+
+def _parse_date(value: Optional[str]) -> Optional[date]:
+    if not value:
+        return None
+    return datetime.strptime(value, "%Y-%m-%d").date()
 
 
 async def _fetch_close_series(
@@ -295,9 +344,32 @@ def _change_class(value: Optional[str]) -> str:
     change = str(value or "").lower()
     if change == "keep":
         return "gpt-change keep"
-    if change == "replace":
+    if change in {"replace", "exit"}:
         return "gpt-change replace"
     return "gpt-change adjust"
+
+
+def _verdict_class(value: Optional[str]) -> str:
+    verdict = str(value or "").lower()
+    if verdict == "approve":
+        return "gpt-verdict approve"
+    if verdict == "reject":
+        return "gpt-verdict reject"
+    return "gpt-verdict watch"
+
+
+def _majority(values: List[str], fallback: str) -> Tuple[str, int]:
+    if not values:
+        return fallback, 0
+    counts: Dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    top_value = max(counts, key=counts.get)
+    top_count = counts[top_value]
+    ties = [value for value, count in counts.items() if count == top_count]
+    if len(ties) > 1:
+        return fallback, top_count
+    return top_value, top_count
 
 
 def _render_gpt_rows(providers: List[Dict[str, Any]]) -> str:
@@ -350,8 +422,8 @@ def _build_gpt_consensus(providers: List[Dict[str, Any]]) -> Dict[str, List[Dict
     provider_list = [p for p in providers if not p.get("error")]
     provider_count = max(1, len(provider_list))
     consensus_min = 2
-    min_per_category = 2
-    max_per_category = 3
+    min_per_category = 5
+    max_per_category = 5
     category_order = ("large_cap", "growth", "etf", "crypto")
     bounds_map = {
         "large_cap": (0.7, 1.3),
@@ -624,6 +696,7 @@ def _render_gpt_challenge_rows(providers: List[Dict[str, Any]]) -> str:
                     f"<span>{html.escape(str(item.get('symbol') or '—'))}</span>"
                     f"<span>{html.escape(str(item.get('last_price') or '—'))}</span>"
                     f"<span class=\"{_change_class(change)}\">{html.escape(str(change or 'adjust').upper())}</span>"
+                    f"<span>{html.escape(str(item.get('replaces') or '—'))}</span>"
                     f"<span class=\"{_action_class(action)}\">{html.escape(_format_action(action))}</span>"
                     f"<span>{html.escape(str(item.get('entry') or '—'))}</span>"
                     f"<span>{html.escape(str(item.get('target') or '—'))}</span>"
@@ -636,6 +709,106 @@ def _render_gpt_challenge_rows(providers: List[Dict[str, Any]]) -> str:
     if not rows:
         return "<div class=\"gpt-challenge-row\"><span>No GPT challenges yet.</span></div>"
     return "\n".join(rows)
+
+
+def _render_gpt_factor_review_rows(consensus: List[Dict[str, Any]]) -> str:
+    rows: List[str] = []
+    for row in consensus:
+        providers = ", ".join(row.get("providers") or [])
+        notes = html.escape(str(row.get("notes") or ""))
+        drivers = row.get("drivers") or []
+        driver_bits = []
+        for driver in drivers:
+            factor = driver.get("factor")
+            signal = driver.get("signal")
+            if factor and signal is not None:
+                driver_bits.append(f"{factor}:{_format_ratio(signal)}")
+            elif factor:
+                driver_bits.append(str(factor))
+        driver_text = html.escape(" | ".join(driver_bits))
+        rows.append(
+            "<div class=\"gpt-factor-row\""
+            + (f" title=\"{driver_text}\"" if driver_text else "")
+            + ">"
+            f"<span>{html.escape(_format_category(row.get('category')))}</span>"
+            f"<span>{html.escape(str(row.get('symbol') or '—'))}</span>"
+            f"<span class=\"{_action_class(row.get('factor_action'))}\">{html.escape(_format_action(row.get('factor_action')))}</span>"
+            f"<span>{html.escape(_format_ratio(row.get('factor_score')))}</span>"
+            f"<span>{html.escape(_format_price_value(row.get('last_price')))}</span>"
+            f"<span class=\"{_verdict_class(row.get('verdict'))}\">{html.escape(str(row.get('verdict') or 'watch').upper())}</span>"
+            f"<span class=\"{_action_class(row.get('action'))}\">{html.escape(_format_action(row.get('action')))}</span>"
+            f"<span>{html.escape(_format_confidence(row.get('confidence')))}</span>"
+            f"<span>{html.escape(providers)}</span>"
+            f"<span>{html.escape(str(row.get('replacement') or '—'))}</span>"
+            f"<span>{notes or '—'}</span>"
+            "</div>"
+        )
+    if not rows:
+        return "<div class=\"gpt-factor-row\"><span>No factor reviews yet.</span></div>"
+    return "\n".join(rows)
+
+
+def _render_gpt_final_rows(rows: List[Dict[str, Any]]) -> str:
+    rendered: List[str] = []
+    for row in rows:
+        providers = ", ".join(row.get("providers") or [])
+        notes = html.escape(str(row.get("notes") or ""))
+        rendered.append(
+            "<div class=\"gpt-final-row\">"
+            f"<span>{html.escape(_format_category(row.get('category')))}</span>"
+            f"<span>{html.escape(str(row.get('symbol') or '—'))}</span>"
+            f"<span class=\"{_action_class(row.get('final_action'))}\">{html.escape(_format_action(row.get('final_action')))}</span>"
+            f"<span>{html.escape(_format_confidence(row.get('confidence')))}</span>"
+            f"<span>{html.escape(_format_ratio(row.get('score')))}</span>"
+            f"<span>{html.escape(str(row.get('review_verdict') or '—').upper())}</span>"
+            f"<span>{html.escape(str(row.get('challenge_change') or '—').upper())}</span>"
+            f"<span>{html.escape(providers)}</span>"
+            f"<span>{html.escape(str(row.get('replacement') or '—'))}</span>"
+            f"<span>{notes or '—'}</span>"
+            "</div>"
+        )
+    if not rendered:
+        return "<div class=\"gpt-final-row\"><span>No consolidated verdicts yet.</span></div>"
+    return "\n".join(rendered)
+
+
+def _summarize_challenges(providers: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    summary: Dict[str, Dict[str, Any]] = {}
+    for provider in providers:
+        provider_name = provider.get("provider") or "unknown"
+        if provider.get("error"):
+            continue
+        categories = provider.get("recommendations") or {}
+        for _, items in categories.items():
+            for item in items or []:
+                symbol = str(item.get("symbol") or "").upper()
+                if not symbol:
+                    continue
+                entry = summary.setdefault(
+                    symbol,
+                    {"changes": [], "replacements": [], "notes": [], "providers": set()},
+                )
+                change = str(item.get("change") or "adjust").lower()
+                entry["changes"].append(change)
+                replacement = item.get("replaces") or item.get("replacement")
+                if replacement:
+                    entry["replacements"].append(str(replacement).upper())
+                notes = item.get("notes") or item.get("thesis")
+                if notes:
+                    entry["notes"].append(f"{provider_name}: {notes}")
+                entry["providers"].add(provider_name)
+
+    summarized: Dict[str, Dict[str, Any]] = {}
+    for symbol, entry in summary.items():
+        change, _ = _majority(entry["changes"], fallback="adjust")
+        replacement, _ = _majority(entry["replacements"], fallback="")
+        summarized[symbol] = {
+            "change": change,
+            "replacement": replacement or None,
+            "notes": " | ".join(entry["notes"][:2]) if entry["notes"] else "",
+            "providers": sorted(entry["providers"]),
+        }
+    return summarized
 
 
 async def _fetch_scalar(query: str) -> Optional[Any]:
@@ -711,6 +884,35 @@ async def _run_gpt_challenge(session: Optional[str]) -> None:
         gpt_challenge_state["last_error"] = _redact_error(str(exc))
 
 
+async def _run_gpt_factor_review(session: Optional[str], as_of: Optional[date]) -> None:
+    gpt_factor_state["status"] = "running"
+    gpt_factor_state["last_error"] = None
+    gpt_factor_state["last_session"] = session
+    try:
+        result = await run_gpt_factor_reviews(session=session, as_of=as_of)
+        gpt_factor_state["status"] = "success"
+        gpt_factor_state["last_run"] = result.get("run_time")
+        gpt_factor_state["last_session"] = result.get("session")
+    except Exception as exc:
+        gpt_factor_state["status"] = "failed"
+        gpt_factor_state["last_error"] = _redact_error(str(exc))
+
+
+async def _run_factor_refresh(as_of: Optional[date]) -> None:
+    factor_state["status"] = "running"
+    factor_state["last_error"] = None
+    factor_state["last_as_of"] = as_of
+    try:
+        result = await run_daily_factors(as_of=as_of)
+        factor_state["status"] = "success"
+        factor_state["last_run"] = result.get("run_time")
+        factor_state["last_as_of"] = result.get("as_of")
+        factor_state["last_as_of"] = result.get("as_of")
+    except Exception as exc:
+        factor_state["status"] = "failed"
+        factor_state["last_error"] = _redact_error(str(exc))
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(frontend_dir / "index.html", headers={"Cache-Control": "no-store"})
@@ -719,6 +921,11 @@ async def index() -> FileResponse:
 @app.get("/strats")
 async def strats() -> FileResponse:
     return FileResponse(frontend_dir / "strats.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/alpha")
+async def alpha() -> FileResponse:
+    return FileResponse(frontend_dir / "alpha.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/gpt")
@@ -735,13 +942,30 @@ async def gpt() -> HTMLResponse:
         challenge_rows = _render_gpt_challenge_rows(challenge_data.get("providers", []))
     except Exception:
         challenge_rows = "<div class=\"gpt-challenge-row\"><span>Unable to load GPT challenges.</span></div>"
+    try:
+        factor_data = await _load_gpt_factor_reviews(session=None)
+        factor_rows = _render_gpt_factor_review_rows(factor_data.get("consensus", []))
+    except Exception:
+        factor_rows = "<div class=\"gpt-factor-row\"><span>Unable to load factor reviews.</span></div>"
+        factor_data = {}
+    try:
+        summary_data = await get_gpt_summary()
+        final_rows = _render_gpt_final_rows(summary_data.get("final", []))
+    except Exception:
+        final_rows = "<div class=\"gpt-final-row\"><span>Unable to load consolidated verdicts.</span></div>"
     last_run = _format_est_timestamp(consensus.get("run_time"))
     session = consensus.get("session") or consensus.get("last_session") or "—"
+    factor_last_run = _format_est_timestamp(factor_data.get("run_time"))
+    factor_session = factor_data.get("session") or factor_data.get("last_session") or "—"
     html_content = (
         html_template.replace("{{GPT_CONSENSUS_ROWS}}", rows)
         .replace("{{GPT_CHALLENGE_ROWS}}", challenge_rows)
+        .replace("{{GPT_FACTOR_ROWS}}", factor_rows)
+        .replace("{{GPT_FINAL_ROWS}}", final_rows)
         .replace("{{GPT_LAST_RUN}}", html.escape(str(last_run)))
         .replace("{{GPT_SESSION}}", html.escape(str(session)))
+        .replace("{{GPT_FACTOR_LAST_RUN}}", html.escape(str(factor_last_run)))
+        .replace("{{GPT_FACTOR_SESSION}}", html.escape(str(factor_session)))
     )
     return HTMLResponse(html_content, headers={"Cache-Control": "no-store"})
 
@@ -994,6 +1218,96 @@ async def _load_gpt_challenges(session: Optional[str]) -> Dict[str, Any]:
     }
 
 
+async def _load_gpt_factor_reviews(session: Optional[str]) -> Dict[str, Any]:
+    if session:
+        query = text(
+            """
+            SELECT DISTINCT ON (provider)
+              provider,
+              session,
+              run_time,
+              as_of,
+              payload,
+              raw_text,
+              error
+            FROM gpt.factor_reviews
+            WHERE session = :session
+            ORDER BY provider, run_time DESC
+            """
+        )
+        max_query = text(
+            """
+            SELECT MAX(run_time)
+            FROM gpt.factor_reviews
+            WHERE session = :session
+            """
+        )
+        params = {"session": session}
+    else:
+        query = text(
+            """
+            SELECT DISTINCT ON (provider)
+              provider,
+              session,
+              run_time,
+              as_of,
+              payload,
+              raw_text,
+              error
+            FROM gpt.factor_reviews
+            ORDER BY provider, run_time DESC
+            """
+        )
+        max_query = text("SELECT MAX(run_time) FROM gpt.factor_reviews")
+        params = {}
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(query, params)
+            rows = result.fetchall()
+            max_result = await conn.execute(max_query, params)
+            latest_run = max_result.scalar_one_or_none()
+    except Exception:
+        return {"session": session, "run_time": None, "providers": [], "consensus": []}
+
+    providers: List[Dict[str, Any]] = []
+    as_of_value: Optional[str] = None
+    for row in rows:
+        payload = row.payload
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                payload = None
+        normalized = normalize_factor_reviews(payload, row.session or session or "pre")
+        if as_of_value is None:
+            as_of_value = normalized.get("as_of") or _isoformat(row.as_of)
+        providers.append(
+            {
+                "provider": row.provider,
+                "session": row.session,
+                "run_time": _isoformat(row.run_time),
+                "as_of": normalized.get("as_of") or _isoformat(row.as_of),
+                "reviews": normalized.get("reviews", []),
+                "error": _redact_error(row.error),
+            }
+        )
+
+    provider_order = {"openai": 0, "deepseek": 1, "gemini": 2}
+    providers.sort(key=lambda item: provider_order.get(item.get("provider"), 99))
+    consensus = build_factor_review_consensus(providers)
+
+    return {
+        "session": session,
+        "run_time": _isoformat(latest_run),
+        "as_of": as_of_value,
+        "providers": providers,
+        "consensus": consensus,
+        "status": gpt_factor_state.get("status"),
+        "last_error": gpt_factor_state.get("last_error"),
+        "last_session": gpt_factor_state.get("last_session"),
+    }
+
+
 @app.get("/api/gpt/recommendations")
 async def get_gpt_recommendations(session: Optional[str] = None) -> Dict[str, Any]:
     return await _load_gpt_recommendations(session=session)
@@ -1039,6 +1353,131 @@ async def refresh_gpt_challenges(request: GPTRefreshRequest) -> Dict[str, Any]:
         }
     asyncio.create_task(_run_gpt_challenge(session))
     return {"status": "running"}
+
+
+@app.get("/api/gpt/factor-reviews")
+async def get_gpt_factor_reviews(session: Optional[str] = None) -> Dict[str, Any]:
+    return await _load_gpt_factor_reviews(session=session)
+
+
+@app.post("/api/gpt/factor-reviews/refresh")
+async def refresh_gpt_factor_reviews(request: GPTFactorReviewRequest) -> Dict[str, Any]:
+    session = request.session
+    as_of = request.as_of
+    if gpt_factor_state.get("status") == "running":
+        return {
+            "status": "running",
+            "message": "gpt factor review already running",
+            "last_run": gpt_factor_state.get("last_run"),
+            "last_error": gpt_factor_state.get("last_error"),
+        }
+    asyncio.create_task(_run_gpt_factor_review(session, as_of))
+    return {"status": "running"}
+
+
+@app.get("/api/gpt/summary")
+async def get_gpt_summary(
+    as_of: Optional[str] = None,
+    min_factors: int = 6,
+    signal_threshold: float = 0.2,
+) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "final": []}
+
+    gpt_data = await _load_gpt_consensus(session=None)
+    factor_data = await _load_gpt_factor_reviews(session=None)
+    challenge_data = await _load_gpt_challenges(session=None)
+    challenge_summary = _summarize_challenges(challenge_data.get("providers", []))
+
+    gpt_rows = gpt_data.get("consensus", [])
+    gpt_by_symbol: Dict[str, Dict[str, Any]] = {}
+    for row in gpt_rows:
+        symbol = str(row.get("symbol") or "").upper()
+        if not symbol:
+            continue
+        existing = gpt_by_symbol.get(symbol)
+        if not existing or (row.get("confidence") or 0) > (existing.get("confidence") or 0):
+            gpt_by_symbol[symbol] = row
+
+    review_by_symbol: Dict[str, Dict[str, Any]] = {
+        str(row.get("symbol") or "").upper(): row for row in factor_data.get("consensus", [])
+    }
+    scored = await _score_all_symbols(target_date, min_factors=min_factors)
+
+    consolidated: List[Dict[str, Any]] = []
+    for symbol, gpt_row in gpt_by_symbol.items():
+        gpt_action = str(gpt_row.get("action") or "neutral").lower()
+        if gpt_action not in {"buy", "sell"}:
+            continue
+        signal = scored.get(symbol)
+        if not signal:
+            continue
+        score_value = signal.get("score")
+        signal_action = str(action_from_signal(score_value, threshold=signal_threshold)).lower()
+        if gpt_action != signal_action:
+            continue
+        review = review_by_symbol.get(symbol)
+        if review and str(review.get("verdict") or "").lower() == "reject":
+            continue
+        review_action = str(review.get("action") or "").lower() if review else ""
+        if review_action in {"buy", "sell"} and review_action != gpt_action:
+            continue
+        challenge = challenge_summary.get(symbol)
+        challenge_change = str(challenge.get("change") or "") if challenge else ""
+        if challenge_change == "exit":
+            continue
+
+        confidence = gpt_row.get("confidence")
+        if confidence is None:
+            confidence = 0.5
+        factor_strength = min(abs(score_value or 0), 1.0)
+        confidence = confidence * (0.7 + 0.3 * factor_strength)
+        if review:
+            verdict = str(review.get("verdict") or "").lower()
+            if verdict == "approve":
+                confidence *= 1.05
+            elif verdict == "watch":
+                confidence *= 0.85
+        if challenge_change == "replace":
+            confidence *= 0.8
+        elif challenge_change == "adjust":
+            confidence *= 0.9
+        confidence = max(0.0, min(1.0, confidence))
+
+        consolidated.append(
+            {
+                "symbol": symbol,
+                "category": gpt_row.get("category"),
+                "final_action": review_action if review_action in {"buy", "sell"} else gpt_action,
+                "confidence": confidence,
+                "score": score_value,
+                "coverage": signal.get("coverage"),
+                "gpt_action": gpt_action,
+                "signal_action": signal_action,
+                "review_verdict": review.get("verdict") if review else None,
+                "review_action": review.get("action") if review else None,
+                "review_confidence": review.get("confidence") if review else None,
+                "challenge_change": challenge_change or None,
+                "replacement": challenge.get("replacement") if challenge else None,
+                "providers": gpt_row.get("providers"),
+                "notes": review.get("notes") if review else None,
+            }
+        )
+
+    consolidated.sort(key=lambda item: item.get("confidence") or 0, reverse=True)
+    return {
+        "as_of": target_date.isoformat(),
+        "session": gpt_data.get("session"),
+        "run_time": gpt_data.get("run_time"),
+        "final": consolidated,
+        "min_factors": min_factors,
+        "signal_threshold": signal_threshold,
+    }
 
 
 @app.get("/api/events/summary")
@@ -1308,3 +1747,556 @@ async def get_news_sentiment(limit: int = 50) -> Dict[str, Any]:
         for row in macro_rows
     ]
     return {"symbols": symbols, "macro": macro}
+
+
+def _coerce_float(value: Any) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_symbols(symbols: List[str]) -> List[str]:
+    seen = set()
+    cleaned = []
+    for symbol in symbols:
+        if not symbol:
+            continue
+        symbol = symbol.strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        cleaned.append(symbol)
+    return cleaned
+
+
+def _decode_metadata(raw: Any) -> Optional[Dict[str, Any]]:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+async def _load_factor_rows(target_date: date) -> List[Any]:
+    query = text(
+        """
+        SELECT symbol, factor, value, source, window_days, metadata
+        FROM factors.daily_factors
+        WHERE as_of = :as_of
+          AND value IS NOT NULL
+        """
+    )
+    async with engine.begin() as conn:
+        result = await conn.execute(query, {"as_of": target_date})
+        return result.fetchall()
+
+
+async def _score_all_symbols(
+    target_date: date,
+    min_factors: int = 1,
+) -> Dict[str, Dict[str, Any]]:
+    rows = await _load_factor_rows(target_date)
+    definitions = get_factor_definitions()
+    stats = build_factor_stats(
+        [
+            (row.symbol, row.factor, _coerce_float(row.value))
+            for row in rows
+            if _coerce_float(row.value) is not None
+        ],
+        definitions,
+    )
+
+    symbol_values: Dict[str, Dict[str, float]] = {}
+    for row in rows:
+        if row.symbol == "__macro__":
+            continue
+        value = _coerce_float(row.value)
+        if value is None:
+            continue
+        symbol_values.setdefault(row.symbol, {})[row.factor] = value
+
+    results: Dict[str, Dict[str, Any]] = {}
+    for symbol, values in symbol_values.items():
+        summary = score_symbol_values(values, definitions, stats)
+        score = summary.get("score")
+        coverage = summary.get("coverage", 0)
+        if score is None or coverage < min_factors:
+            continue
+        results[symbol] = {
+            "symbol": symbol,
+            "score": score,
+            "coverage": coverage,
+            "action": action_from_signal(score),
+            "category": MarketUniverse.get_symbol_info(symbol).get("category"),
+        }
+    return results
+
+
+def _build_factor_entry(
+    row: Any,
+    definitions: Dict[str, Dict[str, object]],
+    stats: Dict[str, Dict[str, float]],
+) -> Optional[Dict[str, Any]]:
+    definition = definitions.get(row.factor)
+    if not definition:
+        return None
+    value = _coerce_float(row.value)
+    if value is None:
+        return None
+    signal = compute_factor_signal(row.factor, value, definition, stats)
+    return {
+        "factor": row.factor,
+        "value": value,
+        "signal": signal,
+        "action": action_from_signal(signal),
+        "description": definition.get("description"),
+        "source": row.source or definition.get("source"),
+        "window": row.window_days if row.window_days is not None else definition.get("window"),
+        "weight": definition.get("weight"),
+        "metadata": _decode_metadata(row.metadata),
+    }
+
+
+@app.get("/api/factors/summary")
+async def get_factors_summary(as_of: Optional[str] = None) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "symbols": 0, "factors": 0, "rows": 0}
+        result = await conn.execute(
+            text(
+                """
+                SELECT COUNT(DISTINCT symbol) AS symbols,
+                       COUNT(DISTINCT factor) AS factors,
+                       COUNT(*) AS rows
+                FROM factors.daily_factors
+                WHERE as_of = :as_of
+                """
+            ),
+            {"as_of": target_date},
+        )
+        row = result.fetchone()
+    return {
+        "as_of": target_date.isoformat(),
+        "symbols": row.symbols if row else 0,
+        "factors": row.factors if row else 0,
+        "rows": row.rows if row else 0,
+        "status": factor_state.get("status"),
+        "last_run": factor_state.get("last_run"),
+        "last_error": factor_state.get("last_error"),
+    }
+
+
+@app.get("/api/factors/alpha")
+async def get_factors_alpha(
+    as_of: Optional[str] = None,
+    limit: int = 20,
+    min_factors: int = 6,
+) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "longs": [], "shorts": [], "factors_used": []}
+        result = await conn.execute(
+            text(
+                """
+                SELECT symbol, factor, value
+                FROM factors.daily_factors
+                WHERE as_of = :as_of
+                  AND symbol != '__macro__'
+                  AND value IS NOT NULL
+                """
+            ),
+            {"as_of": target_date},
+        )
+        rows = result.fetchall()
+
+    row_values = []
+    for row in rows:
+        value = _coerce_float(row.value)
+        if value is None:
+            continue
+        row_values.append((row.symbol, row.factor, value))
+
+    scoring = score_factor_rows(row_values)
+    scores = scoring["scores"]
+    factor_list = scoring["factors_used"]
+
+    filtered = [
+        (symbol, data)
+        for symbol, data in scores.items()
+        if symbol != "__macro__" and data.get("coverage", 0) >= min_factors and data.get("score") is not None
+    ]
+    if not filtered:
+        return {"as_of": target_date.isoformat(), "longs": [], "shorts": [], "factors_used": factor_list}
+
+    filtered.sort(key=lambda item: item[1]["score"], reverse=True)
+    limit = max(5, min(limit, 50))
+    longs = filtered[:limit]
+    shorts = list(reversed(filtered[-limit:]))
+
+    def _format_entry(symbol: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        contributions = [
+            {"factor": factor, "score": value}
+            for factor, value in data["contributions"][:5]
+        ]
+        return {
+            "symbol": symbol,
+            "score": data["score"],
+            "coverage": data["coverage"],
+            "drivers": contributions,
+            "action": action_from_signal(data["score"]),
+        }
+
+    return {
+        "as_of": target_date.isoformat(),
+        "longs": [_format_entry(symbol, data) for symbol, data in longs],
+        "shorts": [_format_entry(symbol, data) for symbol, data in shorts],
+        "factors_used": factor_list,
+        "definitions": scoring.get("definitions", {}),
+        "symbols_scored": len(filtered),
+        "min_factors": min_factors,
+    }
+
+
+@app.get("/api/factors/symbol")
+async def get_factors_symbol(symbol: str, as_of: Optional[str] = None) -> Dict[str, Any]:
+    symbol = symbol.upper()
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"symbol": symbol, "as_of": None, "factors": []}
+
+    rows = await _load_factor_rows(target_date)
+    if not rows:
+        return {"symbol": symbol, "as_of": target_date.isoformat(), "factors": []}
+
+    definitions = get_factor_definitions()
+    stats = build_factor_stats(
+        [
+            (row.symbol, row.factor, _coerce_float(row.value))
+            for row in rows
+            if _coerce_float(row.value) is not None
+        ],
+        definitions,
+    )
+
+    symbol_rows = [row for row in rows if row.symbol == symbol]
+    macro_rows = [row for row in rows if row.symbol == "__macro__"]
+    if not symbol_rows and not macro_rows:
+        return {"symbol": symbol, "as_of": target_date.isoformat(), "factors": []}
+
+    factor_entries = []
+    symbol_values: Dict[str, float] = {}
+    for row in symbol_rows + macro_rows:
+        entry = _build_factor_entry(row, definitions, stats)
+        if entry is None:
+            continue
+        factor_entries.append(entry)
+        symbol_values[row.factor] = entry["value"]
+
+    factor_entries.sort(key=lambda item: abs(item.get("signal") or 0), reverse=True)
+    summary = score_symbol_values(symbol_values, definitions, stats)
+
+    return {
+        "symbol": symbol,
+        "as_of": target_date.isoformat(),
+        "score": summary.get("score"),
+        "coverage": summary.get("coverage"),
+        "action": action_from_signal(summary.get("score")),
+        "category": MarketUniverse.get_symbol_info(symbol).get("category"),
+        "factors": factor_entries,
+    }
+
+
+@app.get("/api/factors/list")
+async def get_factors_list(
+    as_of: Optional[str] = None,
+    min_factors: int = 1,
+) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "symbols": []}
+
+    scored = await _score_all_symbols(target_date, min_factors=min_factors)
+    results = list(scored.values())
+    results.sort(key=lambda item: item.get("score") or 0, reverse=True)
+    return {
+        "as_of": target_date.isoformat(),
+        "symbols": results,
+        "last_run": factor_state.get("last_run"),
+        "last_error": factor_state.get("last_error"),
+    }
+
+
+@app.get("/api/opinions/validated")
+async def get_validated_opinions(
+    as_of: Optional[str] = None,
+    min_factors: int = 6,
+    signal_threshold: float = 0.2,
+) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "validated": []}
+
+    gpt_data = await _load_gpt_consensus(session=None)
+    gpt_rows = gpt_data.get("consensus", [])
+    gpt_by_symbol: Dict[str, Dict[str, Any]] = {}
+    for row in gpt_rows:
+        symbol = str(row.get("symbol") or "").upper()
+        if not symbol:
+            continue
+        existing = gpt_by_symbol.get(symbol)
+        if not existing or (row.get("confidence") or 0) > (existing.get("confidence") or 0):
+            gpt_by_symbol[symbol] = row
+
+    scored = await _score_all_symbols(target_date, min_factors=min_factors)
+
+    validated = []
+    disagreements = []
+    for symbol, gpt_row in gpt_by_symbol.items():
+        signal = scored.get(symbol)
+        if not signal:
+            disagreements.append({"symbol": symbol, "reason": "no_factor_score"})
+            continue
+        gpt_action = str(gpt_row.get("action") or "neutral").lower()
+        score_value = signal.get("score")
+        signal_action = str(action_from_signal(score_value, threshold=signal_threshold)).lower()
+        if gpt_action == signal_action and gpt_action != "neutral":
+            validated.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "score": score_value,
+                    "coverage": signal.get("coverage"),
+                    "confidence": gpt_row.get("confidence"),
+                    "providers": gpt_row.get("providers"),
+                }
+            )
+        else:
+            disagreements.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                }
+            )
+
+    validated.sort(key=lambda item: item.get("confidence") or 0, reverse=True)
+    return {
+        "as_of": target_date.isoformat(),
+        "session": gpt_data.get("session"),
+        "run_time": gpt_data.get("run_time"),
+        "validated": validated,
+        "disagreements": disagreements,
+        "min_factors": min_factors,
+        "signal_threshold": signal_threshold,
+    }
+
+
+@app.get("/api/opinions/final")
+async def get_final_opinions(
+    as_of: Optional[str] = None,
+    min_factors: int = 6,
+    signal_threshold: float = 0.2,
+    filter_rejects: bool = True,
+) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "final": []}
+
+    gpt_data = await _load_gpt_consensus(session=None)
+    gpt_rows = gpt_data.get("consensus", [])
+    gpt_by_symbol: Dict[str, Dict[str, Any]] = {}
+    for row in gpt_rows:
+        symbol = str(row.get("symbol") or "").upper()
+        if not symbol:
+            continue
+        existing = gpt_by_symbol.get(symbol)
+        if not existing or (row.get("confidence") or 0) > (existing.get("confidence") or 0):
+            gpt_by_symbol[symbol] = row
+
+    scored = await _score_all_symbols(target_date, min_factors=min_factors)
+    factor_reviews = await _load_gpt_factor_reviews(session=None)
+    review_by_symbol: Dict[str, Dict[str, Any]] = {
+        str(row.get("symbol") or "").upper(): row for row in factor_reviews.get("consensus", [])
+    }
+
+    validated: List[Dict[str, Any]] = []
+    disagreements: List[Dict[str, Any]] = []
+    for symbol, gpt_row in gpt_by_symbol.items():
+        signal = scored.get(symbol)
+        if not signal:
+            disagreements.append({"symbol": symbol, "reason": "no_factor_score"})
+            continue
+        gpt_action = str(gpt_row.get("action") or "neutral").lower()
+        score_value = signal.get("score")
+        signal_action = str(action_from_signal(score_value, threshold=signal_threshold)).lower()
+        if gpt_action == signal_action and gpt_action != "neutral":
+            validated.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "score": score_value,
+                    "coverage": signal.get("coverage"),
+                    "confidence": gpt_row.get("confidence"),
+                    "providers": gpt_row.get("providers"),
+                }
+            )
+        else:
+            disagreements.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                }
+            )
+
+    final: List[Dict[str, Any]] = []
+    for row in validated:
+        symbol = row.get("symbol")
+        review = review_by_symbol.get(str(symbol or "").upper())
+        verdict = review.get("verdict") if review else None
+        review_action = review.get("action") if review else None
+        review_action = review_action if review_action in {"buy", "sell"} else None
+        if verdict == "reject" and filter_rejects:
+            continue
+        final.append(
+            {
+                **row,
+                "final_action": review_action or row.get("gpt_action"),
+                "review_verdict": verdict,
+                "review_action": review_action,
+                "review_confidence": review.get("confidence") if review else None,
+                "review_providers": review.get("providers") if review else None,
+                "review_notes": review.get("notes") if review else None,
+                "replacement": review.get("replacement") if review else None,
+            }
+        )
+
+    final.sort(key=lambda item: item.get("confidence") or 0, reverse=True)
+    return {
+        "as_of": target_date.isoformat(),
+        "session": gpt_data.get("session"),
+        "run_time": gpt_data.get("run_time"),
+        "final": final,
+        "validated": validated,
+        "disagreements": disagreements,
+        "min_factors": min_factors,
+        "signal_threshold": signal_threshold,
+        "filter_rejects": filter_rejects,
+    }
+
+
+@app.post("/api/factors/selected")
+async def get_factors_selected(request: FactorSelectionRequest) -> Dict[str, Any]:
+    symbols = _normalize_symbols(request.symbols or [])
+    target_date = request.as_of
+    if target_date is None:
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM factors.daily_factors"))
+            target_date = result.scalar_one_or_none()
+    if target_date is None:
+        return {"as_of": None, "symbols": [], "missing": symbols}
+
+    rows = await _load_factor_rows(target_date)
+    definitions = get_factor_definitions()
+    stats = build_factor_stats(
+        [
+            (row.symbol, row.factor, _coerce_float(row.value))
+            for row in rows
+            if _coerce_float(row.value) is not None
+        ],
+        definitions,
+    )
+
+    macro_rows = [row for row in rows if row.symbol == "__macro__"]
+    symbol_rows: Dict[str, List[Any]] = {symbol: [] for symbol in symbols}
+    for row in rows:
+        if row.symbol in symbol_rows:
+            symbol_rows[row.symbol].append(row)
+
+    results = []
+    missing = []
+    for symbol in symbols:
+        factor_entries = []
+        symbol_values: Dict[str, float] = {}
+        rows_for_symbol = symbol_rows.get(symbol, [])
+        if not rows_for_symbol and not macro_rows:
+            missing.append(symbol)
+            continue
+        for row in rows_for_symbol + macro_rows:
+            entry = _build_factor_entry(row, definitions, stats)
+            if entry is None:
+                continue
+            factor_entries.append(entry)
+            symbol_values[row.factor] = entry["value"]
+        if not factor_entries:
+            missing.append(symbol)
+            continue
+        factor_entries.sort(key=lambda item: abs(item.get("signal") or 0), reverse=True)
+        summary = score_symbol_values(symbol_values, definitions, stats)
+        results.append(
+            {
+                "symbol": symbol,
+                "score": summary.get("score"),
+                "coverage": summary.get("coverage"),
+                "action": action_from_signal(summary.get("score")),
+                "factors": factor_entries,
+            }
+        )
+
+    results.sort(key=lambda item: (item.get("score") is None, -(item.get("score") or 0)))
+    return {
+        "as_of": target_date.isoformat(),
+        "symbols": results,
+        "missing": missing,
+        "total_factors": len(definitions),
+        "last_run": factor_state.get("last_run"),
+        "last_error": factor_state.get("last_error"),
+    }
+
+
+@app.post("/api/factors/refresh")
+async def refresh_factors(request: FactorRefreshRequest) -> Dict[str, Any]:
+    if factor_state.get("status") == "running":
+        return {
+            "status": "running",
+            "last_run": factor_state.get("last_run"),
+            "last_error": factor_state.get("last_error"),
+        }
+    asyncio.create_task(_run_factor_refresh(request.as_of))
+    return {"status": "running"}

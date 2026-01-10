@@ -20,6 +20,8 @@ from src.utils.gpt.recommendations import (
     _call_openai,
     _determine_session,
     _extract_json,
+    _fetch_latest_prices,
+    _fetch_yfinance_last_prices,
     _normalize_payload,
     _redact_secret,
 )
@@ -43,11 +45,14 @@ def _build_challenge_prompt(
         "Return JSON with keys: as_of (YYYY-MM-DD), session (pre or post), categories. "
         "Categories must include large_cap, growth, etf, crypto. "
         "Use only symbols from the price snapshot below. Use USD prices; no commas. "
-        "Each category is a list of 3 ideas. Each idea must include: symbol, action (buy or sell), "
-        "entry, target, stop, horizon, thesis, change (keep, adjust, replace), notes, and replaces "
-        "(optional, symbol being replaced). Keep at least one idea per category from the previous "
-        "recommendations. Entry/target/stop must be within +/-20% of last_close for stocks/ETFs and "
-        "+/-40% for crypto. No markdown or extra text. Session: "
+        "Each category must include one review per previous recommendation in that category (same symbols). "
+        "Do not add new symbols as separate rows. If you want to replace a symbol, set change=replace and set "
+        "replaces to the new symbol; still keep the original symbol row. If you would drop a symbol, use "
+        "change=exit. Each review must include: symbol, action (buy or sell), entry, target, stop, horizon, "
+        "thesis, change (keep, adjust, replace, exit), notes, and replaces (optional). Notes must explicitly "
+        "explain why the prior idea is still valid or not today given the last_close. Entry/target/stop must "
+        "be within +/-20% of last_close for stocks/ETFs and +/-40% for crypto. No markdown or extra text. "
+        "Session: "
         + session
         + ". Previous recommendations: "
         + previous_json
@@ -58,12 +63,14 @@ def _build_challenge_prompt(
 
 def _normalize_change(value: Any) -> str:
     raw = str(value or "").strip().lower()
-    if raw in {"keep", "adjust", "replace"}:
+    if raw in {"keep", "adjust", "replace", "exit"}:
         return raw
     if raw in {"hold", "retain", "unchanged"}:
         return "keep"
-    if raw in {"swap", "new", "drop"}:
+    if raw in {"swap", "new", "replace"}:
         return "replace"
+    if raw in {"drop", "remove", "close", "exit"}:
+        return "exit"
     return "adjust"
 
 
@@ -72,11 +79,138 @@ def _normalize_challenge_payload(payload: Dict[str, Any], session: str) -> Dict[
     categories = normalized.get("categories") or {}
     for items in categories.values():
         for item in items:
+            symbol = item.get("symbol")
+            if symbol:
+                item["symbol"] = str(symbol).upper()
             item["change"] = _normalize_change(item.get("change"))
+            replaces = item.get("replaces") or item.get("replacement") or item.get("replacement_symbol")
+            if replaces:
+                item["replaces"] = str(replaces).upper()
             if "notes" not in item:
                 item["notes"] = item.get("rationale") or ""
     normalized["categories"] = categories
     return normalized
+
+
+def _align_challenge_payload(
+    payload: Dict[str, Any],
+    previous_payload: Dict[str, Any],
+    session: str,
+) -> Dict[str, Any]:
+    normalized_prev = _normalize_payload(previous_payload, session)
+    prev_categories = normalized_prev.get("categories") or {}
+    categories = payload.get("categories") or {}
+    aligned: Dict[str, List[Dict[str, Any]]] = {}
+    for category in CATEGORIES:
+        prev_items = prev_categories.get(category, []) or []
+        output_items = categories.get(category, []) or []
+        by_symbol = {
+            str(item.get("symbol")).upper(): item
+            for item in output_items
+            if item.get("symbol")
+        }
+        by_replaces = {}
+        for item in output_items:
+            replaces = item.get("replaces")
+            if replaces:
+                by_replaces[str(replaces).upper()] = item
+
+        merged: List[Dict[str, Any]] = []
+        for prev_item in prev_items:
+            symbol = prev_item.get("symbol")
+            if not symbol:
+                continue
+            symbol_key = str(symbol).upper()
+            current = by_symbol.get(symbol_key)
+            if current:
+                if not current.get("action"):
+                    current["action"] = prev_item.get("action") or "buy"
+                if not current.get("entry"):
+                    current["entry"] = prev_item.get("entry")
+                if not current.get("target"):
+                    current["target"] = prev_item.get("target")
+                if not current.get("stop"):
+                    current["stop"] = prev_item.get("stop")
+                if not current.get("horizon"):
+                    current["horizon"] = prev_item.get("horizon")
+                if not current.get("change"):
+                    current["change"] = "keep"
+                merged.append(current)
+                continue
+            replacement = by_replaces.get(symbol_key)
+            if replacement:
+                replacement_symbol = replacement.get("symbol")
+                notes = replacement.get("notes") or replacement.get("thesis") or ""
+                prefix = f"Replace with {replacement_symbol}. " if replacement_symbol else ""
+                merged.append(
+                    {
+                        "symbol": symbol_key,
+                        "action": prev_item.get("action") or "buy",
+                        "entry": prev_item.get("entry"),
+                        "target": prev_item.get("target"),
+                        "stop": prev_item.get("stop"),
+                        "horizon": prev_item.get("horizon"),
+                        "change": "replace",
+                        "notes": f"{prefix}{notes}".strip(),
+                    }
+                )
+                continue
+            merged.append(
+                {
+                    "symbol": symbol_key,
+                    "action": prev_item.get("action") or "buy",
+                    "entry": prev_item.get("entry"),
+                    "target": prev_item.get("target"),
+                    "stop": prev_item.get("stop"),
+                    "horizon": prev_item.get("horizon"),
+                    "change": "keep",
+                    "notes": "No challenge output; keeping prior idea for review.",
+                }
+            )
+        if merged:
+            aligned[category] = merged
+        else:
+            aligned[category] = output_items
+    payload["categories"] = aligned
+    return payload
+
+
+async def _extend_price_snapshot(
+    price_snapshot: Dict[str, Dict[str, float]],
+    previous_payload: Dict[str, Any],
+    session: str,
+) -> Dict[str, Dict[str, float]]:
+    normalized_prev = _normalize_payload(previous_payload, session)
+    prev_categories = normalized_prev.get("categories") or {}
+    missing_symbols: List[str] = []
+    for category in CATEGORIES:
+        category_prices = price_snapshot.setdefault(category, {})
+        for item in prev_categories.get(category, []) or []:
+            symbol = item.get("symbol")
+            if not symbol:
+                continue
+            symbol_key = str(symbol).upper()
+            if symbol_key not in category_prices:
+                missing_symbols.append(symbol_key)
+
+    if not missing_symbols:
+        return price_snapshot
+
+    latest_prices = await _fetch_latest_prices(missing_symbols)
+    still_missing = [symbol for symbol in missing_symbols if symbol not in latest_prices]
+    yf_prices = _fetch_yfinance_last_prices(still_missing)
+
+    for category in CATEGORIES:
+        category_prices = price_snapshot.setdefault(category, {})
+        for item in prev_categories.get(category, []) or []:
+            symbol = item.get("symbol")
+            if not symbol:
+                continue
+            symbol_key = str(symbol).upper()
+            price = latest_prices.get(symbol_key) or yf_prices.get(symbol_key)
+            if price is not None:
+                category_prices[symbol_key] = price
+    return price_snapshot
 
 
 async def _ensure_gpt_challenge_table(conn) -> None:
@@ -261,7 +395,12 @@ async def run_gpt_challenge(session: Optional[str] = None) -> Dict[str, Any]:
                 raw_text = None
                 payload = None
                 error = None
-                prompt = _build_challenge_prompt(session, price_snapshot, source_payload)
+                provider_snapshot = await _extend_price_snapshot(
+                    {key: dict(value) for key, value in price_snapshot.items()},
+                    source_payload,
+                    session,
+                )
+                prompt = _build_challenge_prompt(session, provider_snapshot, source_payload)
                 try:
                     if provider == "openai":
                         raw_text = await _call_openai(client, prompt)
@@ -273,7 +412,9 @@ async def run_gpt_challenge(session: Optional[str] = None) -> Dict[str, Any]:
                     if not parsed:
                         raise ValueError("invalid json response")
                     payload = _normalize_challenge_payload(parsed, session)
-                    payload = _apply_price_guards(payload, price_snapshot)
+                    payload = _apply_price_guards(payload, provider_snapshot)
+                    payload = _align_challenge_payload(payload, source_payload, session)
+                    payload = _apply_price_guards(payload, provider_snapshot)
                 except Exception as exc:
                     error = str(exc)
 

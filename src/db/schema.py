@@ -44,6 +44,53 @@ market_ohlcv = sa.Table(
 )
 
 
+fundamentals_financials = sa.Table(
+    "financials",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("symbol", sa.String(32), nullable=False),
+    sa.Column("timeframe", sa.String(16)),
+    sa.Column("fiscal_year", sa.Integer()),
+    sa.Column("fiscal_period", sa.String(16)),
+    sa.Column("period_end", sa.Date()),
+    sa.Column("filing_date", sa.Date()),
+    sa.Column("source", sa.String(32), nullable=False),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    sa.UniqueConstraint(
+        "symbol",
+        "timeframe",
+        "fiscal_year",
+        "fiscal_period",
+        "source",
+        name="fund_financials_unique",
+    ),
+    schema="fundamentals",
+)
+
+
+fundamentals_shares = sa.Table(
+    "shares",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("symbol", sa.String(32), nullable=False),
+    sa.Column("as_of", sa.Date(), nullable=False),
+    sa.Column("share_class_shares_outstanding", sa.Numeric(20, 4)),
+    sa.Column("weighted_shares_outstanding", sa.Numeric(20, 4)),
+    sa.Column("market_cap", sa.Numeric(20, 4)),
+    sa.Column("source", sa.String(32), nullable=False),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    sa.UniqueConstraint(
+        "symbol",
+        "as_of",
+        "source",
+        name="fundamentals_shares_symbol_as_of_source_key",
+    ),
+    schema="fundamentals",
+)
+
+
 event_events = sa.Table(
     "events",
     metadata,
@@ -165,6 +212,55 @@ gpt_recommendation_challenges = sa.Table(
     schema="gpt",
 )
 
+gpt_factor_reviews = sa.Table(
+    "factor_reviews",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("provider", sa.String(32), nullable=False),
+    sa.Column("session", sa.String(16), nullable=False),
+    sa.Column("run_time", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("as_of", sa.Date(), nullable=False),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("raw_text", sa.Text()),
+    sa.Column("error", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    sa.UniqueConstraint(
+        "provider",
+        "session",
+        "run_time",
+        name="gpt_factor_reviews_provider_session_run_time_key",
+    ),
+    schema="gpt",
+)
+
+
+factors_daily = sa.Table(
+    "daily_factors",
+    metadata,
+    sa.Column("symbol", sa.String(32), primary_key=True),
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("factor", sa.String(128), primary_key=True),
+    sa.Column("value", sa.Numeric(20, 8)),
+    sa.Column("source", sa.String(32)),
+    sa.Column("window_days", sa.Integer()),
+    sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="factors",
+)
+
+factors_runs = sa.Table(
+    "factor_runs",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("as_of", sa.Date(), nullable=False),
+    sa.Column("run_time", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("status", sa.String(16), nullable=False),
+    sa.Column("summary", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("error", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="factors",
+)
+
 
 __all__ = [
     "metadata",
@@ -176,4 +272,7 @@ __all__ = [
     "news_articles",
     "gpt_recommendations",
     "gpt_recommendation_challenges",
+    "gpt_factor_reviews",
+    "factors_daily",
+    "factors_runs",
 ]

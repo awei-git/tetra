@@ -50,6 +50,46 @@ class PolygonClient:
         payload = resp.json()
         return payload.get("results", []) or []
 
+    async def get_financials(
+        self,
+        symbol: str,
+        start: Optional[date] = None,
+        end: Optional[date] = None,
+        timeframe: str = "quarterly",
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        url = f"{self.base_url}/vX/reference/financials"
+        limit = max(1, min(limit, 100))
+        params: Dict[str, Any] = {
+            "ticker": symbol.upper(),
+            "timeframe": timeframe,
+            "limit": limit,
+            "apiKey": self.api_key,
+        }
+        if start:
+            params["filing_date.gte"] = start.strftime(ISO_DATE)
+        if end:
+            params["filing_date.lte"] = end.strftime(ISO_DATE)
+        results: List[Dict[str, Any]] = []
+        cursor: Optional[str] = None
+        while True:
+            if cursor:
+                params["cursor"] = cursor
+            resp = await self._client.get(url, params=params)
+            if resp.status_code == 404:
+                break
+            resp.raise_for_status()
+            data = resp.json()
+            batch = data.get("results", []) or []
+            results.extend(batch)
+            cursor = data.get("next_url")
+            if not cursor:
+                break
+            url = cursor
+            params = {"apiKey": self.api_key}
+            await asyncio.sleep(0.2)
+        return results
+
     async def get_earnings(self, symbol: str, start: date, end: date) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/vX/reference/earnings"
         params = {

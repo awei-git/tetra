@@ -36,11 +36,20 @@ Use the built-in scheduler:
 python scripts/schedule_daily.py --hour 2 --minute 0
 ```
 
-Mac/Linux cron example (daily at 02:00):
+Mac/Linux cron example (daily after close at 16:20 local):
 
 ```
-0 2 * * * cd /path/to/tetra && /usr/bin/python3 scripts/run_daily_ingest.py >> /path/to/tetra_ingest.log 2>&1
+20 16 * * * cd /path/to/tetra && /usr/bin/python3 scripts/run_daily_ingest.py >> /path/to/tetra_ingest.log 2>&1
 ```
+
+## Launchd jobs (macOS)
+These are the daily automation units tracked in `config/launchd/`:
+- `com.tetra.daily-ingest`: data ingestion (16:20 local)
+- `com.tetra.factors-daily`: factor computation (19:10 local)
+- `com.tetra.gpt-pre`: GPT recommendations pre-market (08:45 local)
+- `com.tetra.gpt-post`: GPT recommendations post-close (16:15 local)
+- `com.tetra.gpt-challenge`: GPT challenge pass (18:30 local)
+- `com.tetra.gpt-factor-review`: GPT critique of factor picks (19:35 local)
 
 ## API keys
 Set keys in `tetra/config/secrets.yml`.

@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from config.config import settings
 from src.db.schema import metadata
 
-SCHEMAS = ("market", "event", "economic", "news", "gpt")
+SCHEMAS = ("market", "event", "economic", "news", "gpt", "factors", "fundamentals")
 UNIQUE_INDEXES = (
     (
         "event.events",

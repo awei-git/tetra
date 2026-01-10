@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260108-14" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260109-2" />
 </head>
 <body>
   <div class="backdrop">
@@ -17,34 +17,71 @@
 
   <main>
     <nav class="tabs">
-      <a class="tab" href="/">DATA</a>
+      <a class="tab" href="/alpha">FACTOR</a>
       <a class="tab active" href="/gpt">GPT</a>
       <a class="tab" href="/strats">STRESS</a>
+      <a class="tab" href="/">DATA</a>
     </nav>
 
     <header class="hero">
       <div>
         <p class="eyebrow">Tetra / GPT Briefing</p>
-        <h1>LLM Trade Recommendations</h1>
-        <p class="subtitle">Daily pre- and post-close ideas from ChatGPT, DeepSeek, and Gemini.</p>
+        <h1>GPT Decision Hub</h1>
+        <p class="subtitle">Three views: factor critiques, today’s recs, and challenges.</p>
       </div>
       <div class="status">
         <div class="status-pill" id="gpt-status">Idle</div>
         <p class="status-meta">Last run: <span id="gpt-last-run">{{GPT_LAST_RUN}}</span></p>
         <p class="status-meta">Session: <span id="gpt-session">{{GPT_SESSION}}</span></p>
         <p class="status-meta gpt-error" id="gpt-error"></p>
-        <p class="status-meta"><a class="gpt-link" href="/api/gpt/consensus" target="_blank" rel="noreferrer">View raw JSON</a></p>
       </div>
     </header>
+
+    <section class="gpt-panel gpt-factor-panel">
+      <div class="panel">
+        <div class="gpt-header">
+          <div>
+            <h3>1) Factor Critiques</h3>
+            <p>GPT critique of factor-driven picks with verdict and confidence.</p>
+          </div>
+          <div class="gpt-actions">
+            <div class="status-pill" id="gpt-factor-status">Idle</div>
+          </div>
+        </div>
+        <p class="status-meta">Last run: <span id="gpt-factor-last-run">{{GPT_FACTOR_LAST_RUN}}</span></p>
+        <p class="status-meta">Session: <span id="gpt-factor-session">{{GPT_FACTOR_SESSION}}</span></p>
+        <p class="status-meta gpt-error" id="gpt-factor-error"></p>
+        <p class="status-meta"><a class="gpt-link" href="/api/gpt/factor-reviews" target="_blank" rel="noreferrer">View raw JSON</a></p>
+        <div class="gpt-factor-table">
+          <div class="gpt-factor-row gpt-factor-head">
+            <span>Category</span>
+            <span>Symbol</span>
+            <span>Factor</span>
+            <span>Score</span>
+            <span>Last</span>
+            <span>Verdict</span>
+            <span>Action</span>
+            <span>Confidence</span>
+            <span>Providers</span>
+            <span>Replacement</span>
+            <span>Notes</span>
+          </div>
+          <div id="gpt-factor-rows">{{GPT_FACTOR_ROWS}}</div>
+        </div>
+      </div>
+    </section>
 
     <section class="gpt-panel">
       <div class="panel">
         <div class="gpt-header">
           <div>
-            <h3>Consensus Table</h3>
+            <h3>2) Today’s GPT Recommendations</h3>
             <p>Aggregated signals across providers with confidence and expected return.</p>
             <p class="status-meta">Last run: <span id="gpt-last-run-inline">{{GPT_LAST_RUN}}</span></p>
             <p class="status-meta">Session: <span id="gpt-session-inline">{{GPT_SESSION}}</span></p>
+          </div>
+          <div class="gpt-actions">
+            <a class="gpt-link" href="/api/gpt/consensus" target="_blank" rel="noreferrer">View raw JSON</a>
           </div>
         </div>
         <div class="gpt-consensus-table">
@@ -71,7 +108,7 @@
       <div class="panel">
         <div class="gpt-header">
           <div>
-            <h3>Challenge Review</h3>
+            <h3>3) Challenge of Previous Recs</h3>
             <p>Daily critique of the latest recommendations to improve portfolio fit.</p>
           </div>
           <div class="gpt-actions">
@@ -89,6 +126,7 @@
             <span>Symbol</span>
             <span>Last</span>
             <span>Change</span>
+            <span>Replacement</span>
             <span>Action</span>
             <span>Entry</span>
             <span>Target</span>
@@ -100,8 +138,40 @@
         </div>
       </div>
     </section>
+
+    <section class="gpt-panel gpt-final-panel">
+      <div class="panel">
+        <div class="gpt-header">
+          <div>
+            <h3>Consolidated Verdict (Buy/Sell)</h3>
+            <p>Strong actions that align GPT today + factor signals + GPT critique + challenge check.</p>
+          </div>
+          <div class="gpt-actions">
+            <div class="status-pill" id="gpt-final-status">Idle</div>
+          </div>
+        </div>
+        <p class="status-meta">As of: <span id="gpt-final-asof">—</span></p>
+        <p class="status-meta">Last run: <span id="gpt-final-last-run">—</span></p>
+        <p class="status-meta gpt-error" id="gpt-final-error"></p>
+        <div class="gpt-final-table">
+          <div class="gpt-final-row gpt-final-head">
+            <span>Category</span>
+            <span>Symbol</span>
+            <span>Verdict</span>
+            <span>Confidence</span>
+            <span>Signal</span>
+            <span>Review</span>
+            <span>Challenge</span>
+            <span>Providers</span>
+            <span>Replacement</span>
+            <span>Notes</span>
+          </div>
+          <div id="gpt-final-rows">{{GPT_FINAL_ROWS}}</div>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <script src="/static/gpt.js?v=20260108-20"></script>
+  <script src="/static/gpt.js?v=20260109-2"></script>
 </body>
 </html>

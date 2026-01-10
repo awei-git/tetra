@@ -17,6 +17,9 @@ This module generates scenario price paths anchored on the latest close for a sy
 
 `GET /api/market/simulations`
 
+The STRESS UI pulls the consensus list from:
+- `GET /api/opinions/final`
+
 Query params:
 - `symbol` (required): ticker, e.g. `SPY`
 - `method`: `historical` | `stress` | `monte_carlo` (default: `historical`)

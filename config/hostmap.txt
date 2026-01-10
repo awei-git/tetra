@@ -1,0 +1,4 @@
+# Local hostname to port mappings for the local reverse proxy.
+# Format: host=port
+tetra-app=8000
+# other-app=6000

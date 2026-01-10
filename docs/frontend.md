@@ -2,9 +2,13 @@
 
 ## FastAPI console
 The console is served by `src/api/app.py` and exposes:
-- `/`: UI
+- `/`: DATA tab
+- `/alpha`: FACTOR tab
+- `/gpt`: GPT tab (consensus + factor review + challenge)
+- `/strats`: STRESS tab
 - `/api/status`: counts + latest timestamps
 - `/api/ingest`: trigger pipelines
+- `/api/opinions/final`: final consensus list for the STRESS tab
 
 Run from `tetra/`:
 
