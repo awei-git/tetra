@@ -96,10 +96,13 @@ async def main_async(args: argparse.Namespace) -> None:
             logging.warning("Email skipped: missing recipients or SMTP credentials")
 
     # Push to Mira bridge + briefing artifacts
-    from src.mira.push import push_to_mira
+    from src.mira.push import push_to_mira, sync_app_status
     report_date = as_of or datetime.now(tz=timezone.utc).date()
     mira_result = push_to_mira(result, as_of=report_date)
     logging.info(f"Mira push: {mira_result}")
+
+    # Sync app status feed (v2 protocol)
+    sync_app_status(result, as_of=report_date)
 
 
 def main() -> None:

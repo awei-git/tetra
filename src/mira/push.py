@@ -204,6 +204,101 @@ def push_to_mira(
     return results
 
 
+APPS_FEED_DIR = MIRA_DIR / "feeds" / "apps"
+
+
+def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -> None:
+    """Write Tetra status to Mira feeds/apps/tetra.json (App Integration Protocol v2)."""
+    if as_of is None:
+        as_of = datetime.now(tz=UTC).date()
+
+    now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    date_str = as_of.isoformat()
+
+    outputs: List[Dict[str, Any]] = []
+
+    # Progress: pipeline status
+    outputs.append({
+        "type": "progress",
+        "id": "pipeline",
+        "title": "Tetra Analysis Pipeline",
+        "updatedAt": now,
+        "status": "active" if report_data.get("status") == "success" else "error",
+        "stage": {"current": 8, "total": 8, "label": "Report Delivered"},
+        "highlights": [
+            f"Regime: {report_data.get('regime', 'N/A')}",
+            f"Portfolio: {report_data.get('portfolio_total', 'N/A')}",
+            f"{report_data.get('signals', 0)} signals detected",
+            f"{report_data.get('forward_events', 0)} forward events",
+        ],
+    })
+
+    # Report: daily market report
+    briefing_md = _generate_briefing_md(report_data, as_of)
+    if len(briefing_md) > 4000:
+        briefing_md = briefing_md[:4000] + "\n…"
+    outputs.append({
+        "type": "report",
+        "id": f"daily-{date_str}",
+        "title": f"Daily Market Report {date_str}",
+        "updatedAt": now,
+        "period": "daily",
+        "content": briefing_md,
+        "parent": "pipeline",
+    })
+
+    # Deep dives: consensus + contrarian trades as separate items
+    consensus = report_data.get("consensus_trades", [])
+    if consensus:
+        trades_content = []
+        for t in consensus:
+            sym = t.get("symbol", "?")
+            direction = t.get("direction", "?").upper()
+            confidence = t.get("confidence", "?")
+            thesis = t.get("combined_thesis", t.get("thesis", ""))
+            trades_content.append(f"**{sym}** {direction} ({confidence})\n{thesis}")
+        content = "\n\n".join(trades_content)
+        if len(content) > 8000:
+            content = content[:8000] + "\n…"
+        outputs.append({
+            "type": "deep_dive",
+            "id": f"trades-{date_str}",
+            "title": f"Trade Recommendations {date_str}",
+            "updatedAt": now,
+            "topic": f"{len(consensus)} consensus trades — {report_data.get('regime', '')}",
+            "content": content,
+            "parent": f"daily-{date_str}",
+        })
+
+    # Alerts: risk warnings
+    for i, risk in enumerate(report_data.get("risk_warnings", [])[:3]):
+        outputs.append({
+            "type": "alert",
+            "id": f"risk-{date_str}-{i}",
+            "title": f"Risk Warning",
+            "updatedAt": now,
+            "severity": "warning",
+            "message": risk,
+        })
+
+    feed = {
+        "app": "tetra",
+        "version": 2,
+        "updatedAt": now,
+        "outputs": outputs,
+    }
+
+    try:
+        APPS_FEED_DIR.mkdir(parents=True, exist_ok=True)
+        target = APPS_FEED_DIR / "tetra.json"
+        tmp = target.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(feed, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.rename(target)
+        logger.info(f"App status synced: {target.name}")
+    except Exception as e:
+        logger.warning(f"Failed to sync app status: {e}")
+
+
 def read_feedback_gaps() -> List[Dict[str, Any]]:
     """Read unanswered questions from Mira analyst feedback.
 
