@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Tetrahedron-slowturn.gif/220px-Tetrahedron-slowturn.gif" width="120" alt="Tetra">
-</p>
-
-<h1 align="center">Tetra</h1>
+<h1 align="center">△ Tetra</h1>
 
 <p align="center">
   <strong>LLM-powered market analysis system with novel signal extraction</strong>
