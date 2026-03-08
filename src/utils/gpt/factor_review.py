@@ -638,6 +638,33 @@ async def _store_factor_review(
     )
 
 
+async def _load_gpt_recommendation_symbols() -> List[str]:
+    """Return the symbols from the latest GPT recommendations run."""
+    try:
+        query = text(
+            """
+            SELECT DISTINCT payload
+            FROM gpt.recommendations
+            WHERE run_time = (SELECT MAX(run_time) FROM gpt.recommendations)
+              AND payload IS NOT NULL
+              AND error IS NULL
+            """
+        )
+        async with engine.begin() as conn:
+            rows = (await conn.execute(query)).fetchall()
+        symbols: List[str] = []
+        for row in rows:
+            payload = row.payload if isinstance(row.payload, dict) else {}
+            for category_items in (payload.get("categories") or {}).values():
+                for item in category_items or []:
+                    sym = str(item.get("symbol") or "").upper()
+                    if sym and sym not in symbols:
+                        symbols.append(sym)
+        return symbols
+    except Exception:
+        return []
+
+
 async def run_gpt_factor_reviews(
     session: Optional[str] = None,
     as_of: Optional[date] = None,
@@ -649,6 +676,47 @@ async def run_gpt_factor_reviews(
     picks = await _build_factor_picks(as_of)
     if not picks:
         raise RuntimeError("No factor picks available for GPT review")
+
+    # Ensure GPT-recommended symbols are also covered by the review, even if
+    # they didn't surface as top factor picks.
+    rec_symbols = await _load_gpt_recommendation_symbols()
+    if rec_symbols:
+        covered = {p["symbol"] for p in picks}
+        missing = [s for s in rec_symbols if s not in covered]
+        if missing:
+            extra_rows = await _load_factor_rows(as_of)
+            extra_defs = get_factor_definitions()
+            extra_stats = build_factor_stats(
+                [(r.symbol, r.factor, _coerce_float(r.value)) for r in extra_rows if _coerce_float(r.value) is not None],
+                extra_defs,
+            )
+            sym_vals: Dict[str, Dict[str, float]] = {}
+            for row in extra_rows:
+                if row.symbol not in missing or row.symbol == "__macro__":
+                    continue
+                v = _coerce_float(row.value)
+                if v is not None:
+                    sym_vals.setdefault(row.symbol, {})[row.factor] = v
+            extra_prices = await _fetch_last_prices(missing)
+            for sym in missing:
+                vals = sym_vals.get(sym, {})
+                summary = score_symbol_values(vals, extra_defs, extra_stats) if vals else {}
+                score = summary.get("score", 0.0)
+                coverage = summary.get("coverage", 0)
+                action = action_from_signal(score, threshold=ACTION_THRESHOLD)
+                if action == "neutral":
+                    action = "buy" if score >= 0 else "sell"
+                raw_cat = MarketUniverse.get_symbol_info(sym).get("category")
+                drivers = _build_driver_details(vals, summary.get("contributions", []), extra_defs, extra_stats) if vals else []
+                picks.append({
+                    "symbol": sym,
+                    "category": _normalize_category(raw_cat),
+                    "factor_score": score,
+                    "factor_action": action,
+                    "coverage": coverage,
+                    "drivers": drivers,
+                    "last_price": extra_prices.get(sym),
+                })
 
     rows = await _load_factor_rows(as_of)
     definitions = get_factor_definitions()
@@ -667,7 +735,7 @@ async def run_gpt_factor_reviews(
     providers: List[Dict[str, Any]] = []
     async with engine.begin() as conn:
         await _ensure_gpt_factor_review_table(conn)
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
             for provider in ("openai", "deepseek", "gemini"):
                 api_key = {
                     "openai": settings.openai_api_key,
@@ -699,7 +767,7 @@ async def run_gpt_factor_reviews(
                         "reviews": aligned,
                     }
                 except Exception as exc:
-                    error = str(exc)
+                    error = str(exc) or type(exc).__name__
 
                 await _store_factor_review(conn, provider, session, now, as_of, payload, raw_text, error)
                 providers.append(

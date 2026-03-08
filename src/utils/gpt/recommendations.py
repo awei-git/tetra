@@ -31,6 +31,12 @@ PRICE_BOUNDS: Dict[str, Tuple[float, float]] = {
     "etf": (0.8, 1.2),
     "crypto": (0.4, 2.5),
 }
+ENTRY_BOUNDS: Dict[str, Tuple[float, float]] = {
+    "large_cap": (0.97, 1.03),
+    "growth": (0.97, 1.03),
+    "etf": (0.97, 1.03),
+    "crypto": (0.95, 1.05),
+}
 
 SYSTEM_PROMPT = (
     "You are a markets strategist. Provide concise trade ideas with clear targets. "
@@ -52,18 +58,24 @@ def _determine_session(now: datetime) -> str:
     return "post" if local >= close_time else "pre"
 
 
-def _build_prompt(session: str, price_snapshot: Dict[str, Dict[str, float]]) -> str:
+def _build_prompt(session: str, as_of: str, price_snapshot: Dict[str, Dict[str, Any]]) -> str:
     price_json = json.dumps(price_snapshot, separators=(",", ":"), sort_keys=True)
     return (
-        "Return JSON with keys: as_of (YYYY-MM-DD), session (pre or post), categories. "
+        f"Today is {as_of}. Session: {session}. "
+        "Return JSON with keys: as_of (YYYY-MM-DD today's date), session (pre or post), categories. "
         "Categories must include large_cap, growth, etf, crypto. "
         "Use only symbols from the price snapshot below. Use USD prices; no commas. "
-        "Each category is a list of 3 ideas. Each idea must include: symbol, action (buy or sell), "
-        "entry, target, stop, horizon, thesis, confidence (0 to 1). Use price ranges if unsure. "
-        "Entry/target/stop must be within +/-20% of last_close for stocks/ETFs and +/-40% for crypto. "
-        "No markdown or extra text. Session: "
-        + session
-        + ". Price snapshot: "
+        "Each category is a list of 3 ideas ranked by conviction. "
+        "Each idea must include: symbol, action (buy or sell), "
+        "entry, target, stop, horizon, thesis, confidence (0 to 1). "
+        "IMPORTANT - use factor_score and factor_action from the snapshot to guide your picks: "
+        "prefer symbols where factor_action aligns with your recommended action. "
+        "IMPORTANT - set realistic targets using atr14 (average true range): "
+        "for a 1-month horizon, target = entry + 2*atr14 for buys, entry - 2*atr14 for sells. "
+        "Stop = entry - 1.5*atr14 for buys, entry + 1.5*atr14 for sells. "
+        "If atr14 is null, use +/-5% for ETFs, +/-8% for stocks, +/-15% for crypto. "
+        "Entry must be within +/-3% of last_close. "
+        "No markdown or extra text. Price snapshot: "
         + price_json
     )
 
@@ -167,35 +179,59 @@ def _entry_within_bounds(entry: Any, last_price: float, bounds: Tuple[float, flo
     return (low / last_price) >= bounds[0] and (high / last_price) <= bounds[1]
 
 
-def _normalize_item_prices(item: Dict[str, Any], last_price: float, category: str) -> Dict[str, Any]:
+def _normalize_item_prices(
+    item: Dict[str, Any],
+    last_price: float,
+    category: str,
+    atr14: Optional[float] = None,
+) -> Dict[str, Any]:
     bounds = PRICE_BOUNDS.get(category, (0.6, 1.4))
+    entry_bounds = ENTRY_BOUNDS.get(category, (0.97, 1.03))
     action = str(item.get("action") or "").lower()
-    entry_ok = _entry_within_bounds(item.get("entry"), last_price, bounds)
+    entry_ok = _entry_within_bounds(item.get("entry"), last_price, entry_bounds)
     target_ok = _entry_within_bounds(item.get("target"), last_price, bounds)
     stop_ok = _entry_within_bounds(item.get("stop"), last_price, bounds)
+
+    # ATR-based fallback multipliers (2x ATR target, 1.5x ATR stop)
+    if atr14 and atr14 > 0:
+        atr_pct = atr14 / last_price
+        target_mult = min(1.0 + 2.0 * atr_pct, bounds[1])
+        stop_mult = max(1.0 - 1.5 * atr_pct, bounds[0])
+        target_mult_sell = max(1.0 - 2.0 * atr_pct, bounds[0])
+        stop_mult_sell = min(1.0 + 1.5 * atr_pct, bounds[1])
+    else:
+        # Conservative defaults without ATR
+        fallbacks = {"etf": (1.05, 0.96), "large_cap": (1.08, 0.94), "growth": (1.1, 0.92), "crypto": (1.15, 0.88)}
+        t, s = fallbacks.get(category, (1.08, 0.94))
+        target_mult, stop_mult = t, s
+        target_mult_sell, stop_mult_sell = 2.0 - t, 2.0 - s
 
     if not entry_ok:
         item["entry"] = _format_range(last_price * 0.99, last_price * 1.01)
     if not target_ok:
         if action == "buy":
-            item["target"] = _format_price(last_price * 1.1)
+            item["target"] = _format_price(last_price * target_mult)
         elif action == "sell":
-            item["target"] = _format_price(last_price * 0.9)
+            item["target"] = _format_price(last_price * target_mult_sell)
         else:
-            item["target"] = _format_price(last_price * 1.03)
+            item["target"] = _format_price(last_price * target_mult)
     if not stop_ok:
         if action == "buy":
-            item["stop"] = _format_price(last_price * 0.95)
+            item["stop"] = _format_price(last_price * stop_mult)
         elif action == "sell":
-            item["stop"] = _format_price(last_price * 1.05)
+            item["stop"] = _format_price(last_price * stop_mult_sell)
         else:
-            item["stop"] = _format_price(last_price * 0.97)
+            item["stop"] = _format_price(last_price * stop_mult)
 
     item["last_price"] = float(_format_price(last_price))
     return item
 
 
-def _apply_price_guards(payload: Dict[str, Any], price_snapshot: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+def _apply_price_guards(
+    payload: Dict[str, Any],
+    price_snapshot: Dict[str, Dict[str, Any]],
+    atr_by_symbol: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
     categories = payload.get("categories") or {}
     updated: Dict[str, List[Dict[str, Any]]] = {}
     for category, items in categories.items():
@@ -203,10 +239,15 @@ def _apply_price_guards(payload: Dict[str, Any], price_snapshot: Dict[str, Dict[
         normalized_items: List[Dict[str, Any]] = []
         for item in items or []:
             symbol = item.get("symbol")
-            last_price = allowed.get(symbol)
-            if not symbol or last_price is None:
+            sym_data = allowed.get(symbol)
+            if not symbol or sym_data is None:
                 continue
-            normalized_items.append(_normalize_item_prices(item, last_price, category))
+            # sym_data is now a dict with last_close, atr14, etc.
+            last_price = sym_data.get("last_close") if isinstance(sym_data, dict) else float(sym_data)
+            if last_price is None:
+                continue
+            atr14 = (atr_by_symbol or {}).get(symbol) or (sym_data.get("atr14") if isinstance(sym_data, dict) else None)
+            normalized_items.append(_normalize_item_prices(item, last_price, category, atr14=atr14))
         updated[category] = normalized_items
     payload["categories"] = updated
     return payload
@@ -364,25 +405,94 @@ def _fetch_yfinance_last_prices(symbols: Sequence[str]) -> Dict[str, float]:
     return prices
 
 
-async def _build_price_snapshot() -> Dict[str, Dict[str, float]]:
+async def _fetch_atr_and_factors(symbols: Sequence[str]) -> Dict[str, Dict[str, Any]]:
+    """Fetch ATR(14) and latest factor score for each symbol."""
+    if not symbols:
+        return {}
+    # ATR query: average true range over last 14 trading days
+    atr_query = text(
+        """
+        WITH ranked AS (
+          SELECT symbol, high, low, close,
+            LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp) AS prev_close,
+            ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS rn
+          FROM market.ohlcv
+          WHERE symbol IN :symbols
+        ),
+        tr AS (
+          SELECT symbol,
+            GREATEST(
+              high - low,
+              ABS(high - prev_close),
+              ABS(low  - prev_close)
+            ) AS true_range
+          FROM ranked
+          WHERE rn <= 14 AND prev_close IS NOT NULL
+        )
+        SELECT symbol, AVG(true_range) AS atr14
+        FROM tr
+        GROUP BY symbol
+        """
+    ).bindparams(bindparam("symbols", expanding=True))
+    # Factor score query: latest composite score
+    factor_query = text(
+        """
+        SELECT DISTINCT ON (symbol)
+          symbol, factor_score, action
+        FROM factors.daily_factors
+        WHERE symbol IN :symbols
+        ORDER BY symbol, as_of DESC
+        """
+    ).bindparams(bindparam("symbols", expanding=True))
+    result: Dict[str, Dict[str, Any]] = {}
+    async with engine.begin() as conn:
+        try:
+            atr_rows = (await conn.execute(atr_query, {"symbols": list(symbols)})).fetchall()
+            for row in atr_rows:
+                result.setdefault(row.symbol, {})["atr14"] = float(row.atr14) if row.atr14 else None
+        except Exception:
+            pass
+        try:
+            factor_rows = (await conn.execute(factor_query, {"symbols": list(symbols)})).fetchall()
+            for row in factor_rows:
+                result.setdefault(row.symbol, {})["factor_score"] = float(row.factor_score) if row.factor_score is not None else None
+                result.setdefault(row.symbol, {})["factor_action"] = row.action
+        except Exception:
+            pass
+    return result
+
+
+async def _build_price_snapshot() -> Tuple[Dict[str, Dict[str, Any]], Dict[str, float]]:
+    """Return (enriched snapshot per category, atr_by_symbol)."""
     symbols: List[str] = []
     for value in CATEGORY_SYMBOLS.values():
         symbols.extend(value)
     unique_symbols = sorted(set(symbols))
     latest_prices = await _fetch_latest_prices(unique_symbols)
-    snapshot: Dict[str, Dict[str, float]] = {}
-    for category, symbols in CATEGORY_SYMBOLS.items():
-        category_prices: Dict[str, float] = {}
-        for symbol in symbols:
+    extra = await _fetch_atr_and_factors(unique_symbols)
+    snapshot: Dict[str, Dict[str, Any]] = {}
+    atr_by_symbol: Dict[str, float] = {}
+    for category, syms in CATEGORY_SYMBOLS.items():
+        category_data: Dict[str, Any] = {}
+        for symbol in syms:
             price = latest_prices.get(symbol)
-            if price is not None:
-                category_prices[symbol] = price
-        if category == "crypto":
-            yf_prices = _fetch_yfinance_last_prices(symbols)
-            if yf_prices:
-                category_prices.update(yf_prices)
-        snapshot[category] = category_prices
-    return snapshot
+            if price is None and category == "crypto":
+                yf = _fetch_yfinance_last_prices([symbol])
+                price = yf.get(symbol)
+            if price is None:
+                continue
+            sym_extra = extra.get(symbol, {})
+            atr14 = sym_extra.get("atr14")
+            if atr14:
+                atr_by_symbol[symbol] = atr14
+            category_data[symbol] = {
+                "last_close": round(price, 4),
+                "atr14": round(atr14, 4) if atr14 else None,
+                "factor_score": round(sym_extra.get("factor_score") or 0, 3),
+                "factor_action": sym_extra.get("factor_action") or "neutral",
+            }
+        snapshot[category] = category_data
+    return snapshot, atr_by_symbol
 
 
 async def _ensure_gpt_table(conn) -> None:
@@ -444,8 +554,9 @@ async def _store_recommendation(
 async def run_gpt_recommendations(session: Optional[str] = None) -> Dict[str, Any]:
     now = datetime.now(tz=UTC)
     session = session or _determine_session(now)
-    price_snapshot = await _build_price_snapshot()
-    prompt = _build_prompt(session, price_snapshot)
+    as_of = now.astimezone(EASTERN).date().isoformat()
+    price_snapshot, atr_by_symbol = await _build_price_snapshot()
+    prompt = _build_prompt(session, as_of, price_snapshot)
 
     providers: List[Dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=10.0)) as client:
@@ -487,7 +598,7 @@ async def run_gpt_recommendations(session: Optional[str] = None) -> Dict[str, An
                     if not parsed:
                         raise ValueError("invalid json response")
                     payload = _normalize_payload(parsed, session)
-                    payload = _apply_price_guards(payload, price_snapshot)
+                    payload = _apply_price_guards(payload, price_snapshot, atr_by_symbol)
                 except Exception as exc:
                     error = str(exc)
 

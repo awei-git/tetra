@@ -252,6 +252,60 @@ class FinnhubClient:
         data = resp.json()
         return data.get("economicCalendar", []) or []
 
+    async def get_insider_transactions(self, symbol: str) -> List[Dict[str, Any]]:
+        """Fetch insider transactions (Form 4) for a symbol."""
+        url = f"{self.base_url}/stock/insider-transactions"
+        params = {"symbol": symbol.upper(), "token": self.api_key}
+        resp = await self._client.get(url, params=params)
+        if resp.status_code == 429:
+            await asyncio.sleep(0.5)
+            resp = await self._client.get(url, params=params)
+            if resp.status_code == 429:
+                return []
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("data", []) or []
+
+    async def get_recommendation(self, symbol: str) -> List[Dict[str, Any]]:
+        """Fetch analyst recommendation trends for a symbol."""
+        url = f"{self.base_url}/stock/recommendation"
+        params = {"symbol": symbol.upper(), "token": self.api_key}
+        resp = await self._client.get(url, params=params)
+        if resp.status_code == 429:
+            await asyncio.sleep(0.5)
+            resp = await self._client.get(url, params=params)
+            if resp.status_code == 429:
+                return []
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
+
+    async def get_peers(self, symbol: str) -> List[str]:
+        """Fetch company peers (for building co-coverage networks)."""
+        url = f"{self.base_url}/stock/peers"
+        params = {"symbol": symbol.upper(), "token": self.api_key}
+        resp = await self._client.get(url, params=params)
+        if resp.status_code in (404, 429):
+            return []
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
+
+    async def get_supply_chain(self, symbol: str) -> Dict[str, Any]:
+        """Fetch supply chain relationships (customers/suppliers)."""
+        url = f"{self.base_url}/stock/supply-chain"
+        params = {"symbol": symbol.upper(), "token": self.api_key}
+        resp = await self._client.get(url, params=params)
+        if resp.status_code in (404, 429):
+            return {}
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
+
 
 class AlphaVantageClient:
     """Client for Alpha Vantage earnings endpoints."""
@@ -373,6 +427,36 @@ class NewsAPIClient:
             results.extend(articles)
             await asyncio.sleep(0.2)
         return results
+
+
+class PolymarketGammaClient:
+    """Client for Polymarket Gamma markets."""
+
+    def __init__(self) -> None:
+        self.base_url = settings.polymarket_gamma_base_url.rstrip("/")
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    async def get_markets(self, active: bool = True, closed: bool = False, limit: int = 200, offset: int = 0) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {
+            "limit": limit,
+            "offset": offset,
+        }
+        if active:
+            params["active"] = "true"
+        if not closed:
+            params["closed"] = "false"
+        resp = await self._client.get(f"{self.base_url}/markets", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        return data.get("markets", []) or data.get("data", []) or []
 
 
 class SECClient:

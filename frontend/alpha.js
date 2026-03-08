@@ -127,10 +127,23 @@ function renderSymbolList(rows) {
     action.className = actionClass(item.action);
     action.textContent = (item.action || "neutral").toUpperCase();
 
+    // Add mini signal bar for quick visualization
+    const score = item.score ?? 0;
+    const absScore = Math.abs(score);
+    const scoreWidth = Math.min(absScore * 50, 100);
+    const scoreType = score > 0.2 ? 'buy' : score < -0.2 ? 'sell' : 'neutral';
+
     row.innerHTML = `
       <span class="alpha-symbol">${item.symbol}</span>
       <span class="alpha-category">${formatCategory(item.category)}</span>
-      <span class="alpha-score">${formatScore(item.score)}</span>
+      <span class="alpha-score">
+        <div class="factor-signal-bar">
+          <div class="signal-bar" style="height: 4px;">
+            <div class="signal-bar-fill ${scoreType}" style="width: ${scoreWidth}%;"></div>
+          </div>
+          <span class="signal-value" style="min-width: 40px;">${formatScore(item.score)}</span>
+        </div>
+      </span>
       <span class="alpha-action-slot"></span>
       <span class="alpha-coverage">${item.coverage ?? "—"}</span>
     `;
@@ -190,10 +203,25 @@ function renderFactorTable() {
     action.className = actionClass(factor.action);
     action.textContent = (factor.action || "neutral").toUpperCase();
 
+    // Create visual signal bar
+    const signal = factor.signal ?? 0;
+    const absSignal = Math.abs(signal);
+    const signalWidth = Math.min(absSignal * 100, 100);
+    const signalType = signal > 0.2 ? 'buy' : signal < -0.2 ? 'sell' : 'neutral';
+
+    const signalBarHtml = `
+      <div class="factor-signal-bar">
+        <div class="signal-bar">
+          <div class="signal-bar-fill ${signalType}" style="width: ${signalWidth}%;"></div>
+        </div>
+        <span class="signal-value">${formatSignal(factor.signal)}</span>
+      </div>
+    `;
+
     row.innerHTML = `
       <span class="alpha-factor">${factor.factor}</span>
       <span class="alpha-value">${formatValue(factor.value)}</span>
-      <span class="alpha-signal">${formatSignal(factor.signal)}</span>
+      <span class="alpha-signal-container">${signalBarHtml}</span>
       <span class="alpha-action-slot"></span>
       <span class="alpha-description">${factor.description || "—"}</span>
     `;

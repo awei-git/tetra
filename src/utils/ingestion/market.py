@@ -40,6 +40,20 @@ def last_market_close_date(now: Optional[datetime] = None) -> date:
     return local_date
 
 
+def _normalize_close_timestamp(ts: datetime, symbol: str) -> datetime:
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    local_date = ts.astimezone(NY_TZ).date()
+    if MarketUniverse.is_crypto(symbol):
+        local_ts = datetime.combine(local_date, datetime.min.time(), tzinfo=NY_TZ)
+    else:
+        local_ts = datetime.combine(local_date, datetime.min.time(), tzinfo=NY_TZ).replace(
+            hour=CLOSE_HOUR,
+            minute=CLOSE_MINUTE,
+        )
+    return local_ts.astimezone(UTC)
+
+
 async def ingest_market_data(
     start: date,
     end: date,
@@ -171,6 +185,13 @@ async def ingest_market_data(
                     ts = datetime.fromtimestamp(item["t"] / 1000, tz=UTC)
                 else:
                     ts = item["timestamp"]
+                if isinstance(ts, datetime):
+                    ts = _normalize_close_timestamp(ts, symbol)
+                else:
+                    ts = _normalize_close_timestamp(
+                        datetime.combine(ts, datetime.min.time(), tzinfo=UTC),
+                        symbol,
+                    )
                 rows.append(
                     {
                         "symbol": symbol,

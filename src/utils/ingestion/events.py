@@ -19,6 +19,45 @@ from src.utils.ingestion.types import IngestionSummary
 UTC = timezone.utc
 
 
+async def _get_alphavantage_earnings(
+    client: AlphaVantageClient,
+    symbol: str,
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+) -> List[Dict]:
+    delay = base_delay
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await client.get_earnings(symbol)
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in {429, 500, 502, 503, 504} and attempt < max_attempts:
+                print(
+                    f"Retrying AlphaVantage earnings for {symbol} after status {status} "
+                    f"(attempt {attempt}/{max_attempts})"
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 8.0)
+                continue
+            print(f"Skipping AlphaVantage earnings for {symbol}: {status}")
+            return []
+        except httpx.HTTPError as exc:
+            if attempt < max_attempts:
+                print(
+                    f"AlphaVantage earnings error for {symbol} "
+                    f"(attempt {attempt}/{max_attempts}): {exc}"
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 8.0)
+                continue
+            print(f"Skipping AlphaVantage earnings for {symbol}: {exc}")
+            return []
+        except Exception as exc:
+            print(f"Skipping AlphaVantage earnings for {symbol}: {exc}")
+            return []
+    return []
+
+
 async def ingest_event_data(
     start: date,
     end: date,
@@ -293,10 +332,8 @@ async def ingest_event_data(
         alpha_symbols = symbols[:20]
         rows = []
         for symbol in alpha_symbols:
-            try:
-                earnings = await alphavantage_client.get_earnings(symbol)
-            except httpx.HTTPStatusError as exc:
-                print(f"Skipping AlphaVantage earnings for {symbol}: {exc.response.status_code}")
+            earnings = await _get_alphavantage_earnings(alphavantage_client, symbol)
+            if not earnings:
                 await asyncio.sleep(1.0)
                 continue
             for entry in earnings:

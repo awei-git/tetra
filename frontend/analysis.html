@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetra Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260222-1" />
+</head>
+<body class="analysis-page">
+  <div class="backdrop">
+    <div class="glow"></div>
+    <div class="grid"></div>
+  </div>
+
+  <main>
+    <nav class="tabs">
+      <a class="tab active" href="/analysis">ANALYSIS</a>
+      <a class="tab" href="/strats">STRESS</a>
+      <a class="tab" href="/">DATA</a>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tetra / Analysis Hub</p>
+        <h1>Analysis Control Room</h1>
+        <p class="subtitle">Factor signals, GPT critique, and inference metrics aligned in one workspace.</p>
+      </div>
+      <div class="status">
+        <div class="status-pill">Live</div>
+        <p class="status-meta">Use the subtabs to drill into each layer.</p>
+      </div>
+    </header>
+
+    <div class="analysis-tabs" role="tablist" aria-label="Analysis sections">
+      <button class="analysis-tab active" type="button" role="tab" aria-selected="true" aria-controls="analysis-gpt" data-target="gpt">
+        GPT Critiques
+      </button>
+      <button class="analysis-tab" type="button" role="tab" aria-selected="false" aria-controls="analysis-factor" data-target="factor">
+        Factor Signals
+      </button>
+      <button class="analysis-tab" type="button" role="tab" aria-selected="false" aria-controls="analysis-inference" data-target="inference">
+        Inference
+      </button>
+    </div>
+
+    <section id="analysis-factor" class="analysis-section" data-section="factor" role="tabpanel">
+      <section class="insight-grid">
+        <div class="insight-card">
+          <h4>Status</h4>
+          <div class="status-pill" id="alpha-status">Idle</div>
+          <div class="insight-meta">Factor engine</div>
+        </div>
+        <div class="insight-card">
+          <h4>As Of</h4>
+          <div class="insight-kpi" id="alpha-asof">—</div>
+          <div class="insight-meta">Signal timestamp (ET)</div>
+        </div>
+        <div class="insight-card">
+          <h4>Last Run</h4>
+          <div class="insight-kpi" id="alpha-last-run">—</div>
+          <div class="insight-meta">Daily factor sweep</div>
+        </div>
+        <div class="insight-card">
+          <h4>Symbols Loaded</h4>
+          <div class="insight-kpi" id="alpha-symbols">—</div>
+          <div class="insight-meta">Factor universe size</div>
+        </div>
+      </section>
+
+      <section class="alpha-grid">
+        <div class="panel alpha-panel alpha-pool-panel">
+          <div class="alpha-header">
+            <div>
+              <h3>Symbol Pool</h3>
+              <p>Full factor universe with sortable signals.</p>
+            </div>
+            <div class="alpha-header-actions">
+              <button id="alpha-sort">Sort: BUY -> SELL</button>
+            </div>
+          </div>
+          <p class="status-meta" id="alpha-pool-meta">Loading full symbol list...</p>
+          <div class="alpha-table alpha-symbol-table">
+            <div class="alpha-row alpha-head alpha-symbol-head">
+              <span>Symbol</span>
+              <span>Category</span>
+              <span>Signal</span>
+              <span>Action</span>
+              <span>Coverage</span>
+            </div>
+            <div id="alpha-symbol-list"></div>
+          </div>
+        </div>
+
+        <div class="panel alpha-panel alpha-detail-panel">
+          <div class="alpha-header">
+            <div>
+              <h3>Factor Details</h3>
+              <p id="alpha-detail-meta">Select a symbol to view factor signals.</p>
+            </div>
+            <div class="alpha-scorecard">
+              <span class="alpha-score-symbol" id="alpha-active-symbol">—</span>
+              <span class="alpha-score-value" id="alpha-symbol-score">—</span>
+              <span class="gpt-action neutral" id="alpha-symbol-action">Neutral</span>
+              <span class="alpha-score-coverage" id="alpha-symbol-coverage">— factors</span>
+            </div>
+          </div>
+          <div class="alpha-table alpha-factor-table">
+            <div class="alpha-row alpha-head alpha-factor-head">
+              <span>Factor</span>
+              <span>Value</span>
+              <span>Signal</span>
+              <span>Action</span>
+              <span>Description</span>
+            </div>
+            <div id="alpha-factor-rows"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="analysis-gpt" class="analysis-section active" data-section="gpt" role="tabpanel">
+
+      <!-- Compact status bar -->
+      <div class="rec-statusbar">
+        <div class="rec-statusbar-left">
+          <span class="rec-meta-label">Last run</span>
+          <span id="gpt-last-run">—</span>
+          <span class="rec-meta-sep">·</span>
+          <span class="rec-meta-label">Session</span>
+          <span id="gpt-session">—</span>
+        </div>
+        <div class="rec-statusbar-right">
+          <div class="status-pill" id="gpt-status">Idle</div>
+          <button class="btn" id="gpt-refresh">
+            <span class="btn-label">Refresh</span>
+          </button>
+        </div>
+      </div>
+      <p class="status-meta gpt-error" id="gpt-error"></p>
+      <p class="status-meta gpt-error" id="gpt-final-error"></p>
+
+      <!-- Main recommendation list -->
+      <div class="panel rec-panel">
+        <div class="rec-list-head rec-row-grid">
+          <span>Symbol</span>
+          <span>Action</span>
+          <span>Confidence</span>
+          <span>Entry</span>
+          <span>Target</span>
+          <span>Stop</span>
+          <span>Return</span>
+          <span>Horizon</span>
+          <span></span>
+        </div>
+        <div id="rec-rows"></div>
+      </div>
+
+      <!-- Challenge section — collapsible -->
+      <details class="challenge-details" id="challenge-details">
+        <summary class="challenge-summary">
+          <span>Challenge Review</span>
+          <span class="status-pill" id="gpt-challenge-status">Idle</span>
+          <span class="challenge-meta">Last run: <span id="gpt-challenge-last-run">—</span></span>
+          <button class="btn btn-sm" id="gpt-challenge-refresh" style="margin-left:auto">
+            <span class="btn-label">Refresh Challenge</span>
+          </button>
+        </summary>
+        <p class="status-meta gpt-error" id="gpt-challenge-error"></p>
+        <div class="panel" style="margin-top:12px">
+          <div class="gpt-challenge-table">
+            <div class="gpt-challenge-row gpt-challenge-head">
+              <span>Provider</span>
+              <span>Category</span>
+              <span>Symbol</span>
+              <span>Last</span>
+              <span>Change</span>
+              <span>Replacement</span>
+              <span>Action</span>
+              <span>Entry</span>
+              <span>Target</span>
+              <span>Stop</span>
+              <span>Notes</span>
+            </div>
+            <div id="gpt-challenge-rows"></div>
+          </div>
+        </div>
+      </details>
+
+    </section>
+
+    <section id="analysis-inference" class="analysis-section" data-section="inference" role="tabpanel">
+      <section class="insight-grid">
+        <div class="insight-card">
+          <h4>Status</h4>
+          <div class="status-pill" id="inference-status">Idle</div>
+          <div class="insight-meta">Inference pipeline</div>
+        </div>
+        <div class="insight-card">
+          <h4>Last Run</h4>
+          <div class="insight-kpi" id="inference-last-run">—</div>
+          <div class="insight-meta">Inference pipeline</div>
+        </div>
+        <div class="insight-card">
+          <h4>As Of</h4>
+          <div class="insight-kpi" id="inference-asof">—</div>
+          <div class="insight-meta">Latest analysis date</div>
+        </div>
+        <div class="insight-card">
+          <h4>Modules</h4>
+          <div class="insight-kpi">3 Views</div>
+          <div class="insight-meta">Signals, Events, Polymarket</div>
+        </div>
+      </section>
+
+      <section class="flow-grid">
+        <div class="panel inference-panel">
+          <div class="inference-header">
+            <div>
+              <h3>1) Signal Quality Leaderboard</h3>
+              <p>Cross-sectional Spearman IC of factor signals vs forward returns.</p>
+            </div>
+          </div>
+          <p class="status-meta">As of: <span id="inference-signal-asof">—</span></p>
+          <div class="inference-table inference-signal-table">
+            <div class="inference-row inference-head">
+              <span>Factor</span>
+              <span>Horizon</span>
+              <span>Avg IC</span>
+              <span>Median IC</span>
+              <span>Hit Rate</span>
+              <span>Days</span>
+              <span>Obs</span>
+            </div>
+            <div id="inference-signal-rows"></div>
+          </div>
+        </div>
+
+        <div class="panel inference-panel">
+          <div class="inference-header">
+            <div>
+              <h3>2) Event Impact Study</h3>
+              <p>Average returns around earnings/filings/dividends, grouped by event type.</p>
+            </div>
+          </div>
+          <p class="status-meta">As of: <span id="inference-event-asof">—</span></p>
+          <div class="inference-table inference-event-table">
+            <div class="inference-row inference-head">
+              <span>Event Type</span>
+              <span>Window (days)</span>
+              <span>Avg Return</span>
+              <span>Median Return</span>
+              <span>Obs</span>
+            </div>
+            <div id="inference-event-rows"></div>
+          </div>
+        </div>
+        <div class="panel inference-panel">
+          <div class="inference-header">
+            <div>
+              <h3>3) Polymarket Calibration (Proxy)</h3>
+              <p>Uses closed markets with a dominant outcome price (≥ 0.9) as proxy resolution.</p>
+            </div>
+          </div>
+          <div class="inference-summary">
+            <div>
+              <span class="inference-label">Markets</span>
+              <strong id="inference-poly-markets">—</strong>
+            </div>
+            <div>
+              <span class="inference-label">Closed</span>
+              <strong id="inference-poly-closed">—</strong>
+            </div>
+            <div>
+              <span class="inference-label">Proxy Resolved</span>
+              <strong id="inference-poly-resolved">—</strong>
+            </div>
+            <div>
+              <span class="inference-label">Avg Spread</span>
+              <strong id="inference-poly-spread">—</strong>
+            </div>
+            <div>
+              <span class="inference-label">Avg Volume</span>
+              <strong id="inference-poly-volume">—</strong>
+            </div>
+            <div>
+              <span class="inference-label">Avg Brier</span>
+              <strong id="inference-poly-brier">—</strong>
+            </div>
+          </div>
+          <p class="status-meta">As of: <span id="inference-poly-asof">—</span></p>
+          <div class="inference-table inference-poly-table">
+            <div class="inference-row inference-head">
+              <span>Bin</span>
+              <span>Count</span>
+              <span>Avg Pred</span>
+              <span>Proxy Accuracy</span>
+              <span>Avg Brier</span>
+            </div>
+            <div id="inference-poly-rows"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <!-- Transcript Modal -->
+  <div id="transcript-modal" class="modal" style="display: none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="transcript-modal-title">GPT Transcript</h3>
+        <button class="modal-close" id="transcript-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="transcript-meta">
+          <span><strong>Provider:</strong> <span id="transcript-provider">—</span></span>
+          <span><strong>Session:</strong> <span id="transcript-session">—</span></span>
+          <span><strong>Run Time:</strong> <span id="transcript-runtime">—</span></span>
+        </div>
+        <div class="transcript-tabs">
+          <button class="transcript-tab active" data-tab="text">Transcript</button>
+          <button class="transcript-tab" data-tab="json">JSON</button>
+        </div>
+        <div id="transcript-text-content" class="transcript-content active">
+          <pre id="transcript-text"></pre>
+        </div>
+        <div id="transcript-json-content" class="transcript-content">
+          <pre id="transcript-json"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/analysis.js?v=20260129-1"></script>
+  <script src="/static/alpha.js?v=20260129-1"></script>
+  <script src="/static/analysis-gpt.js?v=20260222-3"></script>
+  <script src="/static/inference.js?v=20260111-1"></script>
+</body>
+</html>

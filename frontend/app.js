@@ -49,7 +49,17 @@ function formatDate(value) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return date.toISOString().replace("T", " ").replace("Z", " UTC");
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  });
+  return formatter.format(date).replace(",", "");
 }
 
 function formatShortDate(value) {
@@ -60,7 +70,18 @@ function formatShortDate(value) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return date.toISOString().slice(0, 10);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const lookup = {};
+  parts.forEach((part) => {
+    lookup[part.type] = part.value;
+  });
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
 function formatNumber(value) {

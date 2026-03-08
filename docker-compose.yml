@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: tetra
       POSTGRES_USER: tetra_user
-      POSTGRES_PASSWORD: tetra_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     ports:
       - "5432:5432"
     volumes:

@@ -349,7 +349,15 @@ async def _store_challenge(
 async def run_gpt_challenge(session: Optional[str] = None) -> Dict[str, Any]:
     now = datetime.now(tz=UTC)
     session = session or _determine_session(now)
-    price_snapshot = await _build_price_snapshot()
+    enriched_snapshot, _atr = await _build_price_snapshot()
+    # challenge.py needs a flat {category: {symbol: price}} dict
+    price_snapshot: Dict[str, Dict[str, float]] = {}
+    for category, sym_data in enriched_snapshot.items():
+        price_snapshot[category] = {
+            sym: (v.get("last_close") if isinstance(v, dict) else float(v))
+            for sym, v in sym_data.items()
+            if (v.get("last_close") if isinstance(v, dict) else v) is not None
+        }
 
     providers: List[Dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
@@ -396,7 +404,7 @@ async def run_gpt_challenge(session: Optional[str] = None) -> Dict[str, Any]:
                 payload = None
                 error = None
                 provider_snapshot = await _extend_price_snapshot(
-                    {key: dict(value) for key, value in price_snapshot.items()},
+                    {key: dict(value) for key, value in price_snapshot.items()},  # type: ignore[arg-type]
                     source_payload,
                     session,
                 )

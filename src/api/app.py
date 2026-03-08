@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -38,6 +38,7 @@ from src.utils.gpt.factor_review import (
     run_gpt_factor_reviews,
 )
 from src.utils.gpt.recommendations import normalize_recommendations, run_gpt_recommendations
+from src.utils.gpt.summary import generate_summary
 from src.utils.simulations.paths import (
     STRESS_WINDOWS,
     compute_log_returns,
@@ -123,32 +124,31 @@ def _isoformat(value: Any) -> Optional[str]:
     return str(value)
 
 
-def _format_est_timestamp(value: Any) -> str:
-    if value is None:
-        return "—"
-    if isinstance(value, datetime):
-        dt_value = value
-    elif isinstance(value, date):
-        dt_value = datetime.combine(value, datetime.min.time(), tzinfo=UTC)
-    else:
-        text_value = str(value)
-        if text_value.endswith("Z"):
-            text_value = text_value[:-1] + "+00:00"
-        try:
-            dt_value = datetime.fromisoformat(text_value)
-        except ValueError:
-            return str(value)
-    if dt_value.tzinfo is None:
-        dt_value = dt_value.replace(tzinfo=UTC)
-    est_value = dt_value.astimezone(EASTERN)
-    tz_name = est_value.tzname() or "EST"
-    return f"{est_value:%Y-%m-%d %H:%M} {tz_name}"
-
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
     if not value:
         return None
     return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def _parse_horizon_days(value: Optional[str]) -> int:
+    if not value:
+        return 20
+    text_value = str(value).lower()
+    matches = re.findall(r"\d+\.?\d*", text_value)
+    if not matches:
+        return 20
+    numbers = [float(match) for match in matches]
+    avg = sum(numbers) / len(numbers)
+    if "year" in text_value:
+        return max(1, int(round(avg * 252)))
+    if "month" in text_value:
+        return max(1, int(round(avg * 21)))
+    if "week" in text_value:
+        return max(1, int(round(avg * 5)))
+    if "day" in text_value:
+        return max(1, int(round(avg)))
+    return max(1, int(round(avg)))
 
 
 async def _fetch_close_series(
@@ -186,6 +186,138 @@ async def _fetch_close_series(
     if order_desc:
         rows = list(reversed(rows))
     return [(row.timestamp, float(row.close)) for row in rows]
+
+
+async def _estimate_base_profit_prob(
+    symbol: str,
+    action: str,
+    horizon_days: int,
+) -> Tuple[Optional[float], int]:
+    horizon_days = max(1, min(horizon_days, 252))
+    limit = min(1200, max(240, horizon_days * 8))
+    series = await _fetch_close_series(symbol, limit=limit)
+    prices = [price for _, price in series]
+    if len(prices) <= horizon_days:
+        return None, 0
+    wins = 0
+    total = 0
+    for idx in range(len(prices) - horizon_days):
+        entry = prices[idx]
+        exit_price = prices[idx + horizon_days]
+        if entry <= 0:
+            continue
+        ret = (exit_price - entry) / entry
+        if action == "sell":
+            ret = -ret
+        if ret > 0:
+            wins += 1
+        total += 1
+    if total == 0:
+        return None, 0
+    return wins / total, total
+
+
+async def _build_return_series(symbol: str, lookback_days: int) -> Dict[date, float]:
+    lookback_days = max(30, min(lookback_days, 252))
+    limit = min(1400, lookback_days + 120)
+    series = await _fetch_close_series(symbol, limit=limit)
+    close_by_day: Dict[date, float] = {}
+    for timestamp, close in series:
+        close_by_day[timestamp.date()] = close
+    dates = sorted(close_by_day.keys())
+    returns: Dict[date, float] = {}
+    for idx in range(1, len(dates)):
+        prev_close = close_by_day[dates[idx - 1]]
+        cur_close = close_by_day[dates[idx]]
+        if prev_close <= 0:
+            continue
+        returns[dates[idx]] = (cur_close - prev_close) / prev_close
+    if len(returns) > lookback_days:
+        trimmed_dates = sorted(returns.keys())[-lookback_days:]
+        returns = {d: returns[d] for d in trimmed_dates}
+    return returns
+
+
+def _compute_correlation(
+    left: Dict[date, float],
+    right: Dict[date, float],
+    min_obs: int,
+) -> Optional[float]:
+    common = sorted(set(left.keys()) & set(right.keys()))
+    if len(common) < min_obs:
+        return None
+    left_vals = [left[d] for d in common]
+    right_vals = [right[d] for d in common]
+    mean_left = sum(left_vals) / len(left_vals)
+    mean_right = sum(right_vals) / len(right_vals)
+    cov = sum((x - mean_left) * (y - mean_right) for x, y in zip(left_vals, right_vals))
+    var_left = sum((x - mean_left) ** 2 for x in left_vals)
+    var_right = sum((y - mean_right) ** 2 for y in right_vals)
+    if var_left <= 0 or var_right <= 0:
+        return None
+    return cov / (var_left ** 0.5 * var_right ** 0.5)
+
+
+async def _apply_diversification(
+    candidates: List[Dict[str, Any]],
+    lookback_days: int,
+    corr_threshold: float,
+    min_obs: int,
+    max_count: Optional[int] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    symbols = [row.get("symbol") for row in candidates if row.get("symbol")]
+    unique_symbols = sorted({str(sym) for sym in symbols if sym})
+    returns_map: Dict[str, Dict[date, float]] = {}
+    for symbol in unique_symbols:
+        try:
+            returns_map[symbol] = await _build_return_series(symbol, lookback_days)
+        except Exception:
+            returns_map[symbol] = {}
+
+    selected: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+    for row in candidates:
+        symbol = str(row.get("symbol") or "")
+        max_corr = None
+        blocked_by = None
+        for chosen in selected:
+            chosen_symbol = str(chosen.get("symbol") or "")
+            corr = _compute_correlation(
+                returns_map.get(symbol, {}),
+                returns_map.get(chosen_symbol, {}),
+                min_obs,
+            )
+            if corr is None:
+                continue
+            corr_abs = abs(corr)
+            if max_corr is None or corr_abs > max_corr:
+                max_corr = corr_abs
+            if corr_abs >= corr_threshold:
+                blocked_by = chosen_symbol
+                max_corr = corr_abs
+                break
+        if blocked_by:
+            skipped.append(
+                {
+                    "symbol": symbol,
+                    "category": row.get("category"),
+                    "final_action": row.get("final_action"),
+                    "blocked_by": blocked_by,
+                    "max_corr": max_corr,
+                }
+            )
+            continue
+        selected.append(row)
+        if max_count and len(selected) >= max_count:
+            break
+    meta = {
+        "lookback_days": lookback_days,
+        "corr_threshold": corr_threshold,
+        "min_obs": min_obs,
+        "selected": len(selected),
+        "skipped": len(skipped),
+    }
+    return selected, skipped, meta
 
 
 def _percentile(sorted_values: List[float], pct: float) -> float:
@@ -371,51 +503,6 @@ def _majority(values: List[str], fallback: str) -> Tuple[str, int]:
         return fallback, top_count
     return top_value, top_count
 
-
-def _render_gpt_rows(providers: List[Dict[str, Any]]) -> str:
-    rows: List[str] = []
-    for provider in providers:
-        provider_name = html.escape(str(provider.get("provider") or "—"))
-        error = provider.get("error")
-        if error:
-            rows.append(
-                "<div class=\"gpt-row\">"
-                f"<span>{provider_name}</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                f"<span>Error: {html.escape(str(error))}</span>"
-                "</div>"
-            )
-            continue
-
-        categories = provider.get("recommendations") or {}
-        for category, items in categories.items():
-            for item in items or []:
-                action = item.get("action")
-                rows.append(
-                    "<div class=\"gpt-row\">"
-                    f"<span>{provider_name}</span>"
-                    f"<span>{html.escape(_format_category(category))}</span>"
-                    f"<span>{html.escape(str(item.get('symbol') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('last_price') or '—'))}</span>"
-                    f"<span class=\"{_action_class(action)}\">{html.escape(_format_action(action))}</span>"
-                    f"<span>{html.escape(str(item.get('entry') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('target') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('stop') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('horizon') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('thesis') or ''))}</span>"
-                    "</div>"
-                )
-
-    if not rows:
-        return "<div class=\"gpt-row\"><span>No GPT rows yet.</span></div>"
-    return "\n".join(rows)
 
 
 def _build_gpt_consensus(providers: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
@@ -628,148 +715,7 @@ def _build_gpt_consensus(providers: List[Dict[str, Any]]) -> Dict[str, List[Dict
     return rows_by_category
 
 
-def _render_gpt_consensus_rows(rows_by_category: Dict[str, List[Dict[str, Any]]]) -> str:
-    rendered: List[str] = []
-    for category in ("large_cap", "growth", "etf", "crypto"):
-        rows = rows_by_category.get(category, [])
-        rendered.append(
-            "<div class=\"gpt-consensus-group\">"
-            f"<span>{html.escape(_format_category(category))}</span>"
-            "</div>"
-        )
-        for row in rows:
-            providers = ", ".join(row.get("providers") or [])
-            thesis = html.escape(str(row.get("thesis") or "No reasoning provided."))
-            rendered.append(
-                f"<div class=\"gpt-consensus-row\" title=\"{thesis}\">"
-                f"<span>{html.escape(str(row.get('rank') or '—'))}</span>"
-                f"<span>{html.escape(_format_category(row.get('category')))}</span>"
-                f"<span>{html.escape(str(row.get('symbol') or '—'))}</span>"
-                f"<span>{html.escape(_format_price_value(row.get('last_price')))}</span>"
-                f"<span class=\"{_action_class(row.get('action'))}\">{html.escape(_format_action(row.get('action')))}</span>"
-                f"<span>{html.escape(_format_price_value(row.get('entry')))}</span>"
-                f"<span>{html.escape(_format_price_value(row.get('target')))}</span>"
-                f"<span>{html.escape(_format_price_value(row.get('stop')))}</span>"
-                f"<span>{html.escape(_format_percent(row.get('expected_return')))}</span>"
-                f"<span>{html.escape(_format_ratio(row.get('reward_risk')))}</span>"
-                f"<span>{html.escape(_format_confidence(row.get('confidence')))}</span>"
-                f"<span>{html.escape(providers)}</span>"
-                "</div>"
-            )
-    if not rendered:
-        return "<div class=\"gpt-consensus-row\"><span>No consensus rows yet.</span></div>"
-    return "\n".join(rendered)
 
-
-def _render_gpt_challenge_rows(providers: List[Dict[str, Any]]) -> str:
-    rows: List[str] = []
-    for provider in providers:
-        provider_name = html.escape(str(provider.get("provider") or "—"))
-        error = provider.get("error")
-        if error:
-            rows.append(
-                "<div class=\"gpt-challenge-row\">"
-                f"<span>{provider_name}</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                "<span>—</span>"
-                f"<span>Error: {html.escape(str(error))}</span>"
-                "</div>"
-            )
-            continue
-
-        categories = provider.get("recommendations") or {}
-        for category, items in categories.items():
-            for item in items or []:
-                action = item.get("action")
-                change = item.get("change")
-                rows.append(
-                    "<div class=\"gpt-challenge-row\">"
-                    f"<span>{provider_name}</span>"
-                    f"<span>{html.escape(_format_category(category))}</span>"
-                    f"<span>{html.escape(str(item.get('symbol') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('last_price') or '—'))}</span>"
-                    f"<span class=\"{_change_class(change)}\">{html.escape(str(change or 'adjust').upper())}</span>"
-                    f"<span>{html.escape(str(item.get('replaces') or '—'))}</span>"
-                    f"<span class=\"{_action_class(action)}\">{html.escape(_format_action(action))}</span>"
-                    f"<span>{html.escape(str(item.get('entry') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('target') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('stop') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('horizon') or '—'))}</span>"
-                    f"<span>{html.escape(str(item.get('notes') or item.get('thesis') or ''))}</span>"
-                    "</div>"
-                )
-
-    if not rows:
-        return "<div class=\"gpt-challenge-row\"><span>No GPT challenges yet.</span></div>"
-    return "\n".join(rows)
-
-
-def _render_gpt_factor_review_rows(consensus: List[Dict[str, Any]]) -> str:
-    rows: List[str] = []
-    for row in consensus:
-        providers = ", ".join(row.get("providers") or [])
-        notes = html.escape(str(row.get("notes") or ""))
-        drivers = row.get("drivers") or []
-        driver_bits = []
-        for driver in drivers:
-            factor = driver.get("factor")
-            signal = driver.get("signal")
-            if factor and signal is not None:
-                driver_bits.append(f"{factor}:{_format_ratio(signal)}")
-            elif factor:
-                driver_bits.append(str(factor))
-        driver_text = html.escape(" | ".join(driver_bits))
-        rows.append(
-            "<div class=\"gpt-factor-row\""
-            + (f" title=\"{driver_text}\"" if driver_text else "")
-            + ">"
-            f"<span>{html.escape(_format_category(row.get('category')))}</span>"
-            f"<span>{html.escape(str(row.get('symbol') or '—'))}</span>"
-            f"<span class=\"{_action_class(row.get('factor_action'))}\">{html.escape(_format_action(row.get('factor_action')))}</span>"
-            f"<span>{html.escape(_format_ratio(row.get('factor_score')))}</span>"
-            f"<span>{html.escape(_format_price_value(row.get('last_price')))}</span>"
-            f"<span class=\"{_verdict_class(row.get('verdict'))}\">{html.escape(str(row.get('verdict') or 'watch').upper())}</span>"
-            f"<span class=\"{_action_class(row.get('action'))}\">{html.escape(_format_action(row.get('action')))}</span>"
-            f"<span>{html.escape(_format_confidence(row.get('confidence')))}</span>"
-            f"<span>{html.escape(providers)}</span>"
-            f"<span>{html.escape(str(row.get('replacement') or '—'))}</span>"
-            f"<span>{notes or '—'}</span>"
-            "</div>"
-        )
-    if not rows:
-        return "<div class=\"gpt-factor-row\"><span>No factor reviews yet.</span></div>"
-    return "\n".join(rows)
-
-
-def _render_gpt_final_rows(rows: List[Dict[str, Any]]) -> str:
-    rendered: List[str] = []
-    for row in rows:
-        providers = ", ".join(row.get("providers") or [])
-        notes = html.escape(str(row.get("notes") or ""))
-        rendered.append(
-            "<div class=\"gpt-final-row\">"
-            f"<span>{html.escape(_format_category(row.get('category')))}</span>"
-            f"<span>{html.escape(str(row.get('symbol') or '—'))}</span>"
-            f"<span class=\"{_action_class(row.get('final_action'))}\">{html.escape(_format_action(row.get('final_action')))}</span>"
-            f"<span>{html.escape(_format_confidence(row.get('confidence')))}</span>"
-            f"<span>{html.escape(_format_ratio(row.get('score')))}</span>"
-            f"<span>{html.escape(str(row.get('review_verdict') or '—').upper())}</span>"
-            f"<span>{html.escape(str(row.get('challenge_change') or '—').upper())}</span>"
-            f"<span>{html.escape(providers)}</span>"
-            f"<span>{html.escape(str(row.get('replacement') or '—'))}</span>"
-            f"<span>{notes or '—'}</span>"
-            "</div>"
-        )
-    if not rendered:
-        return "<div class=\"gpt-final-row\"><span>No consolidated verdicts yet.</span></div>"
-    return "\n".join(rendered)
 
 
 def _summarize_challenges(providers: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -917,6 +863,10 @@ async def _run_factor_refresh(as_of: Optional[date]) -> None:
 async def index() -> FileResponse:
     return FileResponse(frontend_dir / "index.html", headers={"Cache-Control": "no-store"})
 
+@app.get("/analysis")
+async def analysis() -> FileResponse:
+    return FileResponse(frontend_dir / "analysis.html", headers={"Cache-Control": "no-store"})
+
 
 @app.get("/strats")
 async def strats() -> FileResponse:
@@ -924,50 +874,18 @@ async def strats() -> FileResponse:
 
 
 @app.get("/alpha")
-async def alpha() -> FileResponse:
-    return FileResponse(frontend_dir / "alpha.html", headers={"Cache-Control": "no-store"})
+async def alpha() -> RedirectResponse:
+    return RedirectResponse(url="/analysis#factor")
 
 
 @app.get("/gpt")
-async def gpt() -> HTMLResponse:
-    html_template = (frontend_dir / "gpt.html").read_text(encoding="utf-8")
-    try:
-        consensus = await _load_gpt_consensus(session=None)
-        rows = _render_gpt_consensus_rows(consensus.get("by_category", {}))
-    except Exception:
-        rows = "<div class=\"gpt-consensus-row\"><span>Unable to load GPT data.</span></div>"
-        consensus = {}
-    try:
-        challenge_data = await _load_gpt_challenges(session=None)
-        challenge_rows = _render_gpt_challenge_rows(challenge_data.get("providers", []))
-    except Exception:
-        challenge_rows = "<div class=\"gpt-challenge-row\"><span>Unable to load GPT challenges.</span></div>"
-    try:
-        factor_data = await _load_gpt_factor_reviews(session=None)
-        factor_rows = _render_gpt_factor_review_rows(factor_data.get("consensus", []))
-    except Exception:
-        factor_rows = "<div class=\"gpt-factor-row\"><span>Unable to load factor reviews.</span></div>"
-        factor_data = {}
-    try:
-        summary_data = await get_gpt_summary()
-        final_rows = _render_gpt_final_rows(summary_data.get("final", []))
-    except Exception:
-        final_rows = "<div class=\"gpt-final-row\"><span>Unable to load consolidated verdicts.</span></div>"
-    last_run = _format_est_timestamp(consensus.get("run_time"))
-    session = consensus.get("session") or consensus.get("last_session") or "—"
-    factor_last_run = _format_est_timestamp(factor_data.get("run_time"))
-    factor_session = factor_data.get("session") or factor_data.get("last_session") or "—"
-    html_content = (
-        html_template.replace("{{GPT_CONSENSUS_ROWS}}", rows)
-        .replace("{{GPT_CHALLENGE_ROWS}}", challenge_rows)
-        .replace("{{GPT_FACTOR_ROWS}}", factor_rows)
-        .replace("{{GPT_FINAL_ROWS}}", final_rows)
-        .replace("{{GPT_LAST_RUN}}", html.escape(str(last_run)))
-        .replace("{{GPT_SESSION}}", html.escape(str(session)))
-        .replace("{{GPT_FACTOR_LAST_RUN}}", html.escape(str(factor_last_run)))
-        .replace("{{GPT_FACTOR_SESSION}}", html.escape(str(factor_session)))
-    )
-    return HTMLResponse(html_content, headers={"Cache-Control": "no-store"})
+async def gpt() -> RedirectResponse:
+    return RedirectResponse(url="/analysis#gpt")
+
+
+@app.get("/inference")
+async def inference() -> RedirectResponse:
+    return RedirectResponse(url="/analysis#inference")
 
 
 @app.get("/api/status")
@@ -1117,6 +1035,68 @@ async def _load_gpt_recommendations(session: Optional[str]) -> Dict[str, Any]:
     }
 
 
+async def _load_gpt_recommendations_history(
+    session: Optional[str],
+    provider: Optional[str],
+    start: Optional[datetime],
+    end: Optional[datetime],
+    limit: int,
+) -> Dict[str, Any]:
+    clauses: List[str] = []
+    params: Dict[str, Any] = {"limit": limit}
+    if session:
+        clauses.append("session = :session")
+        params["session"] = session
+    if provider:
+        clauses.append("provider = :provider")
+        params["provider"] = provider
+    if start:
+        clauses.append("run_time >= :start")
+        params["start"] = start
+    if end:
+        clauses.append("run_time <= :end")
+        params["end"] = end
+
+    where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    query = text(
+        f"""
+        SELECT provider, session, run_time, payload, raw_text, error
+        FROM gpt.recommendations
+        {where_clause}
+        ORDER BY run_time DESC, provider
+        LIMIT :limit
+        """
+    )
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(query, params)
+            rows = result.fetchall()
+    except Exception:
+        return {"session": session, "provider": provider, "runs": []}
+
+    runs: List[Dict[str, Any]] = []
+    for row in rows:
+        payload = row.payload
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                payload = None
+        normalized = normalize_recommendations(payload, row.session or session or "pre")
+        runs.append(
+            {
+                "provider": row.provider,
+                "session": row.session,
+                "run_time": _isoformat(row.run_time),
+                "recommendations": normalized.get("categories", {}),
+                "payload": payload,
+                "raw_text": row.raw_text,
+                "error": _redact_error(row.error),
+            }
+        )
+    return {"session": session, "provider": provider, "runs": runs}
+
+
 async def _load_gpt_consensus(session: Optional[str]) -> Dict[str, Any]:
     data = await _load_gpt_recommendations(session=session)
     by_category = _build_gpt_consensus(data.get("providers", []))
@@ -1126,6 +1106,7 @@ async def _load_gpt_consensus(session: Optional[str]) -> Dict[str, Any]:
         "run_time": data.get("run_time"),
         "consensus": consensus,
         "by_category": by_category,
+        "providers": data.get("providers", []),
         "status": data.get("status"),
         "last_error": data.get("last_error"),
         "last_session": data.get("last_session"),
@@ -1313,8 +1294,25 @@ async def get_gpt_recommendations(session: Optional[str] = None) -> Dict[str, An
     return await _load_gpt_recommendations(session=session)
 
 
+@app.get("/api/gpt/recommendations/history")
+async def get_gpt_recommendation_history(
+    session: Optional[str] = None,
+    provider: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    return await _load_gpt_recommendations_history(session, provider, start, end, limit)
+
+
 @app.get("/api/gpt/consensus")
 async def get_gpt_consensus(session: Optional[str] = None) -> Dict[str, Any]:
+    return await _load_gpt_consensus(session=session)
+
+
+@app.get("/api/analysis/consensus")
+async def get_analysis_consensus(session: Optional[str] = None) -> Dict[str, Any]:
     return await _load_gpt_consensus(session=session)
 
 
@@ -1334,9 +1332,100 @@ async def refresh_gpt_recommendations(request: GPTRefreshRequest) -> Dict[str, A
     return {"status": "running"}
 
 
+@app.post("/api/analysis/recommendations/refresh")
+async def refresh_analysis_recommendations(request: GPTRefreshRequest) -> Dict[str, Any]:
+    return await refresh_gpt_recommendations(request)
+
+
 @app.get("/api/gpt/challenges")
 async def get_gpt_challenges(session: Optional[str] = None) -> Dict[str, Any]:
     return await _load_gpt_challenges(session=session)
+
+
+@app.get("/api/analysis/challenges")
+async def get_analysis_challenges(session: Optional[str] = None) -> Dict[str, Any]:
+    return await _load_gpt_challenges(session=session)
+
+
+@app.get("/api/analysis/recommendations/history")
+async def get_analysis_recommendation_history(
+    session: Optional[str] = None,
+    provider: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    return await _load_gpt_recommendations_history(session, provider, start, end, limit)
+
+
+@app.get("/api/analysis/recommendations/transcript")
+async def get_recommendation_transcript(
+    provider: str,
+    session: Optional[str] = None,
+    run_time: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Get the full transcript (raw_text) for a specific GPT recommendation."""
+    if session:
+        query = text(
+            """
+            SELECT provider, session, run_time, payload, raw_text, error
+            FROM gpt.recommendations
+            WHERE provider = :provider AND session = :session
+            ORDER BY run_time DESC
+            LIMIT 1
+            """
+        )
+        params = {"provider": provider, "session": session}
+    elif run_time:
+        query = text(
+            """
+            SELECT provider, session, run_time, payload, raw_text, error
+            FROM gpt.recommendations
+            WHERE provider = :provider AND run_time = :run_time
+            LIMIT 1
+            """
+        )
+        params = {"provider": provider, "run_time": run_time}
+    else:
+        query = text(
+            """
+            SELECT provider, session, run_time, payload, raw_text, error
+            FROM gpt.recommendations
+            WHERE provider = :provider
+            ORDER BY run_time DESC
+            LIMIT 1
+            """
+        )
+        params = {"provider": provider}
+
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(query, params)
+            row = result.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail=f"No transcript found for provider {provider}")
+
+        payload = row.payload
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                payload = None
+
+        return {
+            "provider": row.provider,
+            "session": row.session,
+            "run_time": _isoformat(row.run_time),
+            "raw_text": row.raw_text,
+            "payload": payload,
+            "error": _redact_error(row.error),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching transcript: {str(e)}")
 
 
 @app.post("/api/gpt/challenges/refresh")
@@ -1355,8 +1444,18 @@ async def refresh_gpt_challenges(request: GPTRefreshRequest) -> Dict[str, Any]:
     return {"status": "running"}
 
 
+@app.post("/api/analysis/challenges/refresh")
+async def refresh_analysis_challenges(request: GPTRefreshRequest) -> Dict[str, Any]:
+    return await refresh_gpt_challenges(request)
+
+
 @app.get("/api/gpt/factor-reviews")
 async def get_gpt_factor_reviews(session: Optional[str] = None) -> Dict[str, Any]:
+    return await _load_gpt_factor_reviews(session=session)
+
+
+@app.get("/api/analysis/factor-reviews")
+async def get_analysis_factor_reviews(session: Optional[str] = None) -> Dict[str, Any]:
     return await _load_gpt_factor_reviews(session=session)
 
 
@@ -1373,6 +1472,11 @@ async def refresh_gpt_factor_reviews(request: GPTFactorReviewRequest) -> Dict[st
         }
     asyncio.create_task(_run_gpt_factor_review(session, as_of))
     return {"status": "running"}
+
+
+@app.post("/api/analysis/factor-reviews/refresh")
+async def refresh_analysis_factor_reviews(request: GPTFactorReviewRequest) -> Dict[str, Any]:
+    return await refresh_gpt_factor_reviews(request)
 
 
 @app.get("/api/gpt/summary")
@@ -1409,27 +1513,221 @@ async def get_gpt_summary(
     }
     scored = await _score_all_symbols(target_date, min_factors=min_factors)
 
+    flow_counts = {
+        "gpt_total": len(gpt_rows),
+        "gpt_actionable": 0,
+        "with_signal": 0,
+        "signal_aligned": 0,
+        "signal_neutral": 0,
+        "signal_conflict": 0,
+        "review_reject": 0,
+        "review_conflict": 0,
+        "challenge_exit": 0,
+        "final": 0,
+    }
+
     consolidated: List[Dict[str, Any]] = []
+    debate: List[Dict[str, Any]] = []
+    excluded: List[Dict[str, Any]] = []
+    confidence_components = {
+        "formula": "profit_prob = clamp(base_prob + signal_delta + review_delta + challenge_delta)",
+        "signal_weight": 0.1,
+        "review_delta": {"approve": 0.05, "watch": 0.0, "reject": -0.1},
+        "challenge_delta": {"adjust": -0.03, "replace": -0.05, "exit": -0.1},
+        "default_base_prob": 0.5,
+        "min_profit_prob": 0.5,
+        "corr_threshold": 0.9,
+        "corr_lookback_days": 90,
+        "corr_min_obs": 30,
+    }
     for symbol, gpt_row in gpt_by_symbol.items():
         gpt_action = str(gpt_row.get("action") or "neutral").lower()
         if gpt_action not in {"buy", "sell"}:
             continue
+        flow_counts["gpt_actionable"] += 1
         signal = scored.get(symbol)
-        if not signal:
-            continue
-        score_value = signal.get("score")
-        signal_action = str(action_from_signal(score_value, threshold=signal_threshold)).lower()
-        if gpt_action != signal_action:
-            continue
+        score_value = signal.get("score") if signal else None
+        coverage = signal.get("coverage") if signal else None
+        signal_action = None
+        if signal:
+            signal_action = str(action_from_signal(score_value, threshold=signal_threshold)).lower()
+            flow_counts["with_signal"] += 1
+            if signal_action == gpt_action:
+                flow_counts["signal_aligned"] += 1
+            elif signal_action == "neutral":
+                flow_counts["signal_neutral"] += 1
+            else:
+                flow_counts["signal_conflict"] += 1
         review = review_by_symbol.get(symbol)
-        if review and str(review.get("verdict") or "").lower() == "reject":
-            continue
+        if review is None and signal and score_value is not None:
+            # Derive a synthetic review from the factor score when the factor_review
+            # pipeline did not cover this symbol (pipelines run independently).
+            abs_score = abs(score_value)
+            if abs_score >= signal_threshold and signal_action == gpt_action:
+                review = {
+                    "verdict": "approve",
+                    "action": gpt_action,
+                    "confidence": min(0.5 + abs_score, 0.95),
+                    "notes": f"Factor score {score_value:.3f} aligned with GPT {gpt_action} (synthetic)",
+                }
+            elif abs_score >= signal_threshold and signal_action not in {"neutral", gpt_action}:
+                review = {
+                    "verdict": "reject",
+                    "action": signal_action,
+                    "confidence": min(0.5 + abs_score, 0.95),
+                    "notes": f"Factor score {score_value:.3f} conflicts with GPT {gpt_action} (synthetic)",
+                }
+            else:
+                review = {
+                    "verdict": "watch",
+                    "action": "neutral",
+                    "confidence": 0.5,
+                    "notes": f"Factor score {score_value:.3f} too weak to confirm direction (synthetic)",
+                }
         review_action = str(review.get("action") or "").lower() if review else ""
-        if review_action in {"buy", "sell"} and review_action != gpt_action:
-            continue
         challenge = challenge_summary.get(symbol)
         challenge_change = str(challenge.get("change") or "") if challenge else ""
+
+        reason: List[str] = []
+        reason_codes: List[str] = []
+        warnings: List[str] = []
+        if not signal:
+            reason.append("No factor signal")
+            reason_codes.append("no_factor_signal")
+        elif signal_action == "neutral":
+            reason.append("Signal neutral")
+            warnings.append("signal_neutral")
+        elif gpt_action != signal_action:
+            reason.append(f"Signal says {signal_action.upper()}")
+            reason_codes.append("signal_conflict")
+        if review and str(review.get("verdict") or "").lower() == "reject":
+            reason.append("Review: reject")
+            reason_codes.append("review_reject")
+        if review_action in {"buy", "sell"} and review_action != gpt_action:
+            reason.append(f"Review action: {review_action.upper()}")
+            reason_codes.append("review_action_conflict")
+        if challenge_change in {"adjust", "replace", "exit"}:
+            reason.append(f"Challenge: {challenge_change.upper()}")
+            if challenge_change == "exit":
+                reason_codes.append("challenge_exit")
+            else:
+                warnings.append(f"challenge_{challenge_change}")
+
+        if review:
+            verdict = str(review.get("verdict") or "").lower()
+            if verdict in {"approve", "watch"}:
+                warnings.append(f"review_{verdict}")
+
+        if reason:
+            debate.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "gpt_confidence": gpt_row.get("confidence"),
+                    "providers": gpt_row.get("providers"),
+                    "signal_action": signal_action if signal_action else "missing",
+                    "score": score_value,
+                    "coverage": coverage,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "review_confidence": review.get("confidence") if review else None,
+                    "challenge_change": challenge_change or "keep",
+                    "replacement": challenge.get("replacement") if challenge else None,
+                    "notes": review.get("notes") if review else None,
+                    "reason": ", ".join(reason),
+                    "reason_codes": reason_codes,
+                    "warnings": warnings,
+                }
+            )
+
+        if not signal:
+            excluded.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": None,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "challenge_change": challenge_change or None,
+                    "providers": gpt_row.get("providers"),
+                    "reason": "No factor signal",
+                    "reason_codes": reason_codes or ["no_factor_signal"],
+                    "warnings": warnings,
+                }
+            )
+            continue
+        if gpt_action != signal_action and signal_action != "neutral":
+            excluded.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "challenge_change": challenge_change or None,
+                    "providers": gpt_row.get("providers"),
+                    "reason": "Signal conflict",
+                    "reason_codes": reason_codes or ["signal_conflict"],
+                    "warnings": warnings,
+                }
+            )
+            continue
+        if review and str(review.get("verdict") or "").lower() == "reject":
+            flow_counts["review_reject"] += 1
+            excluded.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "challenge_change": challenge_change or None,
+                    "providers": gpt_row.get("providers"),
+                    "reason": "Review rejected",
+                    "reason_codes": reason_codes or ["review_reject"],
+                    "warnings": warnings,
+                }
+            )
+            continue
+        if review_action in {"buy", "sell"} and review_action != gpt_action:
+            flow_counts["review_conflict"] += 1
+            excluded.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "challenge_change": challenge_change or None,
+                    "providers": gpt_row.get("providers"),
+                    "reason": "Review action conflict",
+                    "reason_codes": reason_codes or ["review_action_conflict"],
+                    "warnings": warnings,
+                }
+            )
+            continue
         if challenge_change == "exit":
+            flow_counts["challenge_exit"] += 1
+            excluded.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "challenge_change": challenge_change or None,
+                    "providers": gpt_row.get("providers"),
+                    "reason": "Challenge exit",
+                    "reason_codes": reason_codes or ["challenge_exit"],
+                    "warnings": warnings,
+                }
+            )
             continue
 
         confidence = gpt_row.get("confidence")
@@ -1449,14 +1747,65 @@ async def get_gpt_summary(
             confidence *= 0.9
         confidence = max(0.0, min(1.0, confidence))
 
+        horizon_days = _parse_horizon_days(gpt_row.get("horizon"))
+        base_prob, base_samples = await _estimate_base_profit_prob(symbol, gpt_action, horizon_days)
+        base_prob = base_prob if base_prob is not None else confidence_components["default_base_prob"]
+        signal_delta = 0.0
+        if signal_action == gpt_action:
+            signal_delta = confidence_components["signal_weight"] * factor_strength
+        review_delta_map = confidence_components["review_delta"]
+        review_delta = 0.0
+        if review:
+            verdict = str(review.get("verdict") or "").lower()
+            review_delta = review_delta_map.get(verdict, 0.0)
+        challenge_delta_map = confidence_components["challenge_delta"]
+        challenge_delta = 0.0
+        if challenge_change:
+            challenge_delta = challenge_delta_map.get(challenge_change, 0.0)
+        profit_prob = max(0.0, min(1.0, base_prob + signal_delta + review_delta + challenge_delta))
+        if profit_prob < confidence_components["min_profit_prob"]:
+            excluded.append(
+                {
+                    "symbol": symbol,
+                    "category": gpt_row.get("category"),
+                    "gpt_action": gpt_action,
+                    "signal_action": signal_action,
+                    "review_verdict": review.get("verdict") if review else None,
+                    "review_action": review.get("action") if review else None,
+                    "challenge_change": challenge_change or None,
+                    "providers": gpt_row.get("providers"),
+                    "reason": "Profit probability below threshold",
+                    "reason_codes": ["profit_prob_below_threshold"],
+                    "warnings": warnings,
+                }
+            )
+            continue
+
+        reason_bits = [
+            f"GPT {gpt_action.upper()}",
+            f"Signal {(signal_action or 'missing').upper()}",
+        ]
+        if review and review.get("verdict"):
+            reason_bits.append(f"Review {str(review.get('verdict')).upper()}")
+        if review_action in {"buy", "sell"}:
+            reason_bits.append(f"Review action {review_action.upper()}")
+        if challenge_change:
+            reason_bits.append(f"Challenge {challenge_change.upper()}")
+
         consolidated.append(
             {
                 "symbol": symbol,
                 "category": gpt_row.get("category"),
                 "final_action": review_action if review_action in {"buy", "sell"} else gpt_action,
-                "confidence": confidence,
+                "confidence": profit_prob,
+                "profit_prob": profit_prob,
+                "base_prob": base_prob,
+                "base_samples": base_samples,
+                "signal_delta": signal_delta,
+                "review_delta": review_delta,
+                "challenge_delta": challenge_delta,
                 "score": score_value,
-                "coverage": signal.get("coverage"),
+                "coverage": coverage,
                 "gpt_action": gpt_action,
                 "signal_action": signal_action,
                 "review_verdict": review.get("verdict") if review else None,
@@ -1466,18 +1815,78 @@ async def get_gpt_summary(
                 "replacement": challenge.get("replacement") if challenge else None,
                 "providers": gpt_row.get("providers"),
                 "notes": review.get("notes") if review else None,
+                "entry": gpt_row.get("entry"),
+                "target": gpt_row.get("target"),
+                "stop": gpt_row.get("stop"),
+                "last_price": gpt_row.get("last_price"),
+                "horizon": gpt_row.get("horizon"),
+                "horizon_days": horizon_days,
+                "thesis": gpt_row.get("thesis"),
+                "reason": "; ".join(reason_bits),
+                "reason_codes": reason_codes,
+                "warnings": warnings,
             }
         )
 
     consolidated.sort(key=lambda item: item.get("confidence") or 0, reverse=True)
+    debate.sort(key=lambda item: item.get("gpt_confidence") or 0, reverse=True)
+    excluded.sort(key=lambda item: item.get("symbol") or "")
+    diversified, corr_skipped, corr_meta = await _apply_diversification(
+        consolidated,
+        lookback_days=confidence_components["corr_lookback_days"],
+        corr_threshold=confidence_components["corr_threshold"],
+        min_obs=confidence_components["corr_min_obs"],
+        max_count=None,
+    )
+    flow_counts["final"] = len(diversified)
+    summary_payload = None
+    summary_provider = None
+    summary_error = None
+    if gpt_data.get("run_time"):
+        try:
+            run_time = datetime.fromisoformat(str(gpt_data.get("run_time")).replace("Z", "+00:00"))
+        except ValueError:
+            run_time = datetime.now(tz=UTC)
+        summary_result = await generate_summary(diversified, gpt_data.get("session"), target_date, run_time)
+        summary_payload = summary_result.get("payload")
+        summary_provider = summary_result.get("provider")
+        summary_error = summary_result.get("error")
+
     return {
         "as_of": target_date.isoformat(),
         "session": gpt_data.get("session"),
         "run_time": gpt_data.get("run_time"),
-        "final": consolidated,
+        "final": diversified,
+        "undiversified": consolidated,
+        "excluded": excluded,
+        "corr_skipped": corr_skipped,
+        "diversification": corr_meta,
+        "debate": debate,
         "min_factors": min_factors,
         "signal_threshold": signal_threshold,
+        "flow": flow_counts,
+        "factor_run_time": factor_data.get("run_time"),
+        "factor_session": factor_data.get("session"),
+        "challenge_run_time": challenge_data.get("run_time"),
+        "confidence_components": confidence_components,
+        "summary": summary_payload.get("summary") if isinstance(summary_payload, dict) else None,
+        "summary_payload": summary_payload,
+        "summary_provider": summary_provider,
+        "summary_error": _redact_error(summary_error) if summary_error else None,
     }
+
+
+@app.get("/api/analysis/summary")
+async def get_analysis_summary(
+    as_of: Optional[str] = None,
+    min_factors: int = 6,
+    signal_threshold: float = 0.2,
+) -> Dict[str, Any]:
+    return await get_gpt_summary(
+        as_of=as_of,
+        min_factors=min_factors,
+        signal_threshold=signal_threshold,
+    )
 
 
 @app.get("/api/events/summary")
@@ -1893,6 +2302,146 @@ async def get_factors_summary(as_of: Optional[str] = None) -> Dict[str, Any]:
         "status": factor_state.get("status"),
         "last_run": factor_state.get("last_run"),
         "last_error": factor_state.get("last_error"),
+    }
+
+
+@app.get("/api/inference/signal-leaderboard")
+async def get_inference_signal_leaderboard(as_of: Optional[str] = None, limit: int = 200) -> Dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM inference.signal_leaderboard"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "rows": []}
+        result = await conn.execute(
+            text(
+                """
+                SELECT factor, horizon_days, avg_ic, median_ic, hit_rate, days, observations
+                FROM inference.signal_leaderboard
+                WHERE as_of = :as_of
+                ORDER BY ABS(avg_ic) DESC NULLS LAST, factor
+                LIMIT :limit
+                """
+            ),
+            {"as_of": target_date, "limit": limit},
+        )
+        rows = result.fetchall()
+
+    payload = [
+        {
+            "factor": row.factor,
+            "horizon_days": row.horizon_days,
+            "avg_ic": row.avg_ic,
+            "median_ic": row.median_ic,
+            "hit_rate": row.hit_rate,
+            "days": row.days,
+            "observations": row.observations,
+        }
+        for row in rows
+    ]
+    return {"as_of": _isoformat(target_date), "rows": payload, "run_time": _isoformat(datetime.now(tz=UTC))}
+
+
+@app.get("/api/inference/event-study")
+async def get_inference_event_study(as_of: Optional[str] = None, limit: int = 200) -> Dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM inference.event_study"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "rows": []}
+        result = await conn.execute(
+            text(
+                """
+                SELECT event_type, window_days, avg_return, median_return, observations
+                FROM inference.event_study
+                WHERE as_of = :as_of
+                ORDER BY ABS(avg_return) DESC NULLS LAST, event_type
+                LIMIT :limit
+                """
+            ),
+            {"as_of": target_date, "limit": limit},
+        )
+        rows = result.fetchall()
+
+    payload = [
+        {
+            "event_type": row.event_type,
+            "window_days": row.window_days,
+            "avg_return": row.avg_return,
+            "median_return": row.median_return,
+            "observations": row.observations,
+        }
+        for row in rows
+    ]
+    return {"as_of": _isoformat(target_date), "rows": payload, "run_time": _isoformat(datetime.now(tz=UTC))}
+
+
+@app.get("/api/inference/polymarket")
+async def get_inference_polymarket(as_of: Optional[str] = None) -> Dict[str, Any]:
+    target_date = _parse_date(as_of)
+    async with engine.begin() as conn:
+        if target_date is None:
+            result = await conn.execute(text("SELECT MAX(as_of) FROM inference.polymarket_summary"))
+            target_date = result.scalar_one_or_none()
+        if target_date is None:
+            return {"as_of": None, "summary": {}, "bins": []}
+        summary_result = await conn.execute(
+            text(
+                """
+                SELECT markets, closed_markets, resolved_proxy, avg_spread, avg_volume, avg_brier
+                FROM inference.polymarket_summary
+                WHERE as_of = :as_of
+                """
+            ),
+            {"as_of": target_date},
+        )
+        summary_row = summary_result.first()
+        bins_result = await conn.execute(
+            text(
+                """
+                SELECT bin_low, bin_high, count, avg_pred, proxy_accuracy, avg_brier
+                FROM inference.polymarket_bins
+                WHERE as_of = :as_of
+                ORDER BY bin_low
+                """
+            ),
+            {"as_of": target_date},
+        )
+        bins = bins_result.fetchall()
+
+    summary = (
+        {
+            "markets": summary_row.markets,
+            "closed_markets": summary_row.closed_markets,
+            "resolved_proxy": summary_row.resolved_proxy,
+            "avg_spread": summary_row.avg_spread,
+            "avg_volume": summary_row.avg_volume,
+            "avg_brier": summary_row.avg_brier,
+        }
+        if summary_row
+        else {}
+    )
+    payload = [
+        {
+            "bin_low": row.bin_low,
+            "bin_high": row.bin_high,
+            "count": row.count,
+            "avg_pred": row.avg_pred,
+            "proxy_accuracy": row.proxy_accuracy,
+            "avg_brier": row.avg_brier,
+        }
+        for row in bins
+    ]
+    return {
+        "as_of": _isoformat(target_date),
+        "summary": summary,
+        "bins": payload,
+        "run_time": _isoformat(datetime.now(tz=UTC)),
     }
 
 

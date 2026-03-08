@@ -52,12 +52,20 @@ class Settings(BaseSettings):
     news_api_base_url: str = "https://newsapi.org/v2"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1"
+    polymarket_gamma_base_url: str = "https://gamma-api.polymarket.com"
     
-    # OpenAI settings
-    openai_model: str = "gpt-4o"
+    # LLM models
+    openai_model: str = "gpt-5.2"
     deepseek_model: str = "deepseek-chat"
-    gemini_model: str = "gemini-3.0-pro"
-    
+    gemini_model: str = "gemini-3-flash-preview"
+    claude_model: str = "claude-opus-4-6"
+
+    # Email / report delivery
+    email_enabled: bool = True
+    email_smtp_server: str = "smtp.gmail.com"
+    email_smtp_port: int = 587
+    email_recipients: str = ""  # Set in secrets.yml: email.recipients
+
     # Features
     enable_paper_trading: bool = True
     enable_live_trading: bool = False
@@ -173,6 +181,34 @@ class Settings(BaseSettings):
     @property
     def azure_speech_key(self) -> Optional[str]:
         return self._secrets.get("api_keys", {}).get("azure_speech")
+
+    @property
+    def anthropic_api_key(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("anthropic")
+
+    @property
+    def smtp_username(self) -> Optional[str]:
+        return self._secrets.get("email", {}).get("smtp_username")
+
+    @property
+    def smtp_password(self) -> Optional[str]:
+        return self._secrets.get("email", {}).get("smtp_password")
+
+    @property
+    def portfolio_config(self) -> dict:
+        return self._secrets.get("Portfolio", {})
+
+    @property
+    def polymarket_api_key(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("polymarket", {}).get("api_key")
+
+    @property
+    def polymarket_secret(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("polymarket", {}).get("secret")
+
+    @property
+    def polymarket_passphrase(self) -> Optional[str]:
+        return self._secrets.get("api_keys", {}).get("polymarket", {}).get("passphrase")
     
     @property
     def secret_key(self) -> str:

@@ -22,6 +22,7 @@ def setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
+        force=True,
     )
 
 
@@ -37,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-economic", action="store_true", help="Skip economic ingestion")
     parser.add_argument("--skip-news", action="store_true", help="Skip news ingestion")
     parser.add_argument("--skip-fundamentals", action="store_true", help="Skip fundamentals ingestion")
+    parser.add_argument("--skip-polymarket", action="store_true", help="Skip Polymarket ingestion")
     return parser.parse_args()
 
 
@@ -72,6 +74,7 @@ def main() -> None:
         "off" if args.skip_news else "on",
         "off" if args.skip_fundamentals else "on",
     )
+    logging.info("Polymarket: %s", "off" if args.skip_polymarket else "on")
 
     started_at = datetime.now(tz=UTC)
     try:
@@ -87,6 +90,7 @@ def main() -> None:
                 include_economic=not args.skip_economic,
                 include_news=not args.skip_news,
                 include_fundamentals=not args.skip_fundamentals,
+                include_polymarket=not args.skip_polymarket,
             )
         )
     except Exception:
@@ -95,6 +99,7 @@ def main() -> None:
     finished_at = datetime.now(tz=UTC)
     duration = finished_at - started_at
     logging.info("Ingestion completed in %s", duration)
+    failed = []
     for result in results:
         logging.info(
             "Pipeline=%s records=%s details=%s",
@@ -102,6 +107,10 @@ def main() -> None:
             result.records,
             result.details,
         )
+        if isinstance(result.details, dict) and result.details.get("status") == "failed":
+            failed.append(result.pipeline)
+    if failed:
+        logging.warning("Pipelines failed: %s", ", ".join(failed))
 
 
 if __name__ == "__main__":

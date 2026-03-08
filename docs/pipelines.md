@@ -8,6 +8,7 @@ The data pipelines are grouped by data type and run sequentially to respect API 
 - Events: Polygon + Finnhub + Alpha Vantage + SEC (earnings, dividends, splits, IPO, macro, filings)
 - Economic: FRED (macro series)
 - News: Finnhub + NewsAPI (sentiment + macro tags)
+- Polymarket: Gamma API (market metadata + snapshot pricing)
 
 For personal usage, start with a small `--symbols` list to control API usage and storage growth.
 
@@ -26,7 +27,8 @@ python scripts/run_daily_ingest.py \
   --symbols SPY,QQQ,AAPL \
   --series-ids DGS10,UNRATE \
   --query "ai stocks" \
-  --skip-news
+  --skip-news \
+  --skip-polymarket
 ```
 
 ## Automate daily runs
@@ -50,6 +52,10 @@ These are the daily automation units tracked in `config/launchd/`:
 - `com.tetra.gpt-post`: GPT recommendations post-close (16:15 local)
 - `com.tetra.gpt-challenge`: GPT challenge pass (18:30 local)
 - `com.tetra.gpt-factor-review`: GPT critique of factor picks (19:35 local)
+- `com.tetra.gpt-summary`: GPT summary of consolidated verdicts (19:45 local)
+- `com.tetra.polymarket-history`: weekly Polymarket snapshot (inactive + closed)
+- `com.tetra.inference-daily`: inference summary (20:05 local)
+- `scripts/run_inference.py`: inference summary (signal IC + event study + Polymarket proxy)
 
 ## API keys
 Set keys in `tetra/config/secrets.yml`.
@@ -60,3 +66,4 @@ If a key is missing, the corresponding pipeline logs a message and returns zero 
 - Alpha Vantage: earnings (optional fallback)
 - FRED: economic indicators
 - NewsAPI: additional news sources
+- Polymarket: prediction markets (Gamma API)

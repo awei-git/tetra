@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetra Inference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260112-5" />
+</head>
+<body>
+  <div class="backdrop">
+    <div class="glow"></div>
+    <div class="grid"></div>
+  </div>
+
+  <main>
+    <nav class="tabs">
+      <a class="tab" href="/alpha">FACTOR</a>
+      <a class="tab" href="/gpt">GPT</a>
+      <a class="tab active" href="/inference">INFERENCE</a>
+      <a class="tab" href="/strats">STRESS</a>
+      <a class="tab" href="/">DATA</a>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tetra / Inference</p>
+        <h1>Signal Quality & Market Learning</h1>
+        <p class="subtitle">Daily inference across factor efficacy, event impact, and Polymarket pricing.</p>
+      </div>
+      <div class="status">
+        <div class="status-pill" id="inference-status">Idle</div>
+        <p class="status-meta">Daily inference digest</p>
+      </div>
+    </header>
+
+    <section class="decision-map">
+      <div class="decision-step">Factor Signals <span>Generate factors</span></div>
+      <div class="decision-step">GPT Briefing <span>Critique signals</span></div>
+      <div class="decision-step active">Inference <span>Measure efficacy</span></div>
+      <div class="decision-step">Stress Test <span>Validate risk</span></div>
+    </section>
+
+    <section class="insight-grid">
+      <div class="insight-card">
+        <h4>Last Run</h4>
+        <div class="insight-kpi" id="inference-last-run">—</div>
+        <div class="insight-meta">Inference pipeline</div>
+      </div>
+      <div class="insight-card">
+        <h4>As Of</h4>
+        <div class="insight-kpi" id="inference-asof">—</div>
+        <div class="insight-meta">Latest analysis date</div>
+      </div>
+      <div class="insight-card">
+        <h4>Modules</h4>
+        <div class="insight-kpi">3 Views</div>
+        <div class="insight-meta">Signals, Events, Polymarket</div>
+      </div>
+    </section>
+
+    <section class="flow-grid">
+      <div class="panel inference-panel">
+        <div class="inference-header">
+          <div>
+            <h3>1) Signal Quality Leaderboard</h3>
+            <p>Cross-sectional Spearman IC of factor signals vs forward returns.</p>
+          </div>
+        </div>
+        <p class="status-meta">As of: <span id="inference-signal-asof">—</span></p>
+        <div class="inference-table inference-signal-table">
+          <div class="inference-row inference-head">
+            <span>Factor</span>
+            <span>Horizon</span>
+            <span>Avg IC</span>
+            <span>Median IC</span>
+            <span>Hit Rate</span>
+            <span>Days</span>
+            <span>Obs</span>
+          </div>
+          <div id="inference-signal-rows"></div>
+        </div>
+      </div>
+
+      <div class="panel inference-panel">
+        <div class="inference-header">
+          <div>
+            <h3>2) Event Impact Study</h3>
+            <p>Average returns around earnings/filings/dividends, grouped by event type.</p>
+          </div>
+        </div>
+        <p class="status-meta">As of: <span id="inference-event-asof">—</span></p>
+        <div class="inference-table inference-event-table">
+          <div class="inference-row inference-head">
+            <span>Event Type</span>
+            <span>Window (days)</span>
+            <span>Avg Return</span>
+            <span>Median Return</span>
+            <span>Obs</span>
+          </div>
+          <div id="inference-event-rows"></div>
+        </div>
+      </div>
+      <div class="panel inference-panel">
+        <div class="inference-header">
+          <div>
+            <h3>3) Polymarket Calibration (Proxy)</h3>
+            <p>Uses closed markets with a dominant outcome price (≥ 0.9) as proxy resolution.</p>
+          </div>
+        </div>
+        <div class="inference-summary">
+          <div>
+            <span class="inference-label">Markets</span>
+            <strong id="inference-poly-markets">—</strong>
+          </div>
+          <div>
+            <span class="inference-label">Closed</span>
+            <strong id="inference-poly-closed">—</strong>
+          </div>
+          <div>
+            <span class="inference-label">Proxy Resolved</span>
+            <strong id="inference-poly-resolved">—</strong>
+          </div>
+          <div>
+            <span class="inference-label">Avg Spread</span>
+            <strong id="inference-poly-spread">—</strong>
+          </div>
+          <div>
+            <span class="inference-label">Avg Volume</span>
+            <strong id="inference-poly-volume">—</strong>
+          </div>
+          <div>
+            <span class="inference-label">Avg Brier</span>
+            <strong id="inference-poly-brier">—</strong>
+          </div>
+        </div>
+        <p class="status-meta">As of: <span id="inference-poly-asof">—</span></p>
+        <div class="inference-table inference-poly-table">
+          <div class="inference-row inference-head">
+            <span>Bin</span>
+            <span>Count</span>
+            <span>Avg Pred</span>
+            <span>Proxy Accuracy</span>
+            <span>Avg Brier</span>
+          </div>
+          <div id="inference-poly-rows"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/inference.js?v=20260112-5"></script>
+</body>
+</html>

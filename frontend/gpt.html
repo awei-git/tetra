@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260109-2" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260112-5" />
 </head>
 <body>
   <div class="backdrop">
@@ -19,6 +19,7 @@
     <nav class="tabs">
       <a class="tab" href="/alpha">FACTOR</a>
       <a class="tab active" href="/gpt">GPT</a>
+      <a class="tab" href="/inference">INFERENCE</a>
       <a class="tab" href="/strats">STRESS</a>
       <a class="tab" href="/">DATA</a>
     </nav>
@@ -31,147 +32,226 @@
       </div>
       <div class="status">
         <div class="status-pill" id="gpt-status">Idle</div>
-        <p class="status-meta">Last run: <span id="gpt-last-run">{{GPT_LAST_RUN}}</span></p>
-        <p class="status-meta">Session: <span id="gpt-session">{{GPT_SESSION}}</span></p>
+        <p class="status-meta">Automated GPT briefings</p>
         <p class="status-meta gpt-error" id="gpt-error"></p>
       </div>
     </header>
 
-    <section class="gpt-panel gpt-factor-panel">
-      <div class="panel">
-        <div class="gpt-header">
-          <div>
-            <h3>1) Factor Critiques</h3>
-            <p>GPT critique of factor-driven picks with verdict and confidence.</p>
-          </div>
-          <div class="gpt-actions">
-            <div class="status-pill" id="gpt-factor-status">Idle</div>
-          </div>
-        </div>
-        <p class="status-meta">Last run: <span id="gpt-factor-last-run">{{GPT_FACTOR_LAST_RUN}}</span></p>
-        <p class="status-meta">Session: <span id="gpt-factor-session">{{GPT_FACTOR_SESSION}}</span></p>
-        <p class="status-meta gpt-error" id="gpt-factor-error"></p>
-        <p class="status-meta"><a class="gpt-link" href="/api/gpt/factor-reviews" target="_blank" rel="noreferrer">View raw JSON</a></p>
-        <div class="gpt-factor-table">
-          <div class="gpt-factor-row gpt-factor-head">
-            <span>Category</span>
-            <span>Symbol</span>
-            <span>Factor</span>
-            <span>Score</span>
-            <span>Last</span>
-            <span>Verdict</span>
-            <span>Action</span>
-            <span>Confidence</span>
-            <span>Providers</span>
-            <span>Replacement</span>
-            <span>Notes</span>
-          </div>
-          <div id="gpt-factor-rows">{{GPT_FACTOR_ROWS}}</div>
-        </div>
+    <section class="decision-map">
+      <div class="decision-step">Factor Signals <span>Signal shortlist</span></div>
+      <div class="decision-step active">GPT Briefing <span>Critique + generate</span></div>
+      <div class="decision-step">Consensus <span>Decide conviction</span></div>
+      <div class="decision-step">Stress Test <span>Validate downside</span></div>
+    </section>
+
+    <section class="insight-grid">
+      <div class="insight-card">
+        <h4>Last Run</h4>
+        <div class="insight-kpi" id="gpt-last-run">{{GPT_LAST_RUN}}</div>
+        <div class="insight-meta">Latest GPT briefing (ET)</div>
+      </div>
+      <div class="insight-card">
+        <h4>Session</h4>
+        <div class="insight-kpi" id="gpt-session">{{GPT_SESSION}}</div>
+        <div class="insight-meta">Pre / post close</div>
+      </div>
+      <div class="insight-card">
+        <h4>Pipeline</h4>
+        <div class="insight-kpi">3 Feeds</div>
+        <div class="insight-meta">Factors, GPT, Challenge</div>
       </div>
     </section>
 
-    <section class="gpt-panel">
-      <div class="panel">
-        <div class="gpt-header">
-          <div>
-            <h3>2) Today’s GPT Recommendations</h3>
-            <p>Aggregated signals across providers with confidence and expected return.</p>
-            <p class="status-meta">Last run: <span id="gpt-last-run-inline">{{GPT_LAST_RUN}}</span></p>
-            <p class="status-meta">Session: <span id="gpt-session-inline">{{GPT_SESSION}}</span></p>
+    <section class="final-grid">
+      <section class="gpt-panel gpt-final-panel">
+        <div class="panel">
+          <div class="gpt-header">
+            <div>
+              <h3>Consolidated Verdict (Buy/Sell)</h3>
+              <p>Strong actions that align GPT today + factor signals + GPT critique + challenge check.</p>
+            </div>
+            <div class="gpt-actions">
+              <div class="status-pill" id="gpt-final-status">Idle</div>
+            </div>
           </div>
-          <div class="gpt-actions">
-            <a class="gpt-link" href="/api/gpt/consensus" target="_blank" rel="noreferrer">View raw JSON</a>
+          <p class="status-meta">As of: <span id="gpt-final-asof">—</span></p>
+          <p class="status-meta">Last run: <span id="gpt-final-last-run">—</span></p>
+          <p class="status-meta gpt-error" id="gpt-final-error"></p>
+          <div class="gpt-final-table">
+            <div class="gpt-final-row gpt-final-head">
+              <span>Category</span>
+              <span>Symbol</span>
+              <span>Verdict</span>
+              <span>Confidence</span>
+              <span>Signal</span>
+              <span>Review</span>
+              <span>Challenge</span>
+              <span>Providers</span>
+              <span>Replacement</span>
+              <span>Notes</span>
+            </div>
+            <div id="gpt-final-rows">{{GPT_FINAL_ROWS}}</div>
           </div>
         </div>
-        <div class="gpt-consensus-table">
-          <div class="gpt-consensus-row gpt-consensus-head">
-            <span>Rank</span>
-            <span>Category</span>
-            <span>Symbol</span>
-            <span>Last</span>
-            <span>Action</span>
-            <span>Entry</span>
-            <span>Target</span>
-            <span>Stop</span>
-            <span>Exp Return</span>
-            <span>R/R</span>
-            <span>Confidence</span>
-            <span>Providers</span>
+      </section>
+
+      <section class="gpt-panel gpt-summary-panel">
+        <div class="panel">
+          <div class="gpt-header">
+            <div>
+              <h3>Summary</h3>
+              <p>Consensus overview of the latest buy/sell signals.</p>
+            </div>
           </div>
-          <div id="gpt-consensus-rows">{{GPT_CONSENSUS_ROWS}}</div>
+          <div class="gpt-summary-block">
+            <span class="gpt-summary-label">Summary</span>
+            <p class="gpt-summary-text" id="gpt-summary-text">{{GPT_SUMMARY_TEXT}}</p>
+          </div>
+          <div class="gpt-actionable-grid">
+            <div class="gpt-actionable-card">
+              <span class="gpt-summary-label">Actionable Buys</span>
+              <div class="gpt-actionable-list" id="gpt-final-buy">—</div>
+            </div>
+            <div class="gpt-actionable-card">
+              <span class="gpt-summary-label">Actionable Sells</span>
+              <div class="gpt-actionable-list" id="gpt-final-sell">—</div>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </section>
 
-    <section class="gpt-panel gpt-challenge-panel">
-      <div class="panel">
-        <div class="gpt-header">
-          <div>
-            <h3>3) Challenge of Previous Recs</h3>
-            <p>Daily critique of the latest recommendations to improve portfolio fit.</p>
+    <section class="flow-grid">
+      <section class="gpt-panel gpt-factor-panel">
+        <div class="panel">
+          <div class="gpt-header">
+            <div>
+              <h3>1) Factor Critiques</h3>
+              <p>GPT critique of factor-driven picks with verdict and confidence.</p>
+            </div>
+            <div class="gpt-actions">
+              <div class="status-pill" id="gpt-factor-status">Idle</div>
+            </div>
           </div>
-          <div class="gpt-actions">
-            <div class="status-pill" id="gpt-challenge-status">Idle</div>
+          <p class="status-meta">Last run: <span id="gpt-factor-last-run">{{GPT_FACTOR_LAST_RUN}}</span></p>
+          <p class="status-meta">Session: <span id="gpt-factor-session">{{GPT_FACTOR_SESSION}}</span></p>
+          <p class="status-meta gpt-error" id="gpt-factor-error"></p>
+          <p class="status-meta"><a class="gpt-link" href="/api/gpt/factor-reviews" target="_blank" rel="noreferrer">View raw JSON</a></p>
+          <div class="gpt-factor-table">
+            <div class="gpt-factor-row gpt-factor-head">
+              <span>Category</span>
+              <span>Symbol</span>
+              <span>Factor</span>
+              <span>Score</span>
+              <span>Last</span>
+              <span>Verdict</span>
+              <span>Action</span>
+              <span>Confidence</span>
+              <span>Providers</span>
+              <span>Replacement</span>
+              <span>Notes</span>
+            </div>
+            <div id="gpt-factor-rows">{{GPT_FACTOR_ROWS}}</div>
           </div>
         </div>
-        <p class="status-meta">Last run: <span id="gpt-challenge-last-run">—</span></p>
-        <p class="status-meta">Session: <span id="gpt-challenge-session">—</span></p>
-        <p class="status-meta gpt-error" id="gpt-challenge-error"></p>
-        <p class="status-meta"><a class="gpt-link" href="/api/gpt/challenges" target="_blank" rel="noreferrer">View raw JSON</a></p>
-        <div class="gpt-challenge-table">
-          <div class="gpt-challenge-row gpt-challenge-head">
-            <span>Provider</span>
-            <span>Category</span>
-            <span>Symbol</span>
-            <span>Last</span>
-            <span>Change</span>
-            <span>Replacement</span>
-            <span>Action</span>
-            <span>Entry</span>
-            <span>Target</span>
-            <span>Stop</span>
-            <span>Horizon</span>
-            <span>Notes</span>
+      </section>
+
+      <section class="gpt-panel">
+        <div class="panel">
+          <div class="gpt-header">
+            <div>
+              <h3>2) Today’s GPT Recommendations</h3>
+              <p>Aggregated signals across providers with confidence and expected return.</p>
+              <p class="status-meta">Last run: <span id="gpt-last-run-inline">{{GPT_LAST_RUN}}</span></p>
+              <p class="status-meta">Session: <span id="gpt-session-inline">{{GPT_SESSION}}</span></p>
+            </div>
+            <div class="gpt-actions">
+              <a class="gpt-link" href="/api/gpt/consensus" target="_blank" rel="noreferrer">View raw JSON</a>
+            </div>
           </div>
-          <div id="gpt-challenge-rows">{{GPT_CHALLENGE_ROWS}}</div>
+          <div class="gpt-consensus-table">
+            <div class="gpt-consensus-row gpt-consensus-head">
+              <span>Rank</span>
+              <span>Category</span>
+              <span>Symbol</span>
+              <span>Last</span>
+              <span>Action</span>
+              <span>Entry</span>
+              <span>Target</span>
+              <span>Stop</span>
+              <span>Exp Return</span>
+              <span>R/R</span>
+              <span>Confidence</span>
+              <span>Providers</span>
+            </div>
+            <div id="gpt-consensus-rows">{{GPT_CONSENSUS_ROWS}}</div>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section class="gpt-panel gpt-challenge-panel">
+        <div class="panel">
+          <div class="gpt-header">
+            <div>
+              <h3>3) Challenge of Previous Recs</h3>
+              <p>Daily critique of the latest recommendations to improve portfolio fit.</p>
+            </div>
+            <div class="gpt-actions">
+              <div class="status-pill" id="gpt-challenge-status">Idle</div>
+            </div>
+          </div>
+          <p class="status-meta">Last run: <span id="gpt-challenge-last-run">—</span></p>
+          <p class="status-meta">Session: <span id="gpt-challenge-session">—</span></p>
+          <p class="status-meta gpt-error" id="gpt-challenge-error"></p>
+          <p class="status-meta"><a class="gpt-link" href="/api/gpt/challenges" target="_blank" rel="noreferrer">View raw JSON</a></p>
+          <div class="gpt-challenge-table">
+            <div class="gpt-challenge-row gpt-challenge-head">
+              <span>Provider</span>
+              <span>Category</span>
+              <span>Symbol</span>
+              <span>Last</span>
+              <span>Change</span>
+              <span>Replacement</span>
+              <span>Action</span>
+              <span>Entry</span>
+              <span>Target</span>
+              <span>Stop</span>
+              <span>Horizon</span>
+              <span>Notes</span>
+            </div>
+            <div id="gpt-challenge-rows">{{GPT_CHALLENGE_ROWS}}</div>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <section class="gpt-panel gpt-final-panel">
+    <section class="gpt-panel gpt-debate-panel">
       <div class="panel">
         <div class="gpt-header">
           <div>
-            <h3>Consolidated Verdict (Buy/Sell)</h3>
-            <p>Strong actions that align GPT today + factor signals + GPT critique + challenge check.</p>
-          </div>
-          <div class="gpt-actions">
-            <div class="status-pill" id="gpt-final-status">Idle</div>
+            <h3>Signal Debate (GPT vs Factors)</h3>
+            <p>Items where GPT is confident but signals/challenge diverge.</p>
           </div>
         </div>
-        <p class="status-meta">As of: <span id="gpt-final-asof">—</span></p>
-        <p class="status-meta">Last run: <span id="gpt-final-last-run">—</span></p>
-        <p class="status-meta gpt-error" id="gpt-final-error"></p>
-        <div class="gpt-final-table">
-          <div class="gpt-final-row gpt-final-head">
+        <p class="status-meta" id="gpt-debate-meta">—</p>
+        <div class="gpt-debate-table">
+          <div class="gpt-debate-row gpt-debate-head">
             <span>Category</span>
             <span>Symbol</span>
-            <span>Verdict</span>
-            <span>Confidence</span>
+            <span>GPT</span>
+            <span>GPT Conf</span>
             <span>Signal</span>
+            <span>Score</span>
             <span>Review</span>
             <span>Challenge</span>
-            <span>Providers</span>
-            <span>Replacement</span>
-            <span>Notes</span>
+            <span>Reason</span>
           </div>
-          <div id="gpt-final-rows">{{GPT_FINAL_ROWS}}</div>
+          <div id="gpt-debate-rows"></div>
         </div>
       </div>
     </section>
   </main>
 
-  <script src="/static/gpt.js?v=20260109-2"></script>
+  <script src="/static/gpt.js?v=20260109-8"></script>
 </body>
 </html>

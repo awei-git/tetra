@@ -27,6 +27,24 @@ const gptFinalStatus = document.getElementById("gpt-final-status");
 const gptFinalLastRun = document.getElementById("gpt-final-last-run");
 const gptFinalAsOf = document.getElementById("gpt-final-asof");
 const gptFinalError = document.getElementById("gpt-final-error");
+const gptSummaryText = document.getElementById("gpt-summary-text");
+const gptFinalBuy = document.getElementById("gpt-final-buy");
+const gptFinalSell = document.getElementById("gpt-final-sell");
+const gptDebateRows = document.getElementById("gpt-debate-rows");
+const gptDebateMeta = document.getElementById("gpt-debate-meta");
+const gptFlowGpt = document.getElementById("gpt-flow-gpt");
+const gptFlowSignals = document.getElementById("gpt-flow-signals");
+const gptFlowFiltered = document.getElementById("gpt-flow-filtered");
+const gptFlowFinal = document.getElementById("gpt-flow-final");
+const gptFlowMeta = document.getElementById("gpt-flow-meta");
+const gptFactorRunTime = document.getElementById("gpt-factor-run-time");
+const gptChallengeRunTime = document.getElementById("gpt-challenge-run-time");
+const gptConfidenceFormula = document.getElementById("gpt-confidence-formula");
+const gptConfidenceComponents = document.getElementById("gpt-confidence-components");
+const gptExcludedRows = document.getElementById("gpt-excluded-rows");
+const gptExcludedMeta = document.getElementById("gpt-excluded-meta");
+const gptCorrRows = document.getElementById("gpt-corr-rows");
+const gptCorrMeta = document.getElementById("gpt-corr-meta");
 const gptRefreshLabel = gptRefresh
   ? (gptRefresh.querySelector(".btn-label") || gptRefresh).textContent
   : "Refresh";
@@ -99,6 +117,21 @@ function formatPrice(value) {
   if (Number.isNaN(num)) return String(value);
   if (Math.abs(num) >= 1) return num.toFixed(2);
   return num.toFixed(4);
+}
+
+function formatProb(value) {
+  if (value === null || value === undefined) return "—";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "—";
+  return `${(num * 100).toFixed(1)}%`;
+}
+
+function formatDelta(value) {
+  if (value === null || value === undefined) return "—";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "—";
+  const sign = num > 0 ? "+" : "";
+  return `${sign}${(num * 100).toFixed(1)}%`;
 }
 
 function actionClass(value) {
@@ -413,18 +446,22 @@ function renderFinalRows(rows) {
     verdict.className = actionClass(item.final_action);
     verdict.textContent = formatAction(item.final_action);
 
-    const confidence = item.confidence;
     const scoreValue = Number(item.score);
+    const components = [
+      `Base ${formatProb(item.base_prob)}`,
+      `Sig ${formatDelta(item.signal_delta)}`,
+      `Rev ${formatDelta(item.review_delta)}`,
+      `Chg ${formatDelta(item.challenge_delta)}`,
+    ].join(" · ");
 
     row.appendChild(Object.assign(document.createElement("span"), { textContent: formatCategory(item.category) }));
     row.appendChild(Object.assign(document.createElement("span"), { textContent: item.symbol || "—" }));
     row.appendChild(verdict);
-    row.appendChild(
-      Object.assign(document.createElement("span"), {
-        textContent:
-          confidence === null || confidence === undefined ? "—" : `${(confidence * 100).toFixed(1)}%`,
-      }),
-    );
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatProb(item.profit_prob ?? item.confidence) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatPrice(item.entry) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatPrice(item.target) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatPrice(item.stop) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.horizon || "—" }));
     row.appendChild(
       Object.assign(document.createElement("span"), {
         textContent:
@@ -435,10 +472,243 @@ function renderFinalRows(rows) {
     row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.challenge_change || "—").toUpperCase() }));
     row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.providers || []).join(", ") }));
     row.appendChild(Object.assign(document.createElement("span"), { textContent: item.replacement || "—" }));
-    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.notes || "—" }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: components }));
+    row.title = item.reason || components;
 
     gptFinalRows.appendChild(row);
   });
+}
+
+function renderFlowSummary(flow) {
+  if (!flow) return;
+  const filtered =
+    (flow.signal_conflict || 0) +
+    (flow.review_reject || 0) +
+    (flow.review_conflict || 0) +
+    (flow.challenge_exit || 0);
+  if (gptFlowGpt) gptFlowGpt.textContent = flow.gpt_actionable ?? "—";
+  if (gptFlowSignals) gptFlowSignals.textContent = flow.with_signal ?? "—";
+  if (gptFlowFiltered) gptFlowFiltered.textContent = filtered;
+  if (gptFlowFinal) gptFlowFinal.textContent = flow.final ?? "—";
+  if (gptFlowMeta) {
+    gptFlowMeta.textContent = `Aligned: ${flow.signal_aligned ?? 0} · Neutral: ${flow.signal_neutral ?? 0} · Conflict: ${flow.signal_conflict ?? 0}`;
+  }
+}
+
+function renderConfidenceFormula(components) {
+  if (!components) return;
+  if (gptConfidenceFormula && components.formula) {
+    gptConfidenceFormula.textContent = components.formula;
+  }
+  if (!gptConfidenceComponents) return;
+  const signalWeight = components.signal_weight ?? 0;
+  const reviewDelta = components.review_delta || {};
+  const challengeDelta = components.challenge_delta || {};
+  const baseProb = components.default_base_prob ?? 0.5;
+  gptConfidenceComponents.textContent =
+    `Base Prob: ${formatProb(baseProb)} · Signal weight: ${formatDelta(signalWeight)} · ` +
+    `Review: approve ${formatDelta(reviewDelta.approve)} / watch ${formatDelta(reviewDelta.watch)} / reject ${formatDelta(reviewDelta.reject)} · ` +
+    `Challenge: adjust ${formatDelta(challengeDelta.adjust)} / replace ${formatDelta(challengeDelta.replace)} / exit ${formatDelta(challengeDelta.exit)}`;
+}
+
+function renderExcludedRows(rows) {
+  if (!gptExcludedRows) return;
+  gptExcludedRows.innerHTML = "";
+  const items = rows || [];
+  if (!items.length) {
+    const row = document.createElement("div");
+    row.className = "gpt-excluded-row";
+    const span = document.createElement("span");
+    span.textContent = "No excluded symbols.";
+    row.appendChild(span);
+    gptExcludedRows.appendChild(row);
+    if (gptExcludedMeta) gptExcludedMeta.textContent = "Excluded: 0";
+    return;
+  }
+
+  if (gptExcludedMeta) {
+    gptExcludedMeta.textContent = `Excluded: ${items.length}`;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "gpt-excluded-row";
+
+    const gptAction = document.createElement("span");
+    gptAction.className = actionClass(item.gpt_action);
+    gptAction.textContent = formatAction(item.gpt_action);
+
+    const signalAction = document.createElement("span");
+    signalAction.className = actionClass(item.signal_action);
+    signalAction.textContent = formatAction(item.signal_action || "missing");
+
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatCategory(item.category) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.symbol || "—" }));
+    row.appendChild(gptAction);
+    row.appendChild(signalAction);
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.review_verdict || "—").toUpperCase() }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.challenge_change || "—").toUpperCase() }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.reason || "—" }));
+    row.title = item.reason || "";
+    gptExcludedRows.appendChild(row);
+  });
+}
+
+function renderCorrelationSkips(rows, meta) {
+  if (!gptCorrRows) return;
+  gptCorrRows.innerHTML = "";
+  const items = rows || [];
+  if (!items.length) {
+    const row = document.createElement("div");
+    row.className = "gpt-corr-row";
+    const span = document.createElement("span");
+    span.textContent = "No correlation conflicts.";
+    row.appendChild(span);
+    gptCorrRows.appendChild(row);
+  } else {
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "gpt-corr-row";
+
+      const action = document.createElement("span");
+      action.className = actionClass(item.final_action);
+      action.textContent = formatAction(item.final_action);
+
+      row.appendChild(Object.assign(document.createElement("span"), { textContent: formatCategory(item.category) }));
+      row.appendChild(Object.assign(document.createElement("span"), { textContent: item.symbol || "—" }));
+      row.appendChild(action);
+      row.appendChild(Object.assign(document.createElement("span"), { textContent: item.blocked_by || "—" }));
+      row.appendChild(
+        Object.assign(document.createElement("span"), {
+          textContent: item.max_corr === null || item.max_corr === undefined ? "—" : item.max_corr.toFixed(2),
+        }),
+      );
+      gptCorrRows.appendChild(row);
+    });
+  }
+  if (gptCorrMeta && meta) {
+    gptCorrMeta.textContent =
+      `Lookback: ${meta.lookback_days}d · Threshold: ${meta.corr_threshold} · Min obs: ${meta.min_obs} · Skipped: ${meta.skipped}`;
+  }
+}
+
+function renderActionable(finalRows) {
+  const buys = (finalRows || []).filter((row) => row.final_action === "buy");
+  const sells = (finalRows || []).filter((row) => row.final_action === "sell");
+  const topBuys = buys.slice(0, 5);
+  const topSells = sells.slice(0, 5);
+
+  function renderList(target, items, emptyLabel) {
+    if (!target) return;
+    target.innerHTML = "";
+    if (!items.length) {
+      const span = document.createElement("span");
+      span.className = "gpt-actionable-empty";
+      span.textContent = emptyLabel;
+      target.appendChild(span);
+      return;
+    }
+    items.forEach((item) => {
+      const chip = document.createElement("div");
+      chip.className = "gpt-actionable-chip";
+      const symbol = document.createElement("span");
+      symbol.textContent = item.symbol || "—";
+      const confidence = document.createElement("span");
+      const conf = item.confidence;
+      confidence.textContent =
+        conf === null || conf === undefined ? "—" : `${(conf * 100).toFixed(1)}%`;
+      chip.appendChild(symbol);
+      chip.appendChild(confidence);
+      target.appendChild(chip);
+    });
+  }
+
+  renderList(gptFinalBuy, topBuys, "No buy signals.");
+  renderList(gptFinalSell, topSells, "No sell signals.");
+}
+
+function renderDebateRows(rows) {
+  if (!gptDebateRows) return;
+  gptDebateRows.innerHTML = "";
+  const items = rows || [];
+  if (!items.length) {
+    const row = document.createElement("div");
+    row.className = "gpt-debate-row";
+    const span = document.createElement("span");
+    span.textContent = "No debate items yet.";
+    row.appendChild(span);
+    gptDebateRows.appendChild(row);
+    if (gptDebateMeta) {
+      gptDebateMeta.textContent = "No debate items.";
+    }
+    return;
+  }
+
+  if (gptDebateMeta) {
+    gptDebateMeta.textContent = `Debate items: ${items.length}`;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "gpt-debate-row";
+
+    const gptAction = document.createElement("span");
+    gptAction.className = actionClass(item.gpt_action);
+    gptAction.textContent = formatAction(item.gpt_action);
+
+    const signalAction = document.createElement("span");
+    signalAction.className = actionClass(item.signal_action);
+    signalAction.textContent = formatAction(item.signal_action);
+
+    const scoreValue = Number(item.score);
+    const gptConf = item.gpt_confidence;
+
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: formatCategory(item.category) }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.symbol || "—" }));
+    row.appendChild(gptAction);
+    row.appendChild(
+      Object.assign(document.createElement("span"), {
+        textContent:
+          gptConf === null || gptConf === undefined ? "—" : `${(gptConf * 100).toFixed(1)}%`,
+      }),
+    );
+    row.appendChild(signalAction);
+    row.appendChild(
+      Object.assign(document.createElement("span"), {
+        textContent:
+          item.score === null || item.score === undefined || Number.isNaN(scoreValue)
+            ? "—"
+            : scoreValue.toFixed(2),
+      }),
+    );
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.review_verdict || "—").toUpperCase() }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: (item.challenge_change || "—").toUpperCase() }));
+    row.appendChild(Object.assign(document.createElement("span"), { textContent: item.reason || "—" }));
+
+    gptDebateRows.appendChild(row);
+  });
+}
+
+function buildFallbackSummary(finalRows) {
+  const rows = finalRows || [];
+  if (!rows.length) {
+    return "No consolidated verdicts yet.";
+  }
+  const buys = rows.filter((row) => row.final_action === "buy").slice(0, 5);
+  const sells = rows.filter((row) => row.final_action === "sell").slice(0, 5);
+
+  const formatList = (items) =>
+    items
+      .map((item) => {
+        const conf = item.confidence;
+        const pct = conf === null || conf === undefined ? "—" : `${(conf * 100).toFixed(0)}%`;
+        return `${item.symbol || "—"} (${pct})`;
+      })
+      .join(", ");
+
+  const buyText = buys.length ? formatList(buys) : "None";
+  const sellText = sells.length ? formatList(sells) : "None";
+  return `Top buys: ${buyText}. Top sells: ${sellText}.`;
 }
 
 async function fetchRecommendations(options = {}) {
@@ -565,7 +835,7 @@ async function fetchFactorReviews(options = {}) {
 async function fetchSummary(options = {}) {
   if (!gptFinalRows) return null;
   try {
-    const response = await fetch("/api/gpt/summary");
+    const response = await fetch("/api/gpt/summary?min_factors=3&signal_threshold=0.1");
     if (!response.ok) {
       throw new Error("Failed to load consolidated verdicts");
     }
@@ -579,7 +849,26 @@ async function fetchSummary(options = {}) {
     if (gptFinalAsOf) {
       gptFinalAsOf.textContent = data.as_of || "—";
     }
+    if (gptFactorRunTime) {
+      gptFactorRunTime.textContent = formatDate(data.factor_run_time);
+    }
+    if (gptChallengeRunTime) {
+      gptChallengeRunTime.textContent = formatDate(data.challenge_run_time);
+    }
+    if (gptSummaryText) {
+      if (data.summary) {
+        gptSummaryText.textContent = data.summary;
+      } else {
+        gptSummaryText.textContent = buildFallbackSummary(data.final || []);
+      }
+    }
     renderFinalRows(data.final || []);
+    renderActionable(data.final || []);
+    renderDebateRows(data.debate || []);
+    renderFlowSummary(data.flow || {});
+    renderExcludedRows(data.excluded || []);
+    renderConfidenceFormula(data.confidence_components || null);
+    renderCorrelationSkips(data.corr_skipped || [], data.diversification || null);
     if (!options.keepStatus) {
       setFinalStatus("idle");
     }
@@ -597,6 +886,15 @@ async function fetchSummary(options = {}) {
       gptFinalRows.innerHTML = "";
       gptFinalRows.appendChild(row);
     }
+    if (gptSummaryText) {
+      gptSummaryText.textContent = "Unable to load GPT summary.";
+    }
+    renderActionable([]);
+    renderDebateRows([]);
+    renderFlowSummary(null);
+    renderExcludedRows([]);
+    renderConfidenceFormula(null);
+    renderCorrelationSkips([], null);
     setFinalStatus("error");
     return null;
   }

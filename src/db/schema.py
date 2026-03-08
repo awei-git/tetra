@@ -44,6 +44,112 @@ market_ohlcv = sa.Table(
 )
 
 
+polymarket_markets = sa.Table(
+    "markets",
+    metadata,
+    sa.Column("market_id", sa.String(64), primary_key=True),
+    sa.Column("slug", sa.String(255)),
+    sa.Column("question", sa.Text()),
+    sa.Column("category", sa.String(128)),
+    sa.Column("description", sa.Text()),
+    sa.Column("active", sa.Boolean()),
+    sa.Column("closed", sa.Boolean()),
+    sa.Column("archived", sa.Boolean()),
+    sa.Column("end_time", sa.DateTime(timezone=True)),
+    sa.Column("created_time", sa.DateTime(timezone=True)),
+    sa.Column("volume", sa.Numeric(20, 8)),
+    sa.Column("liquidity", sa.Numeric(20, 8)),
+    sa.Column("best_bid", sa.Numeric(20, 8)),
+    sa.Column("best_ask", sa.Numeric(20, 8)),
+    sa.Column("condition_id", sa.String(128)),
+    sa.Column("clob_token_ids", postgresql.ARRAY(sa.String(128))),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="polymarket",
+)
+
+
+polymarket_snapshots = sa.Table(
+    "snapshots",
+    metadata,
+    sa.Column("market_id", sa.String(64), primary_key=True),
+    sa.Column("snapshot_time", sa.DateTime(timezone=True), primary_key=True),
+    sa.Column("active", sa.Boolean()),
+    sa.Column("closed", sa.Boolean()),
+    sa.Column("volume", sa.Numeric(20, 8)),
+    sa.Column("liquidity", sa.Numeric(20, 8)),
+    sa.Column("best_bid", sa.Numeric(20, 8)),
+    sa.Column("best_ask", sa.Numeric(20, 8)),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("ingested_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="polymarket",
+)
+
+
+inference_signal_leaderboard = sa.Table(
+    "signal_leaderboard",
+    metadata,
+    sa.Column("factor", sa.String(128), primary_key=True),
+    sa.Column("horizon_days", sa.Integer(), primary_key=True),
+    sa.Column("as_of", sa.Date(), primary_key=True, nullable=False),
+    sa.Column("start_date", sa.Date()),
+    sa.Column("end_date", sa.Date()),
+    sa.Column("avg_ic", sa.Numeric(8, 4)),
+    sa.Column("median_ic", sa.Numeric(8, 4)),
+    sa.Column("hit_rate", sa.Numeric(8, 4)),
+    sa.Column("days", sa.Integer()),
+    sa.Column("observations", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="inference",
+)
+
+
+inference_event_study = sa.Table(
+    "event_study",
+    metadata,
+    sa.Column("event_type", sa.String(64), primary_key=True),
+    sa.Column("window_days", sa.Integer(), primary_key=True),
+    sa.Column("as_of", sa.Date(), primary_key=True, nullable=False),
+    sa.Column("start_date", sa.Date()),
+    sa.Column("end_date", sa.Date()),
+    sa.Column("avg_return", sa.Numeric(12, 6)),
+    sa.Column("median_return", sa.Numeric(12, 6)),
+    sa.Column("observations", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="inference",
+)
+
+
+inference_polymarket_summary = sa.Table(
+    "polymarket_summary",
+    metadata,
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("markets", sa.Integer()),
+    sa.Column("closed_markets", sa.Integer()),
+    sa.Column("resolved_proxy", sa.Integer()),
+    sa.Column("avg_spread", sa.Numeric(12, 6)),
+    sa.Column("avg_volume", sa.Numeric(20, 8)),
+    sa.Column("avg_brier", sa.Numeric(12, 6)),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="inference",
+)
+
+
+inference_polymarket_bins = sa.Table(
+    "polymarket_bins",
+    metadata,
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("bin_low", sa.Numeric(5, 2), primary_key=True),
+    sa.Column("bin_high", sa.Numeric(5, 2), primary_key=True),
+    sa.Column("count", sa.Integer()),
+    sa.Column("avg_pred", sa.Numeric(12, 6)),
+    sa.Column("proxy_accuracy", sa.Numeric(12, 6)),
+    sa.Column("avg_brier", sa.Numeric(12, 6)),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="inference",
+)
+
+
 fundamentals_financials = sa.Table(
     "financials",
     metadata,
@@ -233,6 +339,26 @@ gpt_factor_reviews = sa.Table(
     schema="gpt",
 )
 
+gpt_recommendation_summaries = sa.Table(
+    "recommendation_summaries",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+    sa.Column("session", sa.String(16)),
+    sa.Column("run_time", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("as_of", sa.Date()),
+    sa.Column("provider", sa.String(32)),
+    sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("raw_text", sa.Text()),
+    sa.Column("error", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    sa.UniqueConstraint(
+        "session",
+        "run_time",
+        name="gpt_recommendation_summaries_session_run_time_key",
+    ),
+    schema="gpt",
+)
+
 
 factors_daily = sa.Table(
     "daily_factors",
@@ -266,6 +392,12 @@ __all__ = [
     "metadata",
     "market_assets",
     "market_ohlcv",
+    "polymarket_markets",
+    "polymarket_snapshots",
+    "inference_signal_leaderboard",
+    "inference_event_study",
+    "inference_polymarket_summary",
+    "inference_polymarket_bins",
     "event_events",
     "economic_series",
     "economic_values",
@@ -273,6 +405,7 @@ __all__ = [
     "gpt_recommendations",
     "gpt_recommendation_challenges",
     "gpt_factor_reviews",
+    "gpt_recommendation_summaries",
     "factors_daily",
     "factors_runs",
 ]

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260109-2" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260112-5" />
 </head>
 <body>
   <div class="backdrop">
@@ -19,6 +19,7 @@
     <nav class="tabs">
       <a class="tab active" href="/alpha">FACTOR</a>
       <a class="tab" href="/gpt">GPT</a>
+      <a class="tab" href="/inference">INFERENCE</a>
       <a class="tab" href="/strats">STRESS</a>
       <a class="tab" href="/">DATA</a>
     </nav>
@@ -31,11 +32,34 @@
       </div>
       <div class="status">
         <div class="status-pill" id="alpha-status">Idle</div>
-        <p class="status-meta">As of: <span id="alpha-asof">—</span></p>
-        <p class="status-meta">Last run: <span id="alpha-last-run">—</span></p>
-        <p class="status-meta">Symbols loaded: <span id="alpha-symbols">—</span></p>
+        <p class="status-meta">Factor engine status</p>
       </div>
     </header>
+
+    <section class="decision-map">
+      <div class="decision-step active">Factor Signals <span>Build the universe</span></div>
+      <div class="decision-step">GPT Critique <span>Explain signal picks</span></div>
+      <div class="decision-step">Consensus <span>Confirm conviction</span></div>
+      <div class="decision-step">Stress Test <span>Validate downside</span></div>
+    </section>
+
+    <section class="insight-grid">
+      <div class="insight-card">
+        <h4>As Of</h4>
+        <div class="insight-kpi" id="alpha-asof">—</div>
+        <div class="insight-meta">Signal timestamp (ET)</div>
+      </div>
+      <div class="insight-card">
+        <h4>Last Run</h4>
+        <div class="insight-kpi" id="alpha-last-run">—</div>
+        <div class="insight-meta">Daily factor sweep</div>
+      </div>
+      <div class="insight-card">
+        <h4>Symbols Loaded</h4>
+        <div class="insight-kpi" id="alpha-symbols">—</div>
+        <div class="insight-meta">Factor universe size</div>
+      </div>
+    </section>
 
     <section class="alpha-grid">
       <div class="panel alpha-panel alpha-pool-panel">

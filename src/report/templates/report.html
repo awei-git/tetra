@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tetra Market Report — {{ date }}</title>
+<style>
+
+/* ═══════════════════════════════════════════════
+   PAGE SETUP
+═══════════════════════════════════════════════ */
+@page {
+    size: A4;
+    margin: 2.2cm 1.8cm 2cm 1.8cm;
+    @bottom-right {
+        content: counter(page) " / " counter(pages);
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 8pt;
+        color: #8a9ab0;
+    }
+    @bottom-left {
+        content: "TETRA  ·  {{ date }}  ·  CONFIDENTIAL";
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #8a9ab0;
+        letter-spacing: 0.04em;
+    }
+}
+
+@page cover {
+    margin: 0;
+    @bottom-right { content: ""; }
+    @bottom-left  { content: ""; }
+}
+
+/* ═══════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.55;
+    color: #1c2733;
+    background: #ffffff;
+}
+
+/* ═══════════════════════════════════════════════
+   COVER PAGE
+═══════════════════════════════════════════════ */
+.cover {
+    page: cover;
+    page-break-after: always;
+    background: #0b1f38;
+    width: 100%;
+    height: 297mm;
+    position: relative;
+    display: block;
+}
+
+.cover-inner {
+    padding: 72pt 60pt 60pt 60pt;
+}
+
+.cover-eyebrow {
+    font-size: 8pt;
+    letter-spacing: 0.18em;
+    color: #c0a855;
+    text-transform: uppercase;
+    margin-bottom: 28pt;
+}
+
+.cover-rule {
+    width: 48pt;
+    height: 2.5pt;
+    background: #c0a855;
+    margin-bottom: 28pt;
+}
+
+.cover-title {
+    font-size: 34pt;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin-bottom: 14pt;
+}
+
+.cover-subtitle {
+    font-size: 14pt;
+    color: #8aabcc;
+    font-weight: 300;
+    margin-bottom: 48pt;
+}
+
+.cover-meta-row {
+    border-top: 1pt solid #1e3a5f;
+    padding-top: 20pt;
+    margin-top: 20pt;
+}
+
+.cover-meta-label {
+    font-size: 7.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5a7a9a;
+    margin-bottom: 4pt;
+}
+
+.cover-meta-value {
+    font-size: 12pt;
+    color: #e8eef4;
+    font-weight: 500;
+}
+
+.cover-models {
+    margin-top: 60pt;
+}
+
+.cover-model-chip {
+    display: inline-block;
+    font-size: 7.5pt;
+    letter-spacing: 0.06em;
+    color: #6a9abf;
+    border: 0.75pt solid #1e3a5f;
+    padding: 3pt 9pt;
+    margin-right: 6pt;
+    margin-bottom: 6pt;
+}
+
+.cover-footer {
+    position: absolute;
+    bottom: 36pt;
+    left: 60pt;
+    right: 60pt;
+    border-top: 0.75pt solid #1e3a5f;
+    padding-top: 12pt;
+    font-size: 7.5pt;
+    color: #3a5a7a;
+    letter-spacing: 0.05em;
+}
+
+/* ═══════════════════════════════════════════════
+   SECTION BANNER
+═══════════════════════════════════════════════ */
+.section-banner {
+    background: #0b1f38;
+    color: #ffffff;
+    padding: 9pt 14pt;
+    margin-bottom: 16pt;
+    margin-left: -1.8cm;
+    margin-right: -1.8cm;
+    page-break-after: avoid;
+}
+
+.section-banner-eyebrow {
+    font-size: 7pt;
+    letter-spacing: 0.16em;
+    color: #c0a855;
+    text-transform: uppercase;
+    margin-bottom: 2pt;
+}
+
+.section-banner-title {
+    font-size: 15pt;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.section-banner-sub {
+    font-size: 8pt;
+    color: #8aabcc;
+    margin-top: 2pt;
+}
+
+/* ═══════════════════════════════════════════════
+   MARKET SNAPSHOT
+═══════════════════════════════════════════════ */
+.snapshot-section {
+    page-break-after: always;
+}
+
+.snapshot-panels {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 6pt;
+    margin: 0 0 10pt 0;
+}
+
+.snapshot-row {
+    display: table-row;
+}
+
+.snapshot-panel {
+    display: table-cell;
+    vertical-align: top;
+    width: 33.3%;
+    border: 0.75pt solid #dde3eb;
+    padding: 0;
+}
+
+.panel-header {
+    background: #0b1f38;
+    padding: 5pt 9pt;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #c0a855;
+}
+
+.panel-body {
+    padding: 4pt 0;
+}
+
+.panel-row {
+    display: table;
+    width: 100%;
+    padding: 3pt 9pt;
+    border-bottom: 0.5pt solid #f0f3f7;
+}
+
+.panel-row:last-child { border-bottom: none; }
+
+.panel-cell {
+    display: table-cell;
+    vertical-align: middle;
+}
+
+.panel-name {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #2c3e50;
+    width: 44%;
+}
+
+.panel-price {
+    font-size: 8pt;
+    color: #1c2733;
+    text-align: right;
+    width: 32%;
+    font-variant-numeric: tabular-nums;
+}
+
+.panel-change {
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-align: right;
+    width: 24%;
+    font-variant-numeric: tabular-nums;
+}
+
+.up   { color: #1a7f4b; }
+.down { color: #c0392b; }
+.flat { color: #7a8a9a; }
+
+/* ═══════════════════════════════════════════════
+   ANALYSIS CONTENT
+═══════════════════════════════════════════════ */
+.analysis {
+    font-size: 9.5pt;
+    line-height: 1.58;
+    color: #1c2733;
+}
+
+.analysis h1, .analysis h2 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #0b1f38;
+    margin-top: 16pt;
+    margin-bottom: 5pt;
+    padding-bottom: 3pt;
+    border-bottom: 1pt solid #dde3eb;
+    page-break-after: avoid;
+}
+
+.analysis h3 {
+    font-size: 9.5pt;
+    font-weight: 700;
+    color: #1c2733;
+    margin-top: 12pt;
+    margin-bottom: 4pt;
+    page-break-after: avoid;
+}
+
+.analysis p {
+    margin-bottom: 7pt;
+    text-align: justify;
+}
+
+.analysis ul, .analysis ol {
+    margin-left: 16pt;
+    margin-bottom: 7pt;
+}
+
+.analysis li { margin-bottom: 2.5pt; }
+.analysis strong { font-weight: 700; color: #0b1f38; }
+.analysis em { font-style: italic; color: #3a5a7a; }
+
+.analysis table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10pt 0;
+    font-size: 8pt;
+    page-break-inside: avoid;
+}
+
+.analysis table th {
+    background: #0b1f38;
+    color: #ffffff;
+    padding: 5.5pt 7pt;
+    text-align: left;
+    font-weight: 600;
+    font-size: 7.5pt;
+    letter-spacing: 0.03em;
+}
+
+.analysis table td {
+    padding: 4.5pt 7pt;
+    border-bottom: 0.5pt solid #e8eef4;
+    vertical-align: top;
+    color: #1c2733;
+}
+
+.analysis table tr:nth-child(even) td { background: #f7f9fc; }
+
+.analysis blockquote {
+    background: #f0f5fc;
+    border-left: 3pt solid #0b1f38;
+    padding: 8pt 12pt;
+    margin: 10pt 0;
+    font-size: 9pt;
+    color: #2c3e50;
+}
+
+/* ═══════════════════════════════════════════════
+   TRADE CARDS
+═══════════════════════════════════════════════ */
+.trade-card {
+    border: 0.75pt solid #dde3eb;
+    margin-bottom: 10pt;
+    page-break-inside: avoid;
+}
+
+.trade-header {
+    background: #0b1f38;
+    padding: 6pt 10pt;
+    display: table;
+    width: 100%;
+}
+
+.trade-symbol {
+    display: table-cell;
+    font-size: 11pt;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.trade-direction {
+    display: table-cell;
+    text-align: right;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.trade-long { color: #4ecb71; }
+.trade-short { color: #ff6b6b; }
+
+.trade-body {
+    padding: 8pt 10pt;
+    font-size: 8.5pt;
+    line-height: 1.5;
+}
+
+.trade-meta {
+    display: table;
+    width: 100%;
+    margin-top: 6pt;
+    padding-top: 6pt;
+    border-top: 0.5pt solid #edf0f4;
+}
+
+.trade-meta-cell {
+    display: table-cell;
+    width: 33%;
+}
+
+.trade-meta-label {
+    font-size: 6.5pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7a8a9a;
+    font-weight: 700;
+}
+
+.trade-meta-value {
+    font-size: 8.5pt;
+    color: #1c2733;
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════
+   PORTFOLIO TABLE
+═══════════════════════════════════════════════ */
+.portfolio-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    margin: 10pt 0;
+}
+
+.portfolio-table th {
+    background: #0b1f38;
+    color: #fff;
+    padding: 5pt 7pt;
+    text-align: left;
+    font-weight: 600;
+    font-size: 7.5pt;
+}
+
+.portfolio-table td {
+    padding: 4.5pt 7pt;
+    border-bottom: 0.5pt solid #e8eef4;
+    font-variant-numeric: tabular-nums;
+}
+
+.portfolio-table tr:nth-child(even) td { background: #f7f9fc; }
+
+.portfolio-table .num { text-align: right; }
+
+/* ═══════════════════════════════════════════════
+   SIGNAL STRIP
+═══════════════════════════════════════════════ */
+.signal-strip {
+    background: #f7f9fc;
+    border: 0.75pt solid #dde3eb;
+    border-left: 3pt solid #c0a855;
+    padding: 7pt 12pt;
+    margin-bottom: 14pt;
+    font-size: 8pt;
+    line-height: 1.7;
+    color: #2c3e50;
+}
+
+.signal-strip-title {
+    font-size: 7pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #7a8a9a;
+    margin-bottom: 4pt;
+    font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════
+   LLM CHIPS
+═══════════════════════════════════════════════ */
+.llm-chip {
+    display: inline-block;
+    padding: 2pt 8pt;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-right: 5pt;
+    color: #fff;
+}
+
+.chip-openai   { background: #1a7f4b; }
+.chip-deepseek { background: #5b35b5; }
+.chip-gemini   { background: #1a56c0; }
+.chip-claude   { background: #b05a12; }
+
+/* ═══════════════════════════════════════════════
+   TRACKER TABLE
+═══════════════════════════════════════════════ */
+.tracker-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+    margin: 10pt 0;
+}
+
+.tracker-table th {
+    background: #0b1f38;
+    color: #fff;
+    padding: 4pt 6pt;
+    text-align: left;
+    font-size: 7pt;
+}
+
+.tracker-table td {
+    padding: 3.5pt 6pt;
+    border-bottom: 0.5pt solid #e8eef4;
+    font-variant-numeric: tabular-nums;
+}
+
+.tracker-table tr:nth-child(even) td { background: #f7f9fc; }
+.tracker-table .num { text-align: right; }
+
+/* ═══════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════ */
+.page-break { page-break-before: always; }
+.label {
+    font-size: 7pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7a8a9a;
+    font-weight: 700;
+}
+.gold { color: #c0a855; }
+.navy { color: #0b1f38; }
+
+.method-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin: 12pt 0;
+}
+.method-table th {
+    background: #0b1f38;
+    color: #fff;
+    padding: 6pt 9pt;
+    text-align: left;
+    font-weight: 600;
+    font-size: 8pt;
+}
+.method-table td {
+    padding: 6pt 9pt;
+    border-bottom: 0.5pt solid #e8eef4;
+    vertical-align: top;
+}
+.method-table tr:nth-child(even) td { background: #f7f9fc; }
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     COVER
+════════════════════════════════════════════════════════════ -->
+<div class="cover">
+<div class="cover-inner">
+
+    <div class="cover-eyebrow">Daily Market Intelligence</div>
+    <div class="cover-rule"></div>
+
+    <div class="cover-title">Tetra Market Report</div>
+    <div class="cover-subtitle">Adversarial Debate &amp; Novel Signal Analysis</div>
+
+    <table style="width:100%; margin-top:40pt; border-collapse:collapse;">
+        <tr>
+            <td style="padding-right:30pt; width:40%;">
+                <div class="cover-meta-row">
+                    <div class="cover-meta-label">Report Date</div>
+                    <div class="cover-meta-value">{{ date }}</div>
+                </div>
+            </td>
+            <td style="padding-right:30pt; width:20%;">
+                <div class="cover-meta-row">
+                    <div class="cover-meta-label">Generated</div>
+                    <div class="cover-meta-value">{{ time }}</div>
+                </div>
+            </td>
+            <td style="padding-right:30pt; width:20%;">
+                <div class="cover-meta-row">
+                    <div class="cover-meta-label">Regime</div>
+                    <div class="cover-meta-value">{{ regime | default('—') }}</div>
+                </div>
+            </td>
+            <td style="width:20%;">
+                <div class="cover-meta-row">
+                    <div class="cover-meta-label">Portfolio</div>
+                    <div class="cover-meta-value">{{ portfolio_total | default('—') }}</div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="cover-models">
+        <div style="font-size:7.5pt; letter-spacing:0.12em; text-transform:uppercase; color:#5a7a9a; margin-bottom:10pt;">Analysis Methods</div>
+        <div class="cover-model-chip">NARRATIVE FRAGMENTATION</div>
+        <div class="cover-model-chip">POLYMARKET LEAD-LAG</div>
+        <div class="cover-model-chip">INSIDER SIGNAL</div>
+        <div class="cover-model-chip">EARNINGS CASCADE</div>
+        <div class="cover-model-chip">ANALYST NETWORK</div>
+        <div class="cover-model-chip">LLM ADVERSARIAL DEBATE</div>
+    </div>
+
+</div>
+<div class="cover-footer">
+    Tetra Market Intelligence &nbsp;&middot;&nbsp;
+    For informational purposes only — not investment advice
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 1: WHAT HAPPENED
+════════════════════════════════════════════════════════════ -->
+<div class="snapshot-section">
+
+<div class="section-banner">
+    <div class="section-banner-eyebrow">Section 1</div>
+    <div class="section-banner-title">What Happened</div>
+    <div class="section-banner-sub">{{ date }} &nbsp;&middot;&nbsp; Market state &amp; anomalies</div>
+</div>
+
+<!-- Market snapshot panels -->
+{% if market_snapshot %}
+<table class="snapshot-panels">
+    <tr class="snapshot-row">
+        {% if market_snapshot.indices %}
+        <td class="snapshot-panel">
+            <div class="panel-header">Major Indices</div>
+            <div class="panel-body">
+                {% for item in market_snapshot.indices %}
+                <div class="panel-row">
+                    <span class="panel-cell panel-name">{{ item.name }}</span>
+                    <span class="panel-cell panel-price">{{ item.price }}</span>
+                    <span class="panel-cell panel-change {{ 'up' if item.change_pct > 0 else ('down' if item.change_pct < 0 else 'flat') }}">{{ item.change }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </td>
+        {% endif %}
+
+        {% if market_snapshot.portfolio_positions %}
+        <td class="snapshot-panel">
+            <div class="panel-header">Portfolio Holdings</div>
+            <div class="panel-body">
+                {% for item in market_snapshot.portfolio_positions %}
+                <div class="panel-row">
+                    <span class="panel-cell panel-name">{{ item.name }}</span>
+                    <span class="panel-cell panel-price">{{ item.price }}</span>
+                    <span class="panel-cell panel-change {{ 'up' if item.change_pct > 0 else ('down' if item.change_pct < 0 else 'flat') }}">{{ item.change }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </td>
+        {% endif %}
+
+        {% if market_snapshot.rates %}
+        <td class="snapshot-panel">
+            <div class="panel-header">Rates &amp; Credit</div>
+            <div class="panel-body">
+                {% for item in market_snapshot.rates %}
+                <div class="panel-row">
+                    <span class="panel-cell panel-name">{{ item.name }}</span>
+                    <span class="panel-cell panel-price">{{ item.price }}</span>
+                    <span class="panel-cell panel-change flat">&mdash;</span>
+                </div>
+                {% endfor %}
+            </div>
+        </td>
+        {% endif %}
+    </tr>
+</table>
+{% endif %}
+
+<!-- Narrative + anomalies -->
+<div class="analysis">
+    {{ what_happened | markdown | safe }}
+</div>
+
+{% if narrative_state %}
+<div class="signal-strip">
+    <div class="signal-strip-title">Narrative State</div>
+    <strong>Dominant:</strong> {{ narrative_state.dominant_narrative | default('N/A') }}<br>
+    <strong>Shift:</strong> {{ narrative_state.narrative_shift | default(0) }} (magnitude: {{ narrative_state.shift_magnitude | default(0) }})<br>
+    {% if narrative_state.counter_narrative %}
+    <strong>Counter-narrative:</strong> {{ narrative_state.counter_narrative }}<br>
+    {% endif %}
+</div>
+{% endif %}
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 2: WHAT IT MEANS
+════════════════════════════════════════════════════════════ -->
+<div class="section-banner">
+    <div class="section-banner-eyebrow">Section 2</div>
+    <div class="section-banner-title">What It Means</div>
+    <div class="section-banner-sub">Regime assessment &amp; signal synthesis</div>
+</div>
+
+{% if regime_detail %}
+<div class="signal-strip">
+    <div class="signal-strip-title">Market Regime</div>
+    <strong>Classification:</strong> {{ regime_detail.classification | default('unknown') }}
+    &nbsp;&middot;&nbsp; <strong>Confidence:</strong> {{ regime_detail.confidence | default('?') }}
+    &nbsp;&middot;&nbsp; <strong>Stability:</strong> {{ regime_detail.stability | default('?') }}<br>
+    {% if regime_detail.key_driver %}
+    <strong>Key driver:</strong> {{ regime_detail.key_driver }}
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="analysis">
+    {{ what_it_means | markdown | safe }}
+</div>
+
+{% if signals_summary %}
+<div style="margin-top: 12pt;">
+    <div class="label" style="margin-bottom: 6pt;">Active Signals</div>
+    <table class="portfolio-table">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Signals</th>
+                <th>Top Signal</th>
+                <th>Strength</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sig in signals_summary %}
+            <tr>
+                <td>{{ sig.source }}</td>
+                <td class="num">{{ sig.count }}</td>
+                <td>{{ sig.top_symbol | default('—') }}</td>
+                <td class="num">{{ sig.top_strength | default('—') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if debate_conflicts %}
+<div style="margin-top: 14pt;">
+    <div class="label" style="margin-bottom: 6pt;">Unresolved Conflicts</div>
+    {% for conflict in debate_conflicts %}
+    <div class="signal-strip">
+        <strong>{{ conflict.topic }}</strong><br>
+        <span style="color:#1a7f4b;">Bull:</span> {{ conflict.bull_case }}<br>
+        <span style="color:#c0392b;">Bear:</span> {{ conflict.bear_case }}<br>
+        <em style="font-size:7.5pt;">Resolution: {{ conflict.resolution_data }}</em>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 3: WHAT TO DO
+════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+
+<div class="section-banner">
+    <div class="section-banner-eyebrow">Section 3</div>
+    <div class="section-banner-title">What To Do</div>
+    <div class="section-banner-sub">Actionable trades &amp; portfolio decisions</div>
+</div>
+
+<!-- Consensus Trades -->
+{% if consensus_trades %}
+<div class="label" style="margin-bottom: 8pt;">Consensus Trades (Multi-Analyst Agreement)</div>
+{% for trade in consensus_trades %}
+<div class="trade-card">
+    <div class="trade-header">
+        <span class="trade-symbol">{{ trade.symbol }}</span>
+        <span class="trade-direction {{ 'trade-long' if trade.direction == 'long' else 'trade-short' }}">{{ trade.direction | upper }}</span>
+    </div>
+    <div class="trade-body">
+        <p>{{ trade.combined_thesis | default(trade.thesis | default('')) }}</p>
+        {% if trade.risk %}
+        <p style="color:#c0392b; font-size:8pt;"><strong>Risk:</strong> {{ trade.risk }}</p>
+        {% endif %}
+        <div class="trade-meta">
+            <span class="trade-meta-cell">
+                <div class="trade-meta-label">Confidence</div>
+                <div class="trade-meta-value">{{ trade.confidence | default('medium') | upper }}</div>
+            </span>
+            <span class="trade-meta-cell">
+                <div class="trade-meta-label">Supporting Analysts</div>
+                <div class="trade-meta-value">{{ trade.supporting_analysts | join(', ') if trade.supporting_analysts else '—' }}</div>
+            </span>
+            <span class="trade-meta-cell">
+                <div class="trade-meta-label">Type</div>
+                <div class="trade-meta-value">Consensus</div>
+            </span>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Contrarian Trades -->
+{% if contrarian_trades %}
+<div class="label" style="margin-top: 16pt; margin-bottom: 8pt;">Contrarian Trades (Single-Analyst Edge)</div>
+{% for trade in contrarian_trades %}
+<div class="trade-card">
+    <div class="trade-header" style="background: #2a1a0a;">
+        <span class="trade-symbol">{{ trade.symbol }}</span>
+        <span class="trade-direction {{ 'trade-long' if trade.direction == 'long' else 'trade-short' }}">{{ trade.direction | upper }} &middot; CONTRARIAN</span>
+    </div>
+    <div class="trade-body">
+        <p>{{ trade.thesis | default('') }}</p>
+        {% if trade.what_others_miss %}
+        <p style="font-size:8pt; color:#5b35b5;"><strong>Information gap:</strong> {{ trade.what_others_miss }}</p>
+        {% endif %}
+        {% if trade.risk %}
+        <p style="color:#c0392b; font-size:8pt;"><strong>Risk:</strong> {{ trade.risk }}</p>
+        {% endif %}
+        <div class="trade-meta">
+            <span class="trade-meta-cell">
+                <div class="trade-meta-label">Confidence</div>
+                <div class="trade-meta-value">{{ trade.confidence | default('medium') | upper }}</div>
+            </span>
+            <span class="trade-meta-cell">
+                <div class="trade-meta-label">Source</div>
+                <div class="trade-meta-value">{{ trade.source_analyst | default('—') | upper }}</div>
+            </span>
+            <span class="trade-meta-cell">
+                <div class="trade-meta-label">Type</div>
+                <div class="trade-meta-value">Contrarian</div>
+            </span>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Portfolio Actions -->
+{% if portfolio_actions %}
+<div style="margin-top: 16pt;">
+    <div class="label" style="margin-bottom: 6pt;">Portfolio Actions</div>
+    <table class="portfolio-table">
+        <thead>
+            <tr><th>Symbol</th><th>Action</th><th>Urgency</th><th>Reasoning</th></tr>
+        </thead>
+        <tbody>
+            {% for action in portfolio_actions %}
+            <tr>
+                <td><strong>{{ action.symbol }}</strong></td>
+                <td style="font-weight:700; {{ 'color:#1a7f4b' if action.action in ('add', 'hold') else 'color:#c0392b' }}">{{ action.action | upper }}</td>
+                <td>{{ action.urgency | default('monitor') }}</td>
+                <td>{{ action.reasoning | default('') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Risk Warnings -->
+{% if risk_warnings %}
+<div class="signal-strip" style="border-left-color: #c0392b; margin-top: 14pt;">
+    <div class="signal-strip-title" style="color: #c0392b;">Risk Warnings</div>
+    {% for risk in risk_warnings %}
+    &bull; {{ risk }}<br>
+    {% endfor %}
+</div>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 4: PORTFOLIO & TRACK RECORD
+════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+
+<div class="section-banner">
+    <div class="section-banner-eyebrow">Section 4</div>
+    <div class="section-banner-title">Portfolio &amp; Track Record</div>
+    <div class="section-banner-sub">Current holdings &amp; recommendation performance</div>
+</div>
+
+{% if portfolio_positions %}
+<div class="label" style="margin-bottom: 6pt;">Current Holdings</div>
+<table class="portfolio-table">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th class="num">Price</th>
+            <th class="num">Value</th>
+            <th class="num">Weight</th>
+            <th class="num">PnL</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pos in portfolio_positions %}
+        <tr>
+            <td><strong>{{ pos.symbol }}</strong></td>
+            <td class="num">${{ "{:,.2f}".format(pos.price) }}</td>
+            <td class="num">${{ "{:,.0f}".format(pos.value) }}</td>
+            <td class="num">{{ "{:.1f}".format(pos.weight) }}%</td>
+            <td class="num {{ 'up' if pos.pnl >= 0 else 'down' }}">${{ "{:,.0f}".format(pos.pnl) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if portfolio_summary %}
+<div class="signal-strip" style="margin-top: 10pt;">
+    <div class="signal-strip-title">Portfolio Summary</div>
+    <strong>Total Value:</strong> ${{ "{:,.0f}".format(portfolio_summary.total_value) }}
+    &nbsp;&middot;&nbsp; <strong>Cash:</strong> ${{ "{:,.0f}".format(portfolio_summary.cash) }}
+    &nbsp;&middot;&nbsp; <strong>Daily Return:</strong>
+    <span class="{{ 'up' if portfolio_summary.daily_return >= 0 else 'down' }}">{{ "{:+.2%}".format(portfolio_summary.daily_return) }}</span>
+    &nbsp;&middot;&nbsp; <strong>Cumulative:</strong>
+    <span class="{{ 'up' if portfolio_summary.cumulative_return >= 0 else 'down' }}">{{ "{:+.2%}".format(portfolio_summary.cumulative_return) }}</span>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Track Record -->
+{% if track_record %}
+<div style="margin-top: 16pt;">
+    <div class="label" style="margin-bottom: 6pt;">Recommendation Track Record</div>
+
+    {% if track_record.summary %}
+    <div class="signal-strip">
+        <div class="signal-strip-title">Performance Summary</div>
+        <strong>Total Recs:</strong> {{ track_record.summary.total }}
+        &nbsp;&middot;&nbsp; <strong>Closed:</strong> {{ track_record.summary.closed }}
+        &nbsp;&middot;&nbsp; <strong>Hit Target:</strong> {{ track_record.summary.hit_target }}
+        &nbsp;&middot;&nbsp; <strong>Hit Stop:</strong> {{ track_record.summary.hit_stop }}
+        {% if track_record.summary.avg_pnl is defined %}
+        &nbsp;&middot;&nbsp; <strong>Avg PnL:</strong>
+        <span class="{{ 'up' if track_record.summary.avg_pnl >= 0 else 'down' }}">{{ "{:+.1%}".format(track_record.summary.avg_pnl) }}</span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if track_record.recent_closed %}
+    <table class="tracker-table">
+        <thead>
+            <tr><th>Symbol</th><th>Direction</th><th>Method</th><th>Entry</th><th>Exit</th><th class="num">PnL</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            {% for rec in track_record.recent_closed %}
+            <tr>
+                <td><strong>{{ rec.symbol }}</strong></td>
+                <td>{{ rec.direction }}</td>
+                <td>{{ rec.method | default('—') }}</td>
+                <td class="num">${{ "{:.2f}".format(rec.entry_price) }}</td>
+                <td class="num">${{ "{:.2f}".format(rec.closed_price) }}</td>
+                <td class="num {{ 'up' if rec.realized_pnl >= 0 else 'down' }}">{{ "{:+.1%}".format(rec.realized_pnl) }}</td>
+                <td>{{ rec.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 5: FORWARD CALENDAR
+════════════════════════════════════════════════════════════ -->
+{% if forward_events %}
+<div style="margin-top: 20pt;">
+    <div class="label" style="margin-bottom: 6pt;">Forward Calendar (5 days)</div>
+    <table class="portfolio-table">
+        <thead>
+            <tr><th>Date</th><th>Event</th><th>Symbol</th><th>Impact</th></tr>
+        </thead>
+        <tbody>
+            {% for ev in forward_events %}
+            <tr>
+                <td>{{ ev.date }}</td>
+                <td>{{ ev.event }}</td>
+                <td>{{ ev.symbol | default('—') }}</td>
+                <td>{{ ev.impact | default('—') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     APPENDIX: METHODOLOGY
+════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+
+<div class="section-banner">
+    <div class="section-banner-eyebrow">Appendix</div>
+    <div class="section-banner-title">Methodology &amp; Attribution</div>
+</div>
+
+<div style="margin-top:16pt;">
+    <div class="label" style="margin-bottom:8pt;">Analysis Pipeline</div>
+    <table class="method-table">
+        <thead>
+            <tr><th>Method</th><th>Source</th><th>Signal Type</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Narrative Fragmentation</strong></td>
+                <td>30K+ news articles &rarr; LLM structural analysis</td>
+                <td>Regime shifts, narrative transitions</td>
+            </tr>
+            <tr>
+                <td><strong>Polymarket Lead-Lag</strong></td>
+                <td>10K prediction markets &rarr; Granger causality + LLM filter</td>
+                <td>Cross-asset information flow gaps</td>
+            </tr>
+            <tr>
+                <td><strong>Insider Trading Signal</strong></td>
+                <td>Form 4 filings (Finnhub) &rarr; Rule-based pattern detection</td>
+                <td>Cluster buying, pattern breaks, contrarian signals</td>
+            </tr>
+            <tr>
+                <td><strong>Earnings Cascade</strong></td>
+                <td>Supply chain + peer network &rarr; Centrality-weighted propagation</td>
+                <td>Customer/supplier/peer earnings momentum</td>
+            </tr>
+            <tr>
+                <td><strong>Analyst Network Alpha</strong></td>
+                <td>Co-coverage network &rarr; Recommendation shift propagation</td>
+                <td>Analyst shift, peer momentum, contrarian laggard</td>
+            </tr>
+            <tr>
+                <td><strong>Adversarial Debate</strong></td>
+                <td>3 LLMs with information asymmetry &rarr; 3-round debate</td>
+                <td>Consensus + contrarian trades</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+{% if debate_participants %}
+<div style="margin-top:20pt;">
+    <div class="label" style="margin-bottom:8pt;">Debate Participants</div>
+    <table class="method-table">
+        <thead>
+            <tr><th>Role</th><th>Provider</th><th>Data Slice</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Macro Analyst</strong></td>
+                <td><span class="llm-chip chip-{{ debate_participants.macro | lower }}">{{ debate_participants.macro | upper }}</span></td>
+                <td>Yields, credit spreads, FRED economic data</td>
+            </tr>
+            <tr>
+                <td><strong>Micro Analyst</strong></td>
+                <td><span class="llm-chip chip-{{ debate_participants.micro | lower }}">{{ debate_participants.micro | upper }}</span></td>
+                <td>Earnings, insider trades, analyst consensus</td>
+            </tr>
+            <tr>
+                <td><strong>Crowd Analyst</strong></td>
+                <td><span class="llm-chip chip-{{ debate_participants.crowd | lower }}">{{ debate_participants.crowd | upper }}</span></td>
+                <td>Polymarket, news narratives, sentiment shifts</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div style="margin-top:28pt; padding-top:10pt; border-top:0.75pt solid #dde3eb; font-size:7.5pt; color:#8a9ab0; line-height:1.6;">
+    <strong style="color:#0b1f38;">Tetra Market Intelligence</strong><br>
+    Generated {{ date }} at {{ time }}. Data sourced from Polygon, Finnhub, FRED, Polymarket, NewsAPI.<br>
+    This report is for <strong>informational purposes only</strong> and does not constitute investment advice.
+    Past performance does not guarantee future results.
+</div>
+
+</body>
+</html>

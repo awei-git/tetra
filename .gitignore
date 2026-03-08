@@ -81,3 +81,16 @@ kafka-logs/
 
 # Sketch folder for temporary scripts
 sketch/
+
+# LaunchAgent plists (contain hardcoded paths)
+*.plist
+
+# Daily runner (contains hardcoded paths)
+run_daily.sh
+
+# Output / reports
+output/
+reports/
+
+# Feedback loop
+feedback/
