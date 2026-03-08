@@ -1,4 +1,11 @@
-<h1 align="center">△ Tetra</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/△-Tetra-white?style=for-the-badge&labelColor=333&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDEwIDEwLDkwIDkwLDkwIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+">
+    <img src="https://img.shields.io/badge/△-Tetra-black?style=for-the-badge&labelColor=eee&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDEwIDEwLDkwIDkwLDkwIiBmaWxsPSIjMzMzIiBzdHJva2U9IiMzMzMiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==" alt="Tetra">
+  </picture>
+</p>
+
+<h1 align="center">Tetra</h1>
 
 <p align="center">
   <strong>LLM-powered market analysis system with novel signal extraction</strong>
@@ -184,20 +191,6 @@ Register the LaunchAgent for automated daily runs at market close:
 # Create run_daily.sh with your paths
 # Register: launchctl load com.tetra.plist
 ```
-
----
-
-## Token Budget
-
-| Method | Daily Cost |
-|--------|-----------|
-| Narrative extraction | $5–15 |
-| Polymarket analysis | $3–8 |
-| Adversarial debate | $15–25 |
-| Scenario analysis | $5–10 |
-| Insider/analyst analysis | $2–5 |
-| Report commentary | $2–5 |
-| **Total** | **~$30–65/day** |
 
 ---
 
