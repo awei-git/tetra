@@ -204,16 +204,18 @@ def push_to_mira(
     return results
 
 
-APPS_FEED_DIR = MIRA_DIR / "feeds" / "apps"
+OUTPUT_DIR = TETRA_DIR / "output"
+STATUS_FILE = OUTPUT_DIR / "status.json"
 
 
 def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -> None:
-    """Write Tetra status to Mira feeds/apps/tetra.json (App Integration Protocol v2)."""
+    """Write Tetra status to output/status.json (Mira reads via registry)."""
     if as_of is None:
         as_of = datetime.now(tz=UTC).date()
 
     now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     date_str = as_of.isoformat()
+    pdf_path = report_data.get("pdf_path", "")
 
     outputs: List[Dict[str, Any]] = []
 
@@ -233,21 +235,31 @@ def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -
         ],
     })
 
-    # Report: daily market report
-    briefing_md = _generate_briefing_md(report_data, as_of)
-    if len(briefing_md) > 4000:
-        briefing_md = briefing_md[:4000] + "\n…"
+    # Report: reference the briefing file (Mira reads directly)
+    briefing_path = f"output/briefings/{date_str}_market.md"
     outputs.append({
         "type": "report",
         "id": f"daily-{date_str}",
         "title": f"Daily Market Report {date_str}",
         "updatedAt": now,
         "period": "daily",
-        "content": briefing_md,
+        "path": briefing_path,
         "parent": "pipeline",
     })
 
-    # Deep dives: consensus + contrarian trades as separate items
+    # PDF reference
+    if pdf_path:
+        outputs.append({
+            "type": "report",
+            "id": f"pdf-{date_str}",
+            "title": f"Full PDF Report {date_str}",
+            "updatedAt": now,
+            "period": "daily",
+            "path": pdf_path,
+            "parent": "pipeline",
+        })
+
+    # Deep dives: consensus trades
     consensus = report_data.get("consensus_trades", [])
     if consensus:
         trades_content = []
@@ -257,16 +269,13 @@ def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -
             confidence = t.get("confidence", "?")
             thesis = t.get("combined_thesis", t.get("thesis", ""))
             trades_content.append(f"**{sym}** {direction} ({confidence})\n{thesis}")
-        content = "\n\n".join(trades_content)
-        if len(content) > 8000:
-            content = content[:8000] + "\n…"
         outputs.append({
             "type": "deep_dive",
             "id": f"trades-{date_str}",
             "title": f"Trade Recommendations {date_str}",
             "updatedAt": now,
             "topic": f"{len(consensus)} consensus trades — {report_data.get('regime', '')}",
-            "content": content,
+            "content": "\n\n".join(trades_content),
             "parent": f"daily-{date_str}",
         })
 
@@ -275,7 +284,7 @@ def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -
         outputs.append({
             "type": "alert",
             "id": f"risk-{date_str}-{i}",
-            "title": f"Risk Warning",
+            "title": "Risk Warning",
             "updatedAt": now,
             "severity": "warning",
             "message": risk,
@@ -289,14 +298,13 @@ def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -
     }
 
     try:
-        APPS_FEED_DIR.mkdir(parents=True, exist_ok=True)
-        target = APPS_FEED_DIR / "tetra.json"
-        tmp = target.with_suffix(".json.tmp")
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = STATUS_FILE.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(feed, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.rename(target)
-        logger.info(f"App status synced: {target.name}")
+        tmp.rename(STATUS_FILE)
+        logger.info(f"App status written: {STATUS_FILE}")
     except Exception as e:
-        logger.warning(f"Failed to sync app status: {e}")
+        logger.warning(f"Failed to write app status: {e}")
 
 
 def read_feedback_gaps() -> List[Dict[str, Any]]:
