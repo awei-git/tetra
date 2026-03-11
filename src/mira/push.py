@@ -67,14 +67,14 @@ def _generate_briefing_md(report_data: Dict[str, Any], as_of: date) -> str:
 
     portfolio_total = report_data.get("portfolio_total", "")
     if portfolio_total:
-        lines.append(f"**Portfolio:** {portfolio_total}")
+        parts = [f"**Portfolio:** {portfolio_total}"]
         daily_ret = report_data.get("daily_return")
         if daily_ret is not None:
-            lines.append(f" | Daily: {daily_ret:+.2%}")
+            parts.append(f"Daily: {daily_ret:+.2%}")
         cum_ret = report_data.get("cumulative_return")
         if cum_ret is not None:
-            lines.append(f" | Cumulative: {cum_ret:+.2%}")
-        lines.append("\n")
+            parts.append(f"Cumulative: {cum_ret:+.2%}")
+        lines.append(" | ".join(parts) + "\n")
 
     # Consensus trades
     consensus = report_data.get("consensus_trades", [])

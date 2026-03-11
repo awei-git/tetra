@@ -692,7 +692,7 @@ async def _fetch_news_headlines(as_of: date, limit: int = 15) -> List[Dict[str, 
     """Fetch recent news headlines with sentiment."""
     async with engine.begin() as conn:
         result = await conn.execute(text("""
-            SELECT title, source, published_at, symbols, sentiment_score
+            SELECT headline, source, published_at, tickers, sentiment
             FROM news.articles
             WHERE published_at::date >= :start AND published_at::date <= :as_of
             ORDER BY published_at DESC
@@ -702,10 +702,10 @@ async def _fetch_news_headlines(as_of: date, limit: int = 15) -> List[Dict[str, 
 
     return [
         {
-            "title": r.title,
+            "title": r.headline,
             "source": r.source,
-            "symbols": r.symbols,
-            "sentiment": round(float(r.sentiment_score), 2) if r.sentiment_score is not None else None,
+            "symbols": list(r.tickers) if r.tickers else [],
+            "sentiment": round(float(r.sentiment), 2) if r.sentiment is not None else None,
         }
         for r in rows
     ]

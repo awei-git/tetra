@@ -97,7 +97,7 @@ async def _ingest_premarket_data() -> Dict[str, Any]:
     return summary
 
 
-async def _fetch_overnight_news(since_hours: int = 14) -> List[Dict[str, Any]]:
+async def _fetch_overnight_news(since_hours: int = 20) -> List[Dict[str, Any]]:
     from sqlalchemy import text
     from src.db.session import engine
 
@@ -168,10 +168,14 @@ async def _fetch_polymarket_signals() -> List[Dict[str, Any]]:
 
     signals = []
     for r in rows:
+        price = float(r.best_bid) if r.best_bid is not None else None
+        question = (r.question[:100] if r.question else r.slug or "Unknown")
+        if price is None:
+            continue  # Skip markets with no price data
         signals.append({
             "market": r.slug or "",
-            "question": (r.question[:100] if r.question else ""),
-            "price": float(r.best_bid) if r.best_bid else 0,
+            "question": question,
+            "price": price,
             "change_24h": 0,
             "volume_24h": float(r.volume) if r.volume else 0,
         })
@@ -509,9 +513,11 @@ def _assemble_briefing_md(
     # Portfolio snapshot
     summary = portfolio.get("summary")
     if summary:
-        lines.append(f"**Portfolio:** ${summary['total_value']:,.0f}")
-        lines.append(f" | Last day: {summary['daily_return']:+.2%}")
-        lines.append(f" | Cumulative: {summary['cumulative_return']:+.2%}\n")
+        lines.append(
+            f"**Portfolio:** ${summary['total_value']:,.0f}"
+            f" | Last day: {summary['daily_return']:+.2%}"
+            f" | Cumulative: {summary['cumulative_return']:+.2%}\n"
+        )
 
     if last_debate and last_debate.get("regime"):
         lines.append(f"**Regime:** {last_debate['regime']}\n")
@@ -539,12 +545,15 @@ def _assemble_briefing_md(
         lines.append("\n## Overnight News (Top 15)\n")
         for a in news[:15]:
             sentiment_tag = ""
-            if a["sentiment"] > 0.3:
+            sent = a.get("sentiment") or 0
+            if sent > 0.3:
                 sentiment_tag = " [+]"
-            elif a["sentiment"] < -0.3:
+            elif sent < -0.3:
                 sentiment_tag = " [-]"
-            symbols_str = f" ({', '.join(a['symbols'][:3])})" if a["symbols"] else ""
-            lines.append(f"- {a['title']}{symbols_str}{sentiment_tag}")
+            syms = a.get("symbols") or []
+            symbols_str = f" ({', '.join(syms[:3])})" if syms else ""
+            title = a.get("title") or "(no headline)"
+            lines.append(f"- {title}{symbols_str}{sentiment_tag}")
 
     # Polymarket
     if polymarket:
@@ -669,6 +678,15 @@ async def main_async(args: argparse.Namespace) -> None:
             logger.info(f"Ingest complete: {ingest_summary}")
         except Exception as e:
             logger.warning(f"Ingest failed (continuing with stale data): {e}")
+
+    # Step 1.5: Mark-to-market portfolio with latest prices
+    logger.info("Marking portfolio to market...")
+    try:
+        from src.portfolio.manager import update_positions
+        mtm_result = await update_positions(today)
+        logger.info(f"Portfolio MTM: {mtm_result.get('status', 'unknown')}")
+    except Exception as e:
+        logger.warning(f"Portfolio MTM failed (using stale data): {e}")
 
     # Step 2: Fetch market data from DB + feeds in parallel
     logger.info("Fetching data...")

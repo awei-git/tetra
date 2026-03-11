@@ -585,11 +585,11 @@ body {
         <tbody>
             {% for a in news[:15] %}
             <tr>
-                <td>{{ a.title[:80] }}</td>
-                <td class="muted">{{ a.source }}</td>
+                <td>{{ (a.title or '')[:80] }}</td>
+                <td class="muted">{{ a.source or '' }}</td>
                 <td class="accent">{{ a.symbols[:3]|join(', ') if a.symbols else '' }}</td>
-                <td class="r {{ 'up' if a.sentiment > 0.3 else ('down' if a.sentiment < -0.3 else 'muted') }}">
-                    {{ "{:+.2f}".format(a.sentiment) }}
+                <td class="r {{ 'up' if a.sentiment and a.sentiment > 0.3 else ('down' if a.sentiment and a.sentiment < -0.3 else 'muted') }}">
+                    {{ "{:+.2f}".format(a.sentiment) if a.sentiment is not none else '—' }}
                 </td>
             </tr>
             {% endfor %}
@@ -610,9 +610,9 @@ body {
         <tbody>
             {% for p in polymarket[:10] %}
             <tr>
-                <td>{{ p.question[:70] if p.question else p.market }}</td>
-                <td class="r"><strong>{{ "{:.0%}".format(p.price) }}</strong></td>
-                <td class="r muted">${{ "{:,.0f}".format(p.volume_24h) }}</td>
+                <td>{{ (p.question or p.market or 'Unknown')[:70] }}</td>
+                <td class="r"><strong>{{ "{:.0%}".format(p.price) if p.price is not none else '—' }}</strong></td>
+                <td class="r muted">${{ "{:,.0f}".format(p.volume_24h or 0) }}</td>
             </tr>
             {% endfor %}
         </tbody>
