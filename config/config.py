@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     email_enabled: bool = True
     email_smtp_server: str = "smtp.gmail.com"
     email_smtp_port: int = 587
-    email_recipients: str = ""  # Set in secrets.yml: email.recipients
+    # email_recipients: loaded from secrets.yml via property
 
     # Features
     enable_paper_trading: bool = True
@@ -193,6 +193,10 @@ class Settings(BaseSettings):
     @property
     def smtp_password(self) -> Optional[str]:
         return self._secrets.get("email", {}).get("smtp_password")
+
+    @property
+    def email_recipients(self) -> str:
+        return self._secrets.get("email", {}).get("recipients", "")
 
     @property
     def portfolio_config(self) -> dict:

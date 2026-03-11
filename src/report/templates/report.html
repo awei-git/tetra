@@ -5,1063 +5,1420 @@
 <title>Tetra Market Report — {{ date }}</title>
 <style>
 
-/* ═══════════════════════════════════════════════
-   PAGE SETUP
-═══════════════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   PAGE — charcoal background, edge-to-edge
+═══════════════════════════════════════ */
 @page {
     size: A4;
-    margin: 2.2cm 1.8cm 2cm 1.8cm;
-    @bottom-right {
-        content: counter(page) " / " counter(pages);
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 8pt;
-        color: #8a9ab0;
-    }
-    @bottom-left {
-        content: "TETRA  ·  {{ date }}  ·  CONFIDENTIAL";
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 7.5pt;
-        color: #8a9ab0;
-        letter-spacing: 0.04em;
-    }
-}
-
-@page cover {
     margin: 0;
-    @bottom-right { content: ""; }
-    @bottom-left  { content: ""; }
+    background: #111118;
 }
 
-/* ═══════════════════════════════════════════════
+/* ═══════════════════════════════════════
    RESET & BASE
-═══════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-size: 9.5pt;
-    line-height: 1.55;
-    color: #1c2733;
-    background: #ffffff;
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.5;
+    color: #a0a8b4;
+    background: #111118;
 }
 
-/* ═══════════════════════════════════════════════
-   COVER PAGE
-═══════════════════════════════════════════════ */
-.cover {
-    page: cover;
+/* ═══════════════════════════════════════
+   SLIDE
+═══════════════════════════════════════ */
+.slide {
     page-break-after: always;
-    background: #0b1f38;
-    width: 100%;
-    height: 297mm;
+    padding: 36pt 40pt 28pt 40pt;
+    min-height: 100%;
     position: relative;
-    display: block;
 }
 
-.cover-inner {
-    padding: 72pt 60pt 60pt 60pt;
+.slide-foot {
+    position: absolute;
+    bottom: 18pt;
+    left: 40pt;
+    right: 40pt;
+    display: table;
+    width: calc(100% - 80pt);
+    font-size: 6pt;
+    color: #3a3a48;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.slide-foot-l { display: table-cell; text-align: left; }
+.slide-foot-r { display: table-cell; text-align: right; }
+
+/* ═══════════════════════════════════════
+   COVER
+═══════════════════════════════════════ */
+.cover {
+    page-break-after: always;
+    background: #111118;
+    padding: 80pt 56pt 40pt 56pt;
+    min-height: 297mm;
+    position: relative;
 }
 
-.cover-eyebrow {
+.cover-tag {
     font-size: 8pt;
-    letter-spacing: 0.18em;
-    color: #c0a855;
+    letter-spacing: 0.25em;
+    color: #00bcd4;
     text-transform: uppercase;
+    margin-bottom: 20pt;
+}
+
+.cover-bar {
+    width: 40pt;
+    height: 3pt;
+    background: #00bcd4;
     margin-bottom: 28pt;
 }
 
-.cover-rule {
-    width: 48pt;
-    height: 2.5pt;
-    background: #c0a855;
-    margin-bottom: 28pt;
-}
-
-.cover-title {
-    font-size: 34pt;
-    font-weight: 700;
+.cover h1 {
+    font-size: 40pt;
+    font-weight: 800;
     color: #ffffff;
-    line-height: 1.15;
-    letter-spacing: -0.01em;
-    margin-bottom: 14pt;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 8pt;
 }
 
-.cover-subtitle {
+.cover-sub {
     font-size: 14pt;
-    color: #8aabcc;
-    font-weight: 300;
-    margin-bottom: 48pt;
+    color: #555568;
+    font-weight: 400;
+    margin-bottom: 56pt;
 }
 
-.cover-meta-row {
-    border-top: 1pt solid #1e3a5f;
-    padding-top: 20pt;
-    margin-top: 20pt;
+.cover-grid {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
 }
 
-.cover-meta-label {
-    font-size: 7.5pt;
-    letter-spacing: 0.12em;
+.cover-grid td {
+    vertical-align: top;
+    padding: 16pt 20pt 16pt 0;
+    border-top: 1pt solid #222230;
+}
+
+.cover-lbl {
+    font-size: 6.5pt;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: #5a7a9a;
+    color: #555568;
+    margin-bottom: 5pt;
+}
+
+.cover-val {
+    font-size: 14pt;
+    color: #e8e8f0;
+    font-weight: 700;
+}
+
+.cover-methods {
+    margin-top: 48pt;
+}
+
+.cover-pill {
+    display: inline-block;
+    font-size: 6.5pt;
+    letter-spacing: 0.08em;
+    color: #555568;
+    border: 0.75pt solid #2a2a38;
+    padding: 3pt 8pt;
+    margin-right: 3pt;
     margin-bottom: 4pt;
 }
 
-.cover-meta-value {
-    font-size: 12pt;
-    color: #e8eef4;
-    font-weight: 500;
-}
-
-.cover-models {
-    margin-top: 60pt;
-}
-
-.cover-model-chip {
-    display: inline-block;
-    font-size: 7.5pt;
-    letter-spacing: 0.06em;
-    color: #6a9abf;
-    border: 0.75pt solid #1e3a5f;
-    padding: 3pt 9pt;
-    margin-right: 6pt;
-    margin-bottom: 6pt;
-}
-
-.cover-footer {
+.cover-bottom {
     position: absolute;
-    bottom: 36pt;
-    left: 60pt;
-    right: 60pt;
-    border-top: 0.75pt solid #1e3a5f;
-    padding-top: 12pt;
-    font-size: 7.5pt;
-    color: #3a5a7a;
-    letter-spacing: 0.05em;
+    bottom: 32pt;
+    left: 56pt;
+    right: 56pt;
+    font-size: 6.5pt;
+    color: #333340;
+    letter-spacing: 0.04em;
+    border-top: 0.5pt solid #222230;
+    padding-top: 8pt;
 }
 
-/* ═══════════════════════════════════════════════
-   SECTION BANNER
-═══════════════════════════════════════════════ */
-.section-banner {
-    background: #0b1f38;
-    color: #ffffff;
-    padding: 9pt 14pt;
-    margin-bottom: 16pt;
-    margin-left: -1.8cm;
-    margin-right: -1.8cm;
-    page-break-after: avoid;
-}
-
-.section-banner-eyebrow {
-    font-size: 7pt;
-    letter-spacing: 0.16em;
-    color: #c0a855;
-    text-transform: uppercase;
-    margin-bottom: 2pt;
-}
-
-.section-banner-title {
-    font-size: 15pt;
+/* Regime badges */
+.badge-regime {
+    display: inline-block;
+    padding: 3pt 12pt;
+    font-size: 11pt;
     font-weight: 700;
-    letter-spacing: -0.01em;
+}
+.badge-bullish  { background: #0a6e3a; color: #ffffff; }
+.badge-bearish  { background: #b32d2d; color: #ffffff; }
+.badge-volatile { background: #7c3aed; color: #ffffff; }
+.badge-neutral  { background: #333340; color: #a0a8b4; }
+
+/* ═══════════════════════════════════════
+   SLIDE TITLE
+═══════════════════════════════════════ */
+.stitle {
+    margin-bottom: 20pt;
 }
 
-.section-banner-sub {
+.stitle-tag {
+    font-size: 6.5pt;
+    letter-spacing: 0.2em;
+    color: #00bcd4;
+    text-transform: uppercase;
+    margin-bottom: 4pt;
+}
+
+.stitle h2 {
+    font-size: 22pt;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+}
+
+.stitle-sub {
     font-size: 8pt;
-    color: #8aabcc;
+    color: #555568;
     margin-top: 2pt;
 }
 
-/* ═══════════════════════════════════════════════
-   MARKET SNAPSHOT
-═══════════════════════════════════════════════ */
-.snapshot-section {
-    page-break-after: always;
-}
-
-.snapshot-panels {
+/* ═══════════════════════════════════════
+   KPI CARDS
+═══════════════════════════════════════ */
+.kpi-row {
     display: table;
     width: 100%;
     table-layout: fixed;
     border-collapse: separate;
-    border-spacing: 6pt;
-    margin: 0 0 10pt 0;
+    border-spacing: 8pt 0;
+    margin-bottom: 16pt;
 }
 
-.snapshot-row {
-    display: table-row;
-}
-
-.snapshot-panel {
+.kpi {
     display: table-cell;
     vertical-align: top;
-    width: 33.3%;
-    border: 0.75pt solid #dde3eb;
-    padding: 0;
+    background: #1a1a24;
+    border: 1pt solid #2a2a38;
+    padding: 12pt 14pt;
 }
 
-.panel-header {
-    background: #0b1f38;
-    padding: 5pt 9pt;
+.kpi-lbl {
+    font-size: 6pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #555568;
+    font-weight: 700;
+    margin-bottom: 5pt;
+}
+
+.kpi-num {
+    font-size: 24pt;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.1;
+}
+
+.kpi-num-sm {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.2;
+}
+
+.kpi-hint {
     font-size: 7pt;
+    color: #555568;
+    margin-top: 3pt;
+}
+
+/* ═══════════════════════════════════════
+   TWO-COLUMN
+═══════════════════════════════════════ */
+.row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 8pt 0;
+    margin-bottom: 8pt;
+}
+
+.col { display: table-cell; vertical-align: top; width: 50%; }
+
+/* ═══════════════════════════════════════
+   SECTION LABEL — thin bar accent
+═══════════════════════════════════════ */
+.slbl {
+    font-size: 7pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #00bcd4;
+    font-weight: 700;
+    margin-bottom: 8pt;
+    padding-bottom: 4pt;
+    border-bottom: 1.5pt solid #222230;
+}
+
+.slbl-red { color: #ef4444; border-bottom-color: #3a1a1a; }
+.slbl-grn { color: #22c55e; border-bottom-color: #1a3a1a; }
+
+/* ═══════════════════════════════════════
+   TABLE
+═══════════════════════════════════════ */
+.t {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+}
+
+.t th {
+    background: #1a1a24;
+    padding: 3pt 6pt;
+    text-align: left;
+    font-size: 6pt;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #555568;
+    border-bottom: 1pt solid #2a2a38;
+}
+
+.t th.r { text-align: right; }
+
+.t td {
+    padding: 2.5pt 6pt;
+    border-bottom: 0.5pt solid #1e1e28;
+    font-variant-numeric: tabular-nums;
+    color: #c0c8d4;
+}
+
+.t tr:nth-child(even) td { background: #141420; }
+.t tr:nth-child(odd) td { background: #111118; }
+
+.t td.sym { font-weight: 700; color: #e8e8f0; }
+.t td.r { text-align: right; }
+.t td.b { font-weight: 700; }
+
+/* ═══════════════════════════════════════
+   MARKET GROUP CARD
+═══════════════════════════════════════ */
+.mc {
+    background: #141420;
+    border: 0.75pt solid #222230;
+}
+
+.mc-hdr {
+    background: #1a1a28;
+    padding: 3pt 8pt;
+    font-size: 6.5pt;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #c0a855;
+    color: #00bcd4;
+    border-bottom: 0.75pt solid #222230;
 }
 
-.panel-body {
-    padding: 4pt 0;
+/* ═══════════════════════════════════════
+   COLORS
+═══════════════════════════════════════ */
+.up   { color: #22c55e !important; }
+.down { color: #ef4444 !important; }
+.flat { color: #555568 !important; }
+.wh   { color: #ffffff !important; }
+.dim  { color: #555568 !important; }
+.cyan { color: #00bcd4; }
+
+/* ═══════════════════════════════════════
+   ALERT & INFO STRIPS
+═══════════════════════════════════════ */
+.alert {
+    background: #1a1015;
+    border-left: 3pt solid #ef4444;
+    padding: 6pt 10pt;
+    margin-bottom: 5pt;
+    font-size: 8.5pt;
+    color: #c8a0a0;
 }
 
-.panel-row {
+.info {
+    background: #10161a;
+    border-left: 3pt solid #00bcd4;
+    padding: 6pt 10pt;
+    margin-bottom: 5pt;
+    font-size: 8.5pt;
+    color: #90b0c0;
+}
+
+/* ═══════════════════════════════════════
+   TRADE CARDS
+═══════════════════════════════════════ */
+.tc {
+    border: 1pt solid #222230;
+    margin-bottom: 8pt;
+    page-break-inside: avoid;
+    background: #141420;
+}
+
+.tc-hdr {
+    padding: 6pt 12pt;
     display: table;
     width: 100%;
-    padding: 3pt 9pt;
-    border-bottom: 0.5pt solid #f0f3f7;
+    background: #1a1a28;
 }
 
-.panel-row:last-child { border-bottom: none; }
-
-.panel-cell {
+.tc-sym {
     display: table-cell;
+    font-size: 13pt;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.tc-dir {
+    display: table-cell;
+    text-align: right;
     vertical-align: middle;
 }
 
-.panel-name {
-    font-size: 8pt;
-    font-weight: 600;
-    color: #2c3e50;
-    width: 44%;
-}
-
-.panel-price {
-    font-size: 8pt;
-    color: #1c2733;
-    text-align: right;
-    width: 32%;
-    font-variant-numeric: tabular-nums;
-}
-
-.panel-change {
+.pill-buy {
+    display: inline-block;
+    background: #0a6e3a;
+    color: #fff;
+    padding: 2pt 12pt;
     font-size: 7.5pt;
-    font-weight: 700;
-    text-align: right;
-    width: 24%;
-    font-variant-numeric: tabular-nums;
-}
-
-.up   { color: #1a7f4b; }
-.down { color: #c0392b; }
-.flat { color: #7a8a9a; }
-
-/* ═══════════════════════════════════════════════
-   ANALYSIS CONTENT
-═══════════════════════════════════════════════ */
-.analysis {
-    font-size: 9.5pt;
-    line-height: 1.58;
-    color: #1c2733;
-}
-
-.analysis h1, .analysis h2 {
-    font-size: 11pt;
-    font-weight: 700;
-    color: #0b1f38;
-    margin-top: 16pt;
-    margin-bottom: 5pt;
-    padding-bottom: 3pt;
-    border-bottom: 1pt solid #dde3eb;
-    page-break-after: avoid;
-}
-
-.analysis h3 {
-    font-size: 9.5pt;
-    font-weight: 700;
-    color: #1c2733;
-    margin-top: 12pt;
-    margin-bottom: 4pt;
-    page-break-after: avoid;
-}
-
-.analysis p {
-    margin-bottom: 7pt;
-    text-align: justify;
-}
-
-.analysis ul, .analysis ol {
-    margin-left: 16pt;
-    margin-bottom: 7pt;
-}
-
-.analysis li { margin-bottom: 2.5pt; }
-.analysis strong { font-weight: 700; color: #0b1f38; }
-.analysis em { font-style: italic; color: #3a5a7a; }
-
-.analysis table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 10pt 0;
-    font-size: 8pt;
-    page-break-inside: avoid;
-}
-
-.analysis table th {
-    background: #0b1f38;
-    color: #ffffff;
-    padding: 5.5pt 7pt;
-    text-align: left;
-    font-weight: 600;
-    font-size: 7.5pt;
-    letter-spacing: 0.03em;
-}
-
-.analysis table td {
-    padding: 4.5pt 7pt;
-    border-bottom: 0.5pt solid #e8eef4;
-    vertical-align: top;
-    color: #1c2733;
-}
-
-.analysis table tr:nth-child(even) td { background: #f7f9fc; }
-
-.analysis blockquote {
-    background: #f0f5fc;
-    border-left: 3pt solid #0b1f38;
-    padding: 8pt 12pt;
-    margin: 10pt 0;
-    font-size: 9pt;
-    color: #2c3e50;
-}
-
-/* ═══════════════════════════════════════════════
-   TRADE CARDS
-═══════════════════════════════════════════════ */
-.trade-card {
-    border: 0.75pt solid #dde3eb;
-    margin-bottom: 10pt;
-    page-break-inside: avoid;
-}
-
-.trade-header {
-    background: #0b1f38;
-    padding: 6pt 10pt;
-    display: table;
-    width: 100%;
-}
-
-.trade-symbol {
-    display: table-cell;
-    font-size: 11pt;
-    font-weight: 700;
-    color: #ffffff;
-}
-
-.trade-direction {
-    display: table-cell;
-    text-align: right;
-    font-size: 8pt;
     font-weight: 700;
     letter-spacing: 0.08em;
-    text-transform: uppercase;
-    vertical-align: middle;
 }
 
-.trade-long { color: #4ecb71; }
-.trade-short { color: #ff6b6b; }
+.pill-sell {
+    display: inline-block;
+    background: #b32d2d;
+    color: #fff;
+    padding: 2pt 12pt;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
 
-.trade-body {
-    padding: 8pt 10pt;
+.pill-tag {
+    display: inline-block;
+    color: #7c3aed;
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-left: 6pt;
+}
+
+.tc-body {
+    padding: 8pt 12pt;
     font-size: 8.5pt;
     line-height: 1.5;
+    color: #8890a0;
 }
 
-.trade-meta {
+.tc-meta {
     display: table;
     width: 100%;
     margin-top: 6pt;
     padding-top: 6pt;
-    border-top: 0.5pt solid #edf0f4;
+    border-top: 0.5pt solid #222230;
 }
 
-.trade-meta-cell {
-    display: table-cell;
-    width: 33%;
-}
+.tc-meta-c { display: table-cell; width: 33%; }
 
-.trade-meta-label {
-    font-size: 6.5pt;
-    letter-spacing: 0.1em;
+.tc-meta-l {
+    font-size: 5.5pt;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #7a8a9a;
+    color: #444450;
     font-weight: 700;
 }
 
-.trade-meta-value {
-    font-size: 8.5pt;
-    color: #1c2733;
+.tc-meta-v {
+    font-size: 8pt;
+    color: #c0c8d4;
     font-weight: 600;
 }
 
-/* ═══════════════════════════════════════════════
-   PORTFOLIO TABLE
-═══════════════════════════════════════════════ */
-.portfolio-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 8pt;
-    margin: 10pt 0;
+/* ═══════════════════════════════════════
+   PROSE (LLM analysis)
+═══════════════════════════════════════ */
+.prose {
+    font-size: 9pt;
+    line-height: 1.6;
+    color: #90a0b0;
 }
 
-.portfolio-table th {
-    background: #0b1f38;
-    color: #fff;
-    padding: 5pt 7pt;
+.prose h1, .prose h2 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #e0e0e8;
+    margin-top: 10pt;
+    margin-bottom: 4pt;
+    padding-bottom: 3pt;
+    border-bottom: 0.75pt solid #222230;
+    page-break-after: avoid;
+}
+
+.prose h3 {
+    font-size: 9.5pt;
+    font-weight: 700;
+    color: #c0c8d4;
+    margin-top: 8pt;
+    margin-bottom: 3pt;
+    page-break-after: avoid;
+}
+
+.prose p { margin-bottom: 5pt; }
+.prose ul, .prose ol { margin-left: 14pt; margin-bottom: 5pt; }
+.prose li { margin-bottom: 2pt; }
+.prose strong { font-weight: 700; color: #e0e0e8; }
+.prose em { font-style: italic; color: #7090b0; }
+
+.prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6pt 0;
+    font-size: 8.5pt;
+    page-break-inside: avoid;
+}
+.prose table th {
+    background: #1a1a28;
+    color: #c0c8d4;
+    padding: 3.5pt 7pt;
     text-align: left;
     font-weight: 600;
     font-size: 7.5pt;
 }
+.prose table td {
+    padding: 3pt 7pt;
+    border-bottom: 0.5pt solid #1e1e28;
+    color: #90a0b0;
+}
+.prose table tr:nth-child(even) td { background: #141420; }
 
-.portfolio-table td {
-    padding: 4.5pt 7pt;
-    border-bottom: 0.5pt solid #e8eef4;
-    font-variant-numeric: tabular-nums;
+.prose blockquote {
+    background: #141420;
+    border-left: 3pt solid #00bcd4;
+    padding: 6pt 10pt;
+    margin: 6pt 0;
+    font-size: 8.5pt;
+    color: #7090b0;
 }
 
-.portfolio-table tr:nth-child(even) td { background: #f7f9fc; }
-
-.portfolio-table .num { text-align: right; }
-
-/* ═══════════════════════════════════════════════
-   SIGNAL STRIP
-═══════════════════════════════════════════════ */
-.signal-strip {
-    background: #f7f9fc;
-    border: 0.75pt solid #dde3eb;
-    border-left: 3pt solid #c0a855;
-    padding: 7pt 12pt;
-    margin-bottom: 14pt;
-    font-size: 8pt;
-    line-height: 1.7;
-    color: #2c3e50;
-}
-
-.signal-strip-title {
-    font-size: 7pt;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #7a8a9a;
-    margin-bottom: 4pt;
-    font-weight: 700;
-}
-
-/* ═══════════════════════════════════════════════
-   LLM CHIPS
-═══════════════════════════════════════════════ */
-.llm-chip {
+/* ═══════════════════════════════════════
+   SIGNAL BAR
+═══════════════════════════════════════ */
+.bar-bg {
     display: inline-block;
-    padding: 2pt 8pt;
-    font-size: 7pt;
+    width: 50pt;
+    height: 5pt;
+    background: #1a1a28;
+    vertical-align: middle;
+    margin-right: 4pt;
+}
+.bar-fill { display: block; height: 100%; }
+.bar-hi .bar-fill { background: #22c55e; }
+.bar-md .bar-fill { background: #f59e0b; }
+.bar-lo .bar-fill { background: #555568; }
+
+/* LLM chips */
+.chip {
+    display: inline-block;
+    padding: 2pt 6pt;
+    font-size: 6pt;
     font-weight: 700;
     letter-spacing: 0.06em;
-    margin-right: 5pt;
     color: #fff;
 }
-
-.chip-openai   { background: #1a7f4b; }
-.chip-deepseek { background: #5b35b5; }
+.chip-openai   { background: #0a6e3a; }
+.chip-deepseek { background: #7c3aed; }
 .chip-gemini   { background: #1a56c0; }
 .chip-claude   { background: #b05a12; }
 
-/* ═══════════════════════════════════════════════
-   TRACKER TABLE
-═══════════════════════════════════════════════ */
-.tracker-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 7.5pt;
-    margin: 10pt 0;
-}
-
-.tracker-table th {
-    background: #0b1f38;
-    color: #fff;
-    padding: 4pt 6pt;
-    text-align: left;
-    font-size: 7pt;
-}
-
-.tracker-table td {
-    padding: 3.5pt 6pt;
-    border-bottom: 0.5pt solid #e8eef4;
-    font-variant-numeric: tabular-nums;
-}
-
-.tracker-table tr:nth-child(even) td { background: #f7f9fc; }
-.tracker-table .num { text-align: right; }
-
-/* ═══════════════════════════════════════════════
-   UTILS
-═══════════════════════════════════════════════ */
 .page-break { page-break-before: always; }
-.label {
-    font-size: 7pt;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #7a8a9a;
-    font-weight: 700;
-}
-.gold { color: #c0a855; }
-.navy { color: #0b1f38; }
-
-.method-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 8.5pt;
-    margin: 12pt 0;
-}
-.method-table th {
-    background: #0b1f38;
-    color: #fff;
-    padding: 6pt 9pt;
-    text-align: left;
-    font-weight: 600;
-    font-size: 8pt;
-}
-.method-table td {
-    padding: 6pt 9pt;
-    border-bottom: 0.5pt solid #e8eef4;
-    vertical-align: top;
-}
-.method-table tr:nth-child(even) td { background: #f7f9fc; }
 
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════════
-     COVER
-════════════════════════════════════════════════════════════ -->
+<!-- ══════════════ COVER ══════════════ -->
 <div class="cover">
-<div class="cover-inner">
+    <div class="cover-tag">Daily Market Intelligence</div>
+    <div class="cover-bar"></div>
+    <h1>Tetra Market<br>Report</h1>
+    <div class="cover-sub">Adversarial Debate &amp; Novel Signal Analysis</div>
 
-    <div class="cover-eyebrow">Daily Market Intelligence</div>
-    <div class="cover-rule"></div>
-
-    <div class="cover-title">Tetra Market Report</div>
-    <div class="cover-subtitle">Adversarial Debate &amp; Novel Signal Analysis</div>
-
-    <table style="width:100%; margin-top:40pt; border-collapse:collapse;">
+    <table class="cover-grid">
         <tr>
-            <td style="padding-right:30pt; width:40%;">
-                <div class="cover-meta-row">
-                    <div class="cover-meta-label">Report Date</div>
-                    <div class="cover-meta-value">{{ date }}</div>
+            <td style="width:28%;">
+                <div class="cover-lbl">Report Date</div>
+                <div class="cover-val">{{ date }}</div>
+            </td>
+            <td style="width:18%;">
+                <div class="cover-lbl">Generated</div>
+                <div class="cover-val">{{ time }}</div>
+            </td>
+            <td style="width:27%;">
+                <div class="cover-lbl">Regime</div>
+                <div class="cover-val">
+                    {% if regime %}
+                    {% set rl = regime | lower %}
+                    <span class="badge-regime {{ 'badge-bullish' if 'bull' in rl else ('badge-bearish' if 'bear' in rl else ('badge-volatile' if 'volat' in rl else 'badge-neutral')) }}">{{ regime }}</span>
+                    {% else %}
+                    <span class="badge-regime badge-neutral">PENDING</span>
+                    {% endif %}
                 </div>
             </td>
-            <td style="padding-right:30pt; width:20%;">
-                <div class="cover-meta-row">
-                    <div class="cover-meta-label">Generated</div>
-                    <div class="cover-meta-value">{{ time }}</div>
-                </div>
-            </td>
-            <td style="padding-right:30pt; width:20%;">
-                <div class="cover-meta-row">
-                    <div class="cover-meta-label">Regime</div>
-                    <div class="cover-meta-value">{{ regime | default('—') }}</div>
-                </div>
-            </td>
-            <td style="width:20%;">
-                <div class="cover-meta-row">
-                    <div class="cover-meta-label">Portfolio</div>
-                    <div class="cover-meta-value">{{ portfolio_total | default('—') }}</div>
-                </div>
+            <td style="width:27%;">
+                <div class="cover-lbl">Portfolio</div>
+                <div class="cover-val">{% if portfolio_total %}{{ portfolio_total }}{% else %}<span style="color:#555568;">PENDING</span>{% endif %}</div>
             </td>
         </tr>
     </table>
 
-    <div class="cover-models">
-        <div style="font-size:7.5pt; letter-spacing:0.12em; text-transform:uppercase; color:#5a7a9a; margin-bottom:10pt;">Analysis Methods</div>
-        <div class="cover-model-chip">NARRATIVE FRAGMENTATION</div>
-        <div class="cover-model-chip">POLYMARKET LEAD-LAG</div>
-        <div class="cover-model-chip">INSIDER SIGNAL</div>
-        <div class="cover-model-chip">EARNINGS CASCADE</div>
-        <div class="cover-model-chip">ANALYST NETWORK</div>
-        <div class="cover-model-chip">LLM ADVERSARIAL DEBATE</div>
+    <div class="cover-methods">
+        <div class="cover-lbl" style="margin-bottom:8pt;">Analysis Methods</div>
+        <div class="cover-pill">NARRATIVE FRAGMENTATION</div>
+        <div class="cover-pill">POLYMARKET LEAD-LAG</div>
+        <div class="cover-pill">INSIDER SIGNAL</div>
+        <div class="cover-pill">EARNINGS CASCADE</div>
+        <div class="cover-pill">ANALYST NETWORK</div>
+        <div class="cover-pill">LLM ADVERSARIAL DEBATE</div>
     </div>
 
-</div>
-<div class="cover-footer">
-    Tetra Market Intelligence &nbsp;&middot;&nbsp;
-    For informational purposes only — not investment advice
-</div>
+    <div class="cover-bottom">
+        Tetra Market Intelligence &nbsp;&middot;&nbsp; For informational purposes only &mdash; not investment advice
+    </div>
 </div>
 
 
-<!-- ═══════════════════════════════════════════════════════════
-     SECTION 1: WHAT HAPPENED
-════════════════════════════════════════════════════════════ -->
-<div class="snapshot-section">
+<!-- ══════════════ EXECUTIVE DASHBOARD ══════════════ -->
+<div class="slide">
 
-<div class="section-banner">
-    <div class="section-banner-eyebrow">Section 1</div>
-    <div class="section-banner-title">What Happened</div>
-    <div class="section-banner-sub">{{ date }} &nbsp;&middot;&nbsp; Market state &amp; anomalies</div>
+<div class="stitle">
+    <div class="stitle-tag">Executive Summary</div>
+    <h2>{{ date }} Dashboard</h2>
 </div>
 
-<!-- Market snapshot panels -->
-{% if market_snapshot %}
-<table class="snapshot-panels">
-    <tr class="snapshot-row">
-        {% if market_snapshot.indices %}
-        <td class="snapshot-panel">
-            <div class="panel-header">Major Indices</div>
-            <div class="panel-body">
-                {% for item in market_snapshot.indices %}
-                <div class="panel-row">
-                    <span class="panel-cell panel-name">{{ item.name }}</span>
-                    <span class="panel-cell panel-price">{{ item.price }}</span>
-                    <span class="panel-cell panel-change {{ 'up' if item.change_pct > 0 else ('down' if item.change_pct < 0 else 'flat') }}">{{ item.change }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </td>
+<div class="kpi-row">
+    <div class="kpi">
+        <div class="kpi-lbl">Market Regime</div>
+        {% if regime %}
+        {% set rl = regime | lower %}
+        <div class="kpi-num-sm {{ 'up' if 'bull' in rl else ('down' if 'bear' in rl else 'cyan') }}">{{ regime }}</div>
+        {% if regime_detail and regime_detail.confidence %}
+        <div class="kpi-hint">Confidence: {{ regime_detail.confidence }}</div>
         {% endif %}
-
-        {% if market_snapshot.portfolio_positions %}
-        <td class="snapshot-panel">
-            <div class="panel-header">Portfolio Holdings</div>
-            <div class="panel-body">
-                {% for item in market_snapshot.portfolio_positions %}
-                <div class="panel-row">
-                    <span class="panel-cell panel-name">{{ item.name }}</span>
-                    <span class="panel-cell panel-price">{{ item.price }}</span>
-                    <span class="panel-cell panel-change {{ 'up' if item.change_pct > 0 else ('down' if item.change_pct < 0 else 'flat') }}">{{ item.change }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </td>
+        {% else %}
+        <div class="kpi-num-sm dim">Pending</div>
         {% endif %}
-
-        {% if market_snapshot.rates %}
-        <td class="snapshot-panel">
-            <div class="panel-header">Rates &amp; Credit</div>
-            <div class="panel-body">
-                {% for item in market_snapshot.rates %}
-                <div class="panel-row">
-                    <span class="panel-cell panel-name">{{ item.name }}</span>
-                    <span class="panel-cell panel-price">{{ item.price }}</span>
-                    <span class="panel-cell panel-change flat">&mdash;</span>
-                </div>
-                {% endfor %}
-            </div>
-        </td>
+    </div>
+    <div class="kpi">
+        <div class="kpi-lbl">Portfolio Value</div>
+        {% if portfolio_summary %}
+        <div class="kpi-num">${{ "{:,.0f}".format(portfolio_summary.total_value) }}</div>
+        <div class="kpi-hint">Cash: ${{ "{:,.0f}".format(portfolio_summary.cash) }}</div>
+        {% elif portfolio_total %}
+        <div class="kpi-num">{{ portfolio_total }}</div>
+        {% else %}
+        <div class="kpi-num-sm dim">&mdash;</div>
         {% endif %}
-    </tr>
-</table>
+    </div>
+    <div class="kpi">
+        <div class="kpi-lbl">Daily Return</div>
+        {% if portfolio_summary %}
+        <div class="kpi-num {{ 'up' if portfolio_summary.daily_return >= 0 else 'down' }}">{{ "{:+.2%}".format(portfolio_summary.daily_return) }}</div>
+        <div class="kpi-hint">Cumulative: {{ "{:+.2%}".format(portfolio_summary.cumulative_return) }}</div>
+        {% else %}
+        <div class="kpi-num-sm dim">&mdash;</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if top_gainers or top_losers %}
+<div class="row">
+    {% if top_gainers %}
+    <div class="col">
+        <div class="slbl slbl-grn">Top Gainers</div>
+        <table class="t">
+            <thead><tr><th>Symbol</th><th class="r">Close</th><th class="r">Change</th></tr></thead>
+            <tbody>
+            {% for item in top_gainers[:5] %}
+            <tr>
+                <td class="sym">{{ item.symbol }}</td>
+                <td class="r">${{ "{:,.2f}".format(item.close) if item.close is number else item.close }}</td>
+                <td class="r b up" style="font-size:10pt;">{{ "{:+.1f}%".format(item.change_1d) if item.change_1d is number else item.change_1d }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% if top_losers %}
+    <div class="col">
+        <div class="slbl slbl-red">Top Losers</div>
+        <table class="t">
+            <thead><tr><th>Symbol</th><th class="r">Close</th><th class="r">Change</th></tr></thead>
+            <tbody>
+            {% for item in top_losers[:5] %}
+            <tr>
+                <td class="sym">{{ item.symbol }}</td>
+                <td class="r">${{ "{:,.2f}".format(item.close) if item.close is number else item.close }}</td>
+                <td class="r b down" style="font-size:10pt;">{{ "{:+.1f}%".format(item.change_1d) if item.change_1d is number else item.change_1d }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
 {% endif %}
 
-<!-- Narrative + anomalies -->
-<div class="analysis">
-    {{ what_happened | markdown | safe }}
+<div class="row">
+    <div class="col">
+        {% if risk_warnings %}
+        <div class="slbl slbl-red">Risk Warnings</div>
+        {% for risk in risk_warnings[:3] %}
+        <div class="alert">{{ risk }}</div>
+        {% endfor %}
+        {% endif %}
+    </div>
+    <div class="col">
+        {% if consensus_trades or contrarian_trades %}
+        <div class="slbl">Key Trades</div>
+        {% for trade in (consensus_trades or [])[:3] %}
+        <div style="margin-bottom:5pt;">
+            <span class="{{ 'pill-buy' if trade.direction == 'long' else 'pill-sell' }}">{{ 'BUY' if trade.direction == 'long' else 'SELL' }}</span>
+            <span style="font-weight:800; color:#fff; margin-left:6pt; font-size:10pt;">{{ trade.symbol }}</span>
+            <br><span style="color:#666; font-size:7.5pt;">{{ (trade.combined_thesis | default(trade.thesis | default('')))[:60] }}{% if (trade.combined_thesis | default(trade.thesis | default(''))) | length > 60 %}&hellip;{% endif %}</span>
+        </div>
+        {% endfor %}
+        {% for trade in (contrarian_trades or [])[:2] %}
+        <div style="margin-bottom:5pt;">
+            <span class="{{ 'pill-buy' if trade.direction == 'long' else 'pill-sell' }}">{{ 'BUY' if trade.direction == 'long' else 'SELL' }}</span>
+            <span style="font-weight:800; color:#fff; margin-left:6pt; font-size:10pt;">{{ trade.symbol }}</span>
+            <span class="pill-tag">CONTRARIAN</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
 </div>
 
-{% if narrative_state %}
-<div class="signal-strip">
-    <div class="signal-strip-title">Narrative State</div>
-    <strong>Dominant:</strong> {{ narrative_state.dominant_narrative | default('N/A') }}<br>
-    <strong>Shift:</strong> {{ narrative_state.narrative_shift | default(0) }} (magnitude: {{ narrative_state.shift_magnitude | default(0) }})<br>
+{% if narrative_state and narrative_state.dominant_narrative %}
+<div class="info" style="margin-top:6pt;">
+    <strong style="color:#00bcd4; font-size:6.5pt; letter-spacing:0.1em; text-transform:uppercase;">Dominant Narrative</strong><br>
+    {{ narrative_state.dominant_narrative }}
     {% if narrative_state.counter_narrative %}
-    <strong>Counter-narrative:</strong> {{ narrative_state.counter_narrative }}<br>
+    <br><span style="color:#7c3aed;">Counter: {{ narrative_state.counter_narrative }}</span>
     {% endif %}
 </div>
 {% endif %}
 
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r">2</span>
+</div>
 </div>
 
 
-<!-- ═══════════════════════════════════════════════════════════
-     SECTION 2: WHAT IT MEANS
-════════════════════════════════════════════════════════════ -->
-<div class="section-banner">
-    <div class="section-banner-eyebrow">Section 2</div>
-    <div class="section-banner-title">What It Means</div>
-    <div class="section-banner-sub">Regime assessment &amp; signal synthesis</div>
-</div>
+<!-- ══════════════ MARKET DASHBOARD ══════════════ -->
+{% if market_groups %}
+{% for page_start in range(0, market_groups | length, 6) %}
+<div class="slide">
 
-{% if regime_detail %}
-<div class="signal-strip">
-    <div class="signal-strip-title">Market Regime</div>
-    <strong>Classification:</strong> {{ regime_detail.classification | default('unknown') }}
-    &nbsp;&middot;&nbsp; <strong>Confidence:</strong> {{ regime_detail.confidence | default('?') }}
-    &nbsp;&middot;&nbsp; <strong>Stability:</strong> {{ regime_detail.stability | default('?') }}<br>
-    {% if regime_detail.key_driver %}
-    <strong>Key driver:</strong> {{ regime_detail.key_driver }}
-    {% endif %}
+{% if page_start == 0 %}
+<div class="stitle">
+    <div class="stitle-tag">Market Data</div>
+    <h2>Market Dashboard</h2>
+    <div class="stitle-sub">{{ date }} &middot; Closing prices &amp; returns</div>
 </div>
 {% endif %}
 
-<div class="analysis">
-    {{ what_it_means | markdown | safe }}
+{% for row_start in range(page_start, [page_start + 6, market_groups | length] | min, 2) %}
+<div class="row">
+    <div class="col">
+        <div class="mc">
+            <div class="mc-hdr">{{ market_groups[row_start].name }}</div>
+            <table class="t">
+                <thead><tr><th>Symbol</th><th class="r">Close</th><th class="r">1D</th><th class="r">5D</th></tr></thead>
+                <tbody>
+                {% for s in market_groups[row_start].symbols %}
+                <tr>
+                    <td class="sym">{{ s.symbol }}</td>
+                    <td class="r">${{ "{:,.2f}".format(s.close) if s.close is number else s.close }}</td>
+                    <td class="r b {{ 'up' if s.change_1d is number and s.change_1d > 0 else ('down' if s.change_1d is number and s.change_1d < 0 else 'flat') }}">{{ "{:+.1f}%".format(s.change_1d) if s.change_1d is number else '—' }}</td>
+                    <td class="r {{ 'up' if s.change_5d is number and s.change_5d > 0 else ('down' if s.change_5d is number and s.change_5d < 0 else 'flat') }}">{{ "{:+.1f}%".format(s.change_5d) if s.change_5d is number else '—' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if row_start + 1 < market_groups | length %}
+    <div class="col">
+        <div class="mc">
+            <div class="mc-hdr">{{ market_groups[row_start + 1].name }}</div>
+            <table class="t">
+                <thead><tr><th>Symbol</th><th class="r">Close</th><th class="r">1D</th><th class="r">5D</th></tr></thead>
+                <tbody>
+                {% for s in market_groups[row_start + 1].symbols %}
+                <tr>
+                    <td class="sym">{{ s.symbol }}</td>
+                    <td class="r">${{ "{:,.2f}".format(s.close) if s.close is number else s.close }}</td>
+                    <td class="r b {{ 'up' if s.change_1d is number and s.change_1d > 0 else ('down' if s.change_1d is number and s.change_1d < 0 else 'flat') }}">{{ "{:+.1f}%".format(s.change_1d) if s.change_1d is number else '—' }}</td>
+                    <td class="r {{ 'up' if s.change_5d is number and s.change_5d > 0 else ('down' if s.change_5d is number and s.change_5d < 0 else 'flat') }}">{{ "{:+.1f}%".format(s.change_5d) if s.change_5d is number else '—' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="col"></div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r">{{ 3 + loop.index0 }}</span>
+</div>
+</div>
+{% endfor %}
+{% endif %}
+
+
+<!-- ══════════════ MACRO ══════════════ -->
+{% if macro_data %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Economic Data</div>
+    <h2>Macro &amp; Rates</h2>
 </div>
 
-{% if signals_summary %}
-<div style="margin-top: 12pt;">
-    <div class="label" style="margin-bottom: 6pt;">Active Signals</div>
-    <table class="portfolio-table">
+<table class="t" style="font-size:9.5pt;">
+    <thead><tr><th>Indicator</th><th class="r" style="width:30%;">Value</th></tr></thead>
+    <tbody>
+    {% for item in macro_data %}
+    <tr>
+        <td>{{ item.name }}</td>
+        <td class="r b wh" style="font-size:12pt;">{{ item.value }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
+
+
+<!-- ══════════════ INTELLIGENCE ══════════════ -->
+{% if insider_trades or analyst_recs or news_headlines %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Intelligence</div>
+    <h2>Insider, Analyst &amp; News</h2>
+</div>
+
+{% if insider_trades or analyst_recs %}
+<div class="row">
+    <div class="col">
+        <div class="slbl">Insider Trades</div>
+        {% if insider_trades %}
+        <table class="t">
+            <thead><tr><th>Symbol</th><th>Insider</th><th>Type</th><th class="r">Value</th></tr></thead>
+            <tbody>
+            {% for t in insider_trades[:7] %}
+            <tr>
+                <td class="sym">{{ t.symbol }}</td>
+                <td style="font-size:7pt;">{{ t.insider[:20] }}{% if t.insider|length > 20 %}&hellip;{% endif %}</td>
+                <td class="b {{ 'up' if 'buy' in (t.type|lower) or 'purchase' in (t.type|lower) else 'down' }}">{{ t.type }}</td>
+                <td class="r">${{ "{:,.0f}".format(t.value|abs) if t.value else '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="font-size:8pt; color:#555568; padding:8pt 0;">No recent activity</div>
+        {% endif %}
+    </div>
+    <div class="col">
+        <div class="slbl">Analyst Recommendations</div>
+        {% if analyst_recs %}
+        <table class="t">
+            <thead><tr><th>Symbol</th><th>Firm</th><th>Action</th><th class="r">Target</th></tr></thead>
+            <tbody>
+            {% for r in analyst_recs[:7] %}
+            <tr>
+                <td class="sym">{{ r.symbol }}</td>
+                <td style="font-size:7pt;">{{ r.firm[:16] }}{% if r.firm|length > 16 %}&hellip;{% endif %}</td>
+                <td class="b {{ 'up' if 'upgrade' in (r.action|lower) else ('down' if 'downgrade' in (r.action|lower) else '') }}">{{ r.action }}</td>
+                <td class="r">{{ "$" + "{:,.0f}".format(r.target) if r.target else '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="font-size:8pt; color:#555568; padding:8pt 0;">No recent changes</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if news_headlines %}
+<div style="margin-top:8pt;">
+    <div class="slbl">Key Headlines</div>
+    <table class="t">
+        <thead><tr><th style="width:55%;">Headline</th><th>Source</th><th>Tickers</th><th class="r">Sent.</th></tr></thead>
+        <tbody>
+        {% for n in news_headlines[:10] %}
+        <tr>
+            <td style="font-size:7.5pt;">{{ n.title[:65] }}{% if n.title|length > 65 %}&hellip;{% endif %}</td>
+            <td style="font-size:6.5pt; color:#555568;">{{ n.source }}</td>
+            <td class="sym" style="font-size:7pt;">{{ n.symbols[:3]|join(', ') if n.symbols else '' }}</td>
+            <td class="r b {{ 'up' if n.sentiment and n.sentiment > 0.2 else ('down' if n.sentiment and n.sentiment < -0.2 else 'flat') }}">{{ "{:+.2f}".format(n.sentiment) if n.sentiment else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
+
+
+<!-- ══════════════ CORRELATION MATRIX ══════════════ -->
+{% if correlation_matrix and correlation_matrix.labels and correlation_matrix.matrix %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Cross-Asset Analysis</div>
+    <h2>Cross-Asset Correlation Matrix (20D Rolling)</h2>
+    <div class="stitle-sub">Pearson &rho; computed from daily returns &middot; {{ date }}</div>
+</div>
+
+<table class="t" style="font-size: 7.5pt; text-align: center;">
+    <thead>
+        <tr>
+            <th style="text-align:left;"></th>
+            {% for lbl in correlation_matrix.labels %}
+            <th style="text-align:center; padding:2pt 3pt; font-size:6pt;">{{ lbl }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for i in range(correlation_matrix.labels | length) %}
+        <tr>
+            <td class="sym" style="text-align:left; padding:2pt 4pt;">{{ correlation_matrix.labels[i] }}</td>
+            {% for j in range(correlation_matrix.labels | length) %}
+            {% set rho = correlation_matrix.matrix[i][j] %}
+            {% if i == j %}
+            <td style="text-align:center; padding:2pt 3pt; background:#222230; color:#555568; font-weight:700;">1.00</td>
+            {% elif rho > 0.7 %}
+            <td style="text-align:center; padding:2pt 3pt; background:#22c55e; color:#000; font-weight:700;">{{ "{:.2f}".format(rho) }}</td>
+            {% elif rho > 0.3 %}
+            <td style="text-align:center; padding:2pt 3pt; background:#166534; color:#e0e0e8; font-weight:600;">{{ "{:.2f}".format(rho) }}</td>
+            {% elif rho > -0.3 %}
+            <td style="text-align:center; padding:2pt 3pt; background:#555568; color:#e0e0e8;">{{ "{:.2f}".format(rho) }}</td>
+            {% elif rho > -0.7 %}
+            <td style="text-align:center; padding:2pt 3pt; background:#b32d2d; color:#e0e0e8; font-weight:600;">{{ "{:.2f}".format(rho) }}</td>
+            {% else %}
+            <td style="text-align:center; padding:2pt 3pt; background:#ef4444; color:#000; font-weight:700;">{{ "{:.2f}".format(rho) }}</td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% if correlation_matrix.notable_pairs %}
+<div style="margin-top:14pt;">
+    <div class="slbl slbl-red">Notable Correlation Breaks (&Delta;&rho; &gt; 0.3 from 60D avg)</div>
+    <table class="t">
         <thead>
             <tr>
-                <th>Source</th>
-                <th>Signals</th>
-                <th>Top Signal</th>
-                <th>Strength</th>
+                <th>Pair</th>
+                <th class="r">20D &rho;</th>
+                <th class="r">60D &rho;</th>
+                <th class="r">&Delta;</th>
             </tr>
         </thead>
         <tbody>
-            {% for sig in signals_summary %}
-            <tr>
-                <td>{{ sig.source }}</td>
-                <td class="num">{{ sig.count }}</td>
-                <td>{{ sig.top_symbol | default('—') }}</td>
-                <td class="num">{{ sig.top_strength | default('—') }}</td>
-            </tr>
-            {% endfor %}
+        {% for p in correlation_matrix.notable_pairs %}
+        <tr>
+            <td class="sym">{{ p.pair }}</td>
+            <td class="r b {{ 'up' if p.rho_20d > 0 else 'down' }}">{{ "{:+.2f}".format(p.rho_20d) }}</td>
+            <td class="r">{{ "{:+.2f}".format(p.rho_60d) }}</td>
+            <td class="r b {{ 'up' if p.delta > 0 else 'down' }}">{{ "{:+.2f}".format(p.delta) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
+
+
+<!-- ══════════════ WHAT HAPPENED ══════════════ -->
+{% if what_happened %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Analysis</div>
+    <h2>What Happened</h2>
+    <div class="stitle-sub">Market state &amp; anomalies &middot; {{ date }}</div>
+</div>
+
+<div class="prose">{{ what_happened | markdown | safe }}</div>
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
+
+
+<!-- ══════════════ WHAT IT MEANS ══════════════ -->
+{% if what_it_means or regime_detail or signals_summary or debate_conflicts %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Analysis</div>
+    <h2>What It Means</h2>
+</div>
+
+{% if regime_detail %}
+<div class="info" style="margin-bottom:10pt;">
+    {% set rd_class = regime_detail.classification | default('unknown') | lower %}
+    <strong>Classification:</strong>
+    <span style="font-weight:700;" class="{{ 'up' if 'bull' in rd_class else ('down' if 'bear' in rd_class else 'cyan') }}">{{ regime_detail.classification | default('unknown') }}</span>
+    &nbsp;&middot;&nbsp; <strong>Confidence:</strong> {{ regime_detail.confidence | default('?') }}
+    &nbsp;&middot;&nbsp; <strong>Stability:</strong> {{ regime_detail.stability | default('?') }}
+    {% if regime_detail.key_driver %}
+    <br><strong>Key driver:</strong> {{ regime_detail.key_driver }}
+    {% endif %}
+</div>
+{% endif %}
+
+{% if what_it_means %}
+<div class="prose">{{ what_it_means | markdown | safe }}</div>
+{% endif %}
+
+{% if signals_summary %}
+<div style="margin-top:10pt;">
+    <div class="slbl">Active Signals</div>
+    <table class="t">
+        <thead><tr><th>Source</th><th class="r">Count</th><th>Top Signal</th><th>Strength</th></tr></thead>
+        <tbody>
+        {% for sig in signals_summary %}
+        <tr>
+            <td class="sym">{{ sig.source }}</td>
+            <td class="r b wh">{{ sig.count }}</td>
+            <td>{{ sig.top_symbol | default('—') }}</td>
+            <td>
+                {% set str_val = sig.top_strength | default(0) %}
+                {% if str_val is number %}
+                {% set pct = (str_val * 100) | int if str_val <= 1 else str_val | int %}
+                <span class="bar-bg {{ 'bar-hi' if pct >= 70 else ('bar-md' if pct >= 40 else 'bar-lo') }}"><span class="bar-fill" style="width:{{ pct }}%;"></span></span>
+                <span style="font-size:8pt; font-weight:600; color:#c0c8d4;">{{ str_val }}</span>
+                {% else %}
+                <span style="font-weight:600;">{{ str_val }}</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
         </tbody>
     </table>
 </div>
 {% endif %}
 
 {% if debate_conflicts %}
-<div style="margin-top: 14pt;">
-    <div class="label" style="margin-bottom: 6pt;">Unresolved Conflicts</div>
+<div style="margin-top:10pt;">
+    <div class="slbl">Unresolved Conflicts</div>
     {% for conflict in debate_conflicts %}
-    <div class="signal-strip">
-        <strong>{{ conflict.topic }}</strong><br>
-        <span style="color:#1a7f4b;">Bull:</span> {{ conflict.bull_case }}<br>
-        <span style="color:#c0392b;">Bear:</span> {{ conflict.bear_case }}<br>
-        <em style="font-size:7.5pt;">Resolution: {{ conflict.resolution_data }}</em>
+    <div class="info" style="margin-bottom:5pt;">
+        <strong style="color:#fff;">{{ conflict.topic }}</strong><br>
+        <span class="up" style="font-weight:700;">Bull:</span> {{ conflict.bull_case }}<br>
+        <span class="down" style="font-weight:700;">Bear:</span> {{ conflict.bear_case }}<br>
+        <em style="font-size:7pt; color:#444450;">Resolution: {{ conflict.resolution_data }}</em>
     </div>
     {% endfor %}
 </div>
 {% endif %}
 
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
 
-<!-- ═══════════════════════════════════════════════════════════
-     SECTION 3: WHAT TO DO
-════════════════════════════════════════════════════════════ -->
-<div class="page-break"></div>
 
-<div class="section-banner">
-    <div class="section-banner-eyebrow">Section 3</div>
-    <div class="section-banner-title">What To Do</div>
-    <div class="section-banner-sub">Actionable trades &amp; portfolio decisions</div>
+<!-- ══════════════ TRADE IDEAS ══════════════ -->
+{% if consensus_trades or contrarian_trades or portfolio_actions or risk_warnings %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Actionable</div>
+    <h2>Trade Ideas</h2>
 </div>
 
-<!-- Consensus Trades -->
 {% if consensus_trades %}
-<div class="label" style="margin-bottom: 8pt;">Consensus Trades (Multi-Analyst Agreement)</div>
+<div class="slbl">Consensus Trades</div>
 {% for trade in consensus_trades %}
-<div class="trade-card">
-    <div class="trade-header">
-        <span class="trade-symbol">{{ trade.symbol }}</span>
-        <span class="trade-direction {{ 'trade-long' if trade.direction == 'long' else 'trade-short' }}">{{ trade.direction | upper }}</span>
+<div class="tc">
+    <div class="tc-hdr">
+        <span class="tc-sym">{{ trade.symbol }}</span>
+        <span class="tc-dir"><span class="{{ 'pill-buy' if trade.direction == 'long' else 'pill-sell' }}">{{ 'BUY' if trade.direction == 'long' else 'SELL' }}</span></span>
     </div>
-    <div class="trade-body">
+    <div class="tc-body">
         <p>{{ trade.combined_thesis | default(trade.thesis | default('')) }}</p>
         {% if trade.risk %}
-        <p style="color:#c0392b; font-size:8pt;"><strong>Risk:</strong> {{ trade.risk }}</p>
+        <p style="color:#ef4444; font-size:8pt;"><strong>Risk:</strong> {{ trade.risk }}</p>
         {% endif %}
-        <div class="trade-meta">
-            <span class="trade-meta-cell">
-                <div class="trade-meta-label">Confidence</div>
-                <div class="trade-meta-value">{{ trade.confidence | default('medium') | upper }}</div>
-            </span>
-            <span class="trade-meta-cell">
-                <div class="trade-meta-label">Supporting Analysts</div>
-                <div class="trade-meta-value">{{ trade.supporting_analysts | join(', ') if trade.supporting_analysts else '—' }}</div>
-            </span>
-            <span class="trade-meta-cell">
-                <div class="trade-meta-label">Type</div>
-                <div class="trade-meta-value">Consensus</div>
-            </span>
+        <div class="tc-meta">
+            <span class="tc-meta-c"><div class="tc-meta-l">Confidence</div><div class="tc-meta-v">{{ trade.confidence | default('medium') | upper }}</div></span>
+            <span class="tc-meta-c"><div class="tc-meta-l">Supporting</div><div class="tc-meta-v">{{ trade.supporting_analysts | join(', ') if trade.supporting_analysts else '—' }}</div></span>
+            <span class="tc-meta-c"><div class="tc-meta-l">Type</div><div class="tc-meta-v">Consensus</div></span>
         </div>
     </div>
 </div>
 {% endfor %}
 {% endif %}
 
-<!-- Contrarian Trades -->
 {% if contrarian_trades %}
-<div class="label" style="margin-top: 16pt; margin-bottom: 8pt;">Contrarian Trades (Single-Analyst Edge)</div>
+<div class="slbl" style="margin-top:10pt;">Contrarian Trades</div>
 {% for trade in contrarian_trades %}
-<div class="trade-card">
-    <div class="trade-header" style="background: #2a1a0a;">
-        <span class="trade-symbol">{{ trade.symbol }}</span>
-        <span class="trade-direction {{ 'trade-long' if trade.direction == 'long' else 'trade-short' }}">{{ trade.direction | upper }} &middot; CONTRARIAN</span>
+<div class="tc">
+    <div class="tc-hdr" style="background:#1a1520;">
+        <span class="tc-sym">{{ trade.symbol }}</span>
+        <span class="tc-dir">
+            <span class="{{ 'pill-buy' if trade.direction == 'long' else 'pill-sell' }}">{{ 'BUY' if trade.direction == 'long' else 'SELL' }}</span>
+            <span class="pill-tag">CONTRARIAN</span>
+        </span>
     </div>
-    <div class="trade-body">
+    <div class="tc-body">
         <p>{{ trade.thesis | default('') }}</p>
         {% if trade.what_others_miss %}
-        <p style="font-size:8pt; color:#5b35b5;"><strong>Information gap:</strong> {{ trade.what_others_miss }}</p>
+        <p style="color:#7c3aed; font-size:8pt;"><strong>Edge:</strong> {{ trade.what_others_miss }}</p>
         {% endif %}
-        {% if trade.risk %}
-        <p style="color:#c0392b; font-size:8pt;"><strong>Risk:</strong> {{ trade.risk }}</p>
-        {% endif %}
-        <div class="trade-meta">
-            <span class="trade-meta-cell">
-                <div class="trade-meta-label">Confidence</div>
-                <div class="trade-meta-value">{{ trade.confidence | default('medium') | upper }}</div>
-            </span>
-            <span class="trade-meta-cell">
-                <div class="trade-meta-label">Source</div>
-                <div class="trade-meta-value">{{ trade.source_analyst | default('—') | upper }}</div>
-            </span>
-            <span class="trade-meta-cell">
-                <div class="trade-meta-label">Type</div>
-                <div class="trade-meta-value">Contrarian</div>
-            </span>
-        </div>
     </div>
 </div>
 {% endfor %}
 {% endif %}
 
-<!-- Portfolio Actions -->
 {% if portfolio_actions %}
-<div style="margin-top: 16pt;">
-    <div class="label" style="margin-bottom: 6pt;">Portfolio Actions</div>
-    <table class="portfolio-table">
-        <thead>
-            <tr><th>Symbol</th><th>Action</th><th>Urgency</th><th>Reasoning</th></tr>
-        </thead>
+<div style="margin-top:10pt;">
+    <div class="slbl">Portfolio Actions</div>
+    <table class="t">
+        <thead><tr><th>Symbol</th><th>Action</th><th>Urgency</th><th>Reasoning</th></tr></thead>
         <tbody>
-            {% for action in portfolio_actions %}
-            <tr>
-                <td><strong>{{ action.symbol }}</strong></td>
-                <td style="font-weight:700; {{ 'color:#1a7f4b' if action.action in ('add', 'hold') else 'color:#c0392b' }}">{{ action.action | upper }}</td>
-                <td>{{ action.urgency | default('monitor') }}</td>
-                <td>{{ action.reasoning | default('') }}</td>
-            </tr>
-            {% endfor %}
+        {% for action in portfolio_actions %}
+        <tr>
+            <td class="sym">{{ action.symbol }}</td>
+            <td class="b {{ 'up' if action.action in ('add', 'hold', 'buy') else 'down' }}">{{ action.action | upper }}</td>
+            <td>{{ action.urgency | default('monitor') }}</td>
+            <td style="font-size:7.5pt;">{{ action.reasoning | default('') }}</td>
+        </tr>
+        {% endfor %}
         </tbody>
     </table>
 </div>
 {% endif %}
 
-<!-- Risk Warnings -->
 {% if risk_warnings %}
-<div class="signal-strip" style="border-left-color: #c0392b; margin-top: 14pt;">
-    <div class="signal-strip-title" style="color: #c0392b;">Risk Warnings</div>
+<div style="margin-top:10pt;">
+    <div class="slbl slbl-red">Risk Warnings</div>
     {% for risk in risk_warnings %}
-    &bull; {{ risk }}<br>
+    <div class="alert">{{ risk }}</div>
     {% endfor %}
 </div>
 {% endif %}
 
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
 
-<!-- ═══════════════════════════════════════════════════════════
-     SECTION 4: PORTFOLIO & TRACK RECORD
-════════════════════════════════════════════════════════════ -->
-<div class="page-break"></div>
 
-<div class="section-banner">
-    <div class="section-banner-eyebrow">Section 4</div>
-    <div class="section-banner-title">Portfolio &amp; Track Record</div>
-    <div class="section-banner-sub">Current holdings &amp; recommendation performance</div>
+<!-- ══════════════ PORTFOLIO ══════════════ -->
+{% if portfolio_positions or track_record %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Portfolio</div>
+    <h2>Holdings &amp; Track Record</h2>
 </div>
 
 {% if portfolio_positions %}
-<div class="label" style="margin-bottom: 6pt;">Current Holdings</div>
-<table class="portfolio-table">
-    <thead>
-        <tr>
-            <th>Symbol</th>
-            <th class="num">Price</th>
-            <th class="num">Value</th>
-            <th class="num">Weight</th>
-            <th class="num">PnL</th>
-        </tr>
-    </thead>
+<div class="slbl">Current Holdings</div>
+<table class="t" style="font-size:9pt;">
+    <thead><tr><th>Symbol</th><th class="r">Price</th><th class="r">Value</th><th class="r">Weight</th><th class="r">PnL</th></tr></thead>
     <tbody>
-        {% for pos in portfolio_positions %}
-        <tr>
-            <td><strong>{{ pos.symbol }}</strong></td>
-            <td class="num">${{ "{:,.2f}".format(pos.price) }}</td>
-            <td class="num">${{ "{:,.0f}".format(pos.value) }}</td>
-            <td class="num">{{ "{:.1f}".format(pos.weight) }}%</td>
-            <td class="num {{ 'up' if pos.pnl >= 0 else 'down' }}">${{ "{:,.0f}".format(pos.pnl) }}</td>
-        </tr>
-        {% endfor %}
+    {% for pos in portfolio_positions %}
+    <tr>
+        <td class="sym">{{ pos.symbol }}</td>
+        <td class="r">${{ "{:,.2f}".format(pos.price) }}</td>
+        <td class="r">${{ "{:,.0f}".format(pos.value) }}</td>
+        <td class="r">{{ "{:.1f}".format(pos.weight) }}%</td>
+        <td class="r b {{ 'up' if pos.pnl >= 0 else 'down' }}">${{ "{:,.0f}".format(pos.pnl) }}</td>
+    </tr>
+    {% endfor %}
     </tbody>
 </table>
 
 {% if portfolio_summary %}
-<div class="signal-strip" style="margin-top: 10pt;">
-    <div class="signal-strip-title">Portfolio Summary</div>
-    <strong>Total Value:</strong> ${{ "{:,.0f}".format(portfolio_summary.total_value) }}
+<div class="info" style="margin-top:8pt;">
+    <strong>Total:</strong> ${{ "{:,.0f}".format(portfolio_summary.total_value) }}
     &nbsp;&middot;&nbsp; <strong>Cash:</strong> ${{ "{:,.0f}".format(portfolio_summary.cash) }}
-    &nbsp;&middot;&nbsp; <strong>Daily Return:</strong>
-    <span class="{{ 'up' if portfolio_summary.daily_return >= 0 else 'down' }}">{{ "{:+.2%}".format(portfolio_summary.daily_return) }}</span>
-    &nbsp;&middot;&nbsp; <strong>Cumulative:</strong>
-    <span class="{{ 'up' if portfolio_summary.cumulative_return >= 0 else 'down' }}">{{ "{:+.2%}".format(portfolio_summary.cumulative_return) }}</span>
+    &nbsp;&middot;&nbsp; <strong>Daily:</strong> <span class="{{ 'up' if portfolio_summary.daily_return >= 0 else 'down' }}" style="font-weight:700;">{{ "{:+.2%}".format(portfolio_summary.daily_return) }}</span>
 </div>
 {% endif %}
 {% endif %}
 
-<!-- Track Record -->
-{% if track_record %}
-<div style="margin-top: 16pt;">
-    <div class="label" style="margin-bottom: 6pt;">Recommendation Track Record</div>
+{% if track_record and track_record.recent_closed %}
+<div style="margin-top:12pt;">
+    <div class="slbl">Track Record</div>
+    <table class="t">
+        <thead><tr><th>Symbol</th><th>Dir</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">PnL</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for rec in track_record.recent_closed %}
+        <tr>
+            <td class="sym">{{ rec.symbol }}</td>
+            <td>{{ rec.direction }}</td>
+            <td class="r">${{ "{:.2f}".format(rec.entry_price) }}</td>
+            <td class="r">${{ "{:.2f}".format(rec.closed_price) }}</td>
+            <td class="r b {{ 'up' if rec.realized_pnl >= 0 else 'down' }}">{{ "{:+.1%}".format(rec.realized_pnl) }}</td>
+            <td>{{ rec.status }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
-    {% if track_record.summary %}
-    <div class="signal-strip">
-        <div class="signal-strip-title">Performance Summary</div>
-        <strong>Total Recs:</strong> {{ track_record.summary.total }}
-        &nbsp;&middot;&nbsp; <strong>Closed:</strong> {{ track_record.summary.closed }}
-        &nbsp;&middot;&nbsp; <strong>Hit Target:</strong> {{ track_record.summary.hit_target }}
-        &nbsp;&middot;&nbsp; <strong>Hit Stop:</strong> {{ track_record.summary.hit_stop }}
-        {% if track_record.summary.avg_pnl is defined %}
-        &nbsp;&middot;&nbsp; <strong>Avg PnL:</strong>
-        <span class="{{ 'up' if track_record.summary.avg_pnl >= 0 else 'down' }}">{{ "{:+.1%}".format(track_record.summary.avg_pnl) }}</span>
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
+{% endif %}
+
+
+<!-- ══════════════ TRACK RECORD ANALYTICS ══════════════ -->
+{% if track_record and track_record.summary and track_record.summary.closed > 0 %}
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Performance</div>
+    <h2>Track Record Analytics</h2>
+</div>
+
+<!-- KPI row -->
+<div class="kpi-row">
+    <div class="kpi">
+        <div class="kpi-lbl">Total Recs</div>
+        <div class="kpi-num">{{ track_record.summary.total }}</div>
+        <div class="kpi-hint">{{ track_record.summary.closed }} closed</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-lbl">Win Rate</div>
+        {% set win_rate = track_record.summary.hit_target / track_record.summary.closed if track_record.summary.closed > 0 else 0 %}
+        <div class="kpi-num {{ 'up' if win_rate >= 0.5 else 'down' }}">{{ "{:.0%}".format(win_rate) }}</div>
+        <div class="kpi-hint">{{ track_record.summary.hit_target }}W / {{ track_record.summary.hit_stop }}L</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-lbl">Avg PnL</div>
+        <div class="kpi-num-sm {{ 'up' if track_record.summary.avg_pnl >= 0 else 'down' }}">{{ "{:+.2%}".format(track_record.summary.avg_pnl) }}</div>
+        {% if track_record.avg_hold_days %}
+        <div class="kpi-hint">Avg hold: {{ track_record.avg_hold_days }}d</div>
         {% endif %}
+    </div>
+    <div class="kpi">
+        <div class="kpi-lbl">Best Trade</div>
+        {% if track_record.best_trade %}
+        <div class="kpi-num-sm up">{{ "{:+.2%}".format(track_record.best_trade.pnl) }}</div>
+        <div class="kpi-hint">{{ track_record.best_trade.symbol }} {{ track_record.best_trade.direction }}</div>
+        {% else %}
+        <div class="kpi-num-sm dim">&mdash;</div>
+        {% endif %}
+    </div>
+    <div class="kpi">
+        <div class="kpi-lbl">Worst Trade</div>
+        {% if track_record.worst_trade %}
+        <div class="kpi-num-sm down">{{ "{:+.2%}".format(track_record.worst_trade.pnl) }}</div>
+        <div class="kpi-hint">{{ track_record.worst_trade.symbol }} {{ track_record.worst_trade.direction }}</div>
+        {% else %}
+        <div class="kpi-num-sm dim">&mdash;</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Accuracy tables -->
+<div class="row">
+    {% if track_record.accuracy_by_method %}
+    <div class="col">
+        <div class="slbl">Accuracy by Method</div>
+        <table class="t">
+            <thead><tr><th>Method</th><th class="r">Closed</th><th class="r">Wins</th><th class="r">Hit Rate</th><th class="r">Avg PnL</th></tr></thead>
+            <tbody>
+            {% for m in track_record.accuracy_by_method %}
+            <tr>
+                <td class="sym">{{ m.method }}</td>
+                <td class="r">{{ m.closed }}</td>
+                <td class="r">{{ m.wins }}</td>
+                <td class="r b {{ 'up' if m.hit_rate is not none and m.hit_rate >= 0.5 else ('down' if m.hit_rate is not none else 'flat') }}">{{ "{:.0%}".format(m.hit_rate) if m.hit_rate is not none else '—' }}</td>
+                <td class="r {{ 'up' if m.avg_pnl is not none and m.avg_pnl >= 0 else ('down' if m.avg_pnl is not none else 'flat') }}">{{ "{:+.2%}".format(m.avg_pnl) if m.avg_pnl is not none else '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% endif %}
 
-    {% if track_record.recent_closed %}
-    <table class="tracker-table">
-        <thead>
-            <tr><th>Symbol</th><th>Direction</th><th>Method</th><th>Entry</th><th>Exit</th><th class="num">PnL</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-            {% for rec in track_record.recent_closed %}
+    {% if track_record.accuracy_by_confidence %}
+    <div class="col">
+        <div class="slbl">Accuracy by Confidence</div>
+        <table class="t">
+            <thead><tr><th>Level</th><th class="r">Closed</th><th class="r">Wins</th><th class="r">Hit Rate</th><th class="r">Avg PnL</th></tr></thead>
+            <tbody>
+            {% for c in track_record.accuracy_by_confidence %}
             <tr>
-                <td><strong>{{ rec.symbol }}</strong></td>
-                <td>{{ rec.direction }}</td>
-                <td>{{ rec.method | default('—') }}</td>
-                <td class="num">${{ "{:.2f}".format(rec.entry_price) }}</td>
-                <td class="num">${{ "{:.2f}".format(rec.closed_price) }}</td>
-                <td class="num {{ 'up' if rec.realized_pnl >= 0 else 'down' }}">{{ "{:+.1%}".format(rec.realized_pnl) }}</td>
-                <td>{{ rec.status }}</td>
+                <td class="sym">{{ c.confidence | upper }}</td>
+                <td class="r">{{ c.closed }}</td>
+                <td class="r">{{ c.wins }}</td>
+                <td class="r b {{ 'up' if c.hit_rate is not none and c.hit_rate >= 0.5 else ('down' if c.hit_rate is not none else 'flat') }}">{{ "{:.0%}".format(c.hit_rate) if c.hit_rate is not none else '—' }}</td>
+                <td class="r {{ 'up' if c.avg_pnl is not none and c.avg_pnl >= 0 else ('down' if c.avg_pnl is not none else 'flat') }}">{{ "{:+.2%}".format(c.avg_pnl) if c.avg_pnl is not none else '—' }}</td>
             </tr>
             {% endfor %}
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    </div>
     {% endif %}
 </div>
+
+<!-- Cumulative PnL & streaks -->
+{% if track_record.cumulative_pnl is defined %}
+<div style="margin-top:10pt;">
+    <div class="slbl">Cumulative Performance</div>
+    <div class="info">
+        <strong>Cumulative PnL:</strong>
+        <span class="b {{ 'up' if track_record.cumulative_pnl >= 0 else 'down' }}" style="font-size:12pt;">{{ "{:+.2%}".format(track_record.cumulative_pnl) }}</span>
+        {% if track_record.win_streak > 0 %}
+        &nbsp;&middot;&nbsp; <span class="up"><strong>Win streak:</strong> {{ track_record.win_streak }}</span>
+        {% endif %}
+        {% if track_record.lose_streak > 0 %}
+        &nbsp;&middot;&nbsp; <span class="down"><strong>Lose streak:</strong> {{ track_record.lose_streak }}</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
+</div>
 {% endif %}
 
 
-<!-- ═══════════════════════════════════════════════════════════
-     SECTION 5: FORWARD CALENDAR
-════════════════════════════════════════════════════════════ -->
+<!-- ══════════════ FORWARD CALENDAR ══════════════ -->
 {% if forward_events %}
-<div style="margin-top: 20pt;">
-    <div class="label" style="margin-bottom: 6pt;">Forward Calendar (5 days)</div>
-    <table class="portfolio-table">
-        <thead>
-            <tr><th>Date</th><th>Event</th><th>Symbol</th><th>Impact</th></tr>
-        </thead>
-        <tbody>
-            {% for ev in forward_events %}
-            <tr>
-                <td>{{ ev.date }}</td>
-                <td>{{ ev.event }}</td>
-                <td>{{ ev.symbol | default('—') }}</td>
-                <td>{{ ev.impact | default('—') }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Calendar</div>
+    <h2>Forward Events</h2>
+</div>
+
+<table class="t" style="font-size:9pt;">
+    <thead><tr><th>Date</th><th>Event</th><th>Symbol</th><th>Impact</th></tr></thead>
+    <tbody>
+    {% for ev in forward_events %}
+    <tr>
+        <td class="b wh">{{ ev.date }}</td>
+        <td>{{ ev.event }}</td>
+        <td class="sym">{{ ev.symbol | default('—') }}</td>
+        <td>{{ ev.impact | default('—') }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
 </div>
 {% endif %}
 
 
-<!-- ═══════════════════════════════════════════════════════════
-     APPENDIX: METHODOLOGY
-════════════════════════════════════════════════════════════ -->
-<div class="page-break"></div>
-
-<div class="section-banner">
-    <div class="section-banner-eyebrow">Appendix</div>
-    <div class="section-banner-title">Methodology &amp; Attribution</div>
-</div>
-
-<div style="margin-top:16pt;">
-    <div class="label" style="margin-bottom:8pt;">Analysis Pipeline</div>
-    <table class="method-table">
-        <thead>
-            <tr><th>Method</th><th>Source</th><th>Signal Type</th></tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><strong>Narrative Fragmentation</strong></td>
-                <td>30K+ news articles &rarr; LLM structural analysis</td>
-                <td>Regime shifts, narrative transitions</td>
-            </tr>
-            <tr>
-                <td><strong>Polymarket Lead-Lag</strong></td>
-                <td>10K prediction markets &rarr; Granger causality + LLM filter</td>
-                <td>Cross-asset information flow gaps</td>
-            </tr>
-            <tr>
-                <td><strong>Insider Trading Signal</strong></td>
-                <td>Form 4 filings (Finnhub) &rarr; Rule-based pattern detection</td>
-                <td>Cluster buying, pattern breaks, contrarian signals</td>
-            </tr>
-            <tr>
-                <td><strong>Earnings Cascade</strong></td>
-                <td>Supply chain + peer network &rarr; Centrality-weighted propagation</td>
-                <td>Customer/supplier/peer earnings momentum</td>
-            </tr>
-            <tr>
-                <td><strong>Analyst Network Alpha</strong></td>
-                <td>Co-coverage network &rarr; Recommendation shift propagation</td>
-                <td>Analyst shift, peer momentum, contrarian laggard</td>
-            </tr>
-            <tr>
-                <td><strong>Adversarial Debate</strong></td>
-                <td>3 LLMs with information asymmetry &rarr; 3-round debate</td>
-                <td>Consensus + contrarian trades</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
+<!-- ══════════════ APPENDIX ══════════════ -->
 {% if debate_participants %}
-<div style="margin-top:20pt;">
-    <div class="label" style="margin-bottom:8pt;">Debate Participants</div>
-    <table class="method-table">
-        <thead>
-            <tr><th>Role</th><th>Provider</th><th>Data Slice</th></tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><strong>Macro Analyst</strong></td>
-                <td><span class="llm-chip chip-{{ debate_participants.macro | lower }}">{{ debate_participants.macro | upper }}</span></td>
-                <td>Yields, credit spreads, FRED economic data</td>
-            </tr>
-            <tr>
-                <td><strong>Micro Analyst</strong></td>
-                <td><span class="llm-chip chip-{{ debate_participants.micro | lower }}">{{ debate_participants.micro | upper }}</span></td>
-                <td>Earnings, insider trades, analyst consensus</td>
-            </tr>
-            <tr>
-                <td><strong>Crowd Analyst</strong></td>
-                <td><span class="llm-chip chip-{{ debate_participants.crowd | lower }}">{{ debate_participants.crowd | upper }}</span></td>
-                <td>Polymarket, news narratives, sentiment shifts</td>
-            </tr>
-        </tbody>
-    </table>
+<div class="slide">
+<div class="stitle">
+    <div class="stitle-tag">Appendix</div>
+    <h2>Methodology</h2>
+</div>
+
+<div class="row">
+    <div class="col">
+        <div class="slbl">Analysis Pipeline</div>
+        <table class="t">
+            <thead><tr><th>Method</th><th>Signal Type</th></tr></thead>
+            <tbody>
+                <tr><td class="sym">Narrative Fragmentation</td><td>Regime shifts</td></tr>
+                <tr><td class="sym">Polymarket Lead-Lag</td><td>Cross-asset flow</td></tr>
+                <tr><td class="sym">Insider Trading Signal</td><td>Cluster buying</td></tr>
+                <tr><td class="sym">Earnings Cascade</td><td>Supply chain</td></tr>
+                <tr><td class="sym">Analyst Network Alpha</td><td>Rec propagation</td></tr>
+                <tr><td class="sym">Adversarial Debate</td><td>Consensus + contrarian</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col">
+        <div class="slbl">Debate Participants</div>
+        <table class="t">
+            <thead><tr><th>Role</th><th>Provider</th></tr></thead>
+            <tbody>
+                <tr><td class="sym">Macro Analyst</td><td><span class="chip chip-{{ debate_participants.macro | lower }}">{{ debate_participants.macro | upper }}</span></td></tr>
+                <tr><td class="sym">Micro Analyst</td><td><span class="chip chip-{{ debate_participants.micro | lower }}">{{ debate_participants.micro | upper }}</span></td></tr>
+                <tr><td class="sym">Crowd Analyst</td><td><span class="chip chip-{{ debate_participants.crowd | lower }}">{{ debate_participants.crowd | upper }}</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div style="margin-top:24pt; font-size:7pt; color:#333340; line-height:1.5; border-top:0.5pt solid #222230; padding-top:8pt;">
+    <strong style="color:#555568;">Tetra Market Intelligence</strong> &middot;
+    Generated {{ date }} at {{ time }}. Data: Polygon, Finnhub, FRED, Polymarket, NewsAPI.
+    For informational purposes only &mdash; not investment advice.
+</div>
+
+<div class="slide-foot">
+    <span class="slide-foot-l">Tetra &middot; {{ date }} &middot; Confidential</span>
+    <span class="slide-foot-r"></span>
+</div>
 </div>
 {% endif %}
-
-<div style="margin-top:28pt; padding-top:10pt; border-top:0.75pt solid #dde3eb; font-size:7.5pt; color:#8a9ab0; line-height:1.6;">
-    <strong style="color:#0b1f38;">Tetra Market Intelligence</strong><br>
-    Generated {{ date }} at {{ time }}. Data sourced from Polygon, Finnhub, FRED, Polymarket, NewsAPI.<br>
-    This report is for <strong>informational purposes only</strong> and does not constitute investment advice.
-    Past performance does not guarantee future results.
-</div>
 
 </body>
 </html>

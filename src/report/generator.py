@@ -1,7 +1,7 @@
 """Report generator — assembles all analysis into report sections.
 
-Fetches data from DB (analysis results, debate, portfolio, signals, events)
-and formats it for the Jinja2 template.
+Fetches data from DB (OHLCV for 205 symbols, FRED rates, analysis results,
+debate, portfolio, signals, events) and formats it for the Jinja2 template.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
 
@@ -19,17 +19,193 @@ from src.report.delivery import generate_pdf
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
+# ---------------------------------------------------------------------------
+# Symbol universe grouped by category
+# ---------------------------------------------------------------------------
+MARKET_GROUPS = [
+    ("Mega Cap Tech", ["AAPL", "MSFT", "NVDA", "META", "GOOGL", "AMZN", "TSLA"]),
+    ("Large Cap Growth", ["NFLX", "AVGO", "CRM", "ADBE", "NOW", "INTU", "SNOW", "PLTR", "MELI"]),
+    ("Sector ETFs", ["XLK", "XLE", "XLF", "XLV", "XLI", "XLC", "XLY", "XLP", "XLU", "XLB", "XLRE"]),
+    ("Major Indices", ["SPY", "QQQ", "IWM", "DIA", "VOO", "VTI"]),
+    ("International", ["EEM", "EFA", "FXI", "EWJ", "EWY", "EWZ", "INDA", "VEA", "VWO"]),
+    ("Commodities", ["GLD", "SLV", "USO", "UNG", "GDX", "COPX", "DBA"]),
+    ("Crypto", ["IBIT", "GBTC", "MSTR", "COIN", "MARA", "RIOT", "BITF", "HUT"]),
+    ("Bonds & Rates", ["TLT", "IEF", "SHY", "AGG", "BND", "LQD", "HYG", "EMB", "TIP"]),
+    ("Volatility", ["UVXY", "SVXY", "VXX", "VIXY", "VXZ"]),
+    ("Thematic ETFs", ["ARKK", "ARKW", "ARKG", "BOTZ", "ROBO", "HACK", "ICLN", "TAN", "LIT"]),
+]
 
-async def _fetch_market_snapshot(as_of: date) -> Dict[str, Any]:
-    """Fetch latest prices for snapshot panels."""
-    snapshot: Dict[str, Any] = {}
+ALL_SYMBOLS = []
+for _, syms in MARKET_GROUPS:
+    ALL_SYMBOLS.extend(syms)
+ALL_SYMBOLS = list(dict.fromkeys(ALL_SYMBOLS))  # dedupe, preserve order
+
+
+# ---------------------------------------------------------------------------
+# Data fetchers
+# ---------------------------------------------------------------------------
+
+async def _resolve_latest_trading_day(as_of: date) -> date:
+    """Find the most recent trading day on or before as_of with OHLCV data."""
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT MAX(timestamp::date) AS latest
+            FROM market.ohlcv
+            WHERE timestamp::date <= :as_of
+        """), {"as_of": as_of})
+        row = result.fetchone()
+        if row and row.latest:
+            return row.latest
+    return as_of
+
+
+async def _fetch_market_dashboard(trading_day: date) -> Tuple[
+    List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]
+]:
+    """Fetch OHLCV data for all symbols and compute 1d/5d returns.
+
+    Returns:
+        (market_groups, top_gainers, top_losers)
+    """
+    prev_1d = trading_day - timedelta(days=1)
+    prev_5d = trading_day - timedelta(days=10)  # generous window for 5 trading days
 
     async with engine.begin() as conn:
-        # Portfolio positions with prices
+        # Get the latest close on or before trading_day, the previous close (1d),
+        # and the close ~5 trading days ago — all in one query.
         result = await conn.execute(text("""
-            SELECT p.symbol, p.shares, p.current_price, p.market_value, p.weight, p.unrealized_pnl
-            FROM portfolio.positions p
-            ORDER BY p.market_value DESC NULLS LAST
+            WITH ranked AS (
+                SELECT symbol, timestamp::date AS dt, close,
+                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS rn
+                FROM market.ohlcv
+                WHERE symbol = ANY(:symbols) AND timestamp::date <= :trading_day
+            ),
+            latest AS (
+                SELECT symbol, close AS close_today
+                FROM ranked WHERE rn = 1
+            ),
+            prev1 AS (
+                SELECT symbol, close AS close_prev1
+                FROM ranked WHERE rn = 2
+            ),
+            prev5 AS (
+                -- 5th most recent trading day (row 6 = 5 trading days back)
+                SELECT symbol, close AS close_prev5
+                FROM ranked WHERE rn = 6
+            )
+            SELECT l.symbol, l.close_today,
+                   p1.close_prev1, p5.close_prev5
+            FROM latest l
+            LEFT JOIN prev1 p1 ON l.symbol = p1.symbol
+            LEFT JOIN prev5 p5 ON l.symbol = p5.symbol
+        """), {"symbols": ALL_SYMBOLS, "trading_day": trading_day})
+        rows = result.fetchall()
+
+    # Build lookup: symbol -> {close, change_1d, change_5d}
+    sym_data: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        close = float(r.close_today) if r.close_today else None
+        prev1 = float(r.close_prev1) if r.close_prev1 else None
+        prev5 = float(r.close_prev5) if r.close_prev5 else None
+
+        change_1d = ((close / prev1) - 1) if (close and prev1) else None
+        change_5d = ((close / prev5) - 1) if (close and prev5) else None
+
+        sym_data[r.symbol] = {
+            "symbol": r.symbol,
+            "close": close,
+            "change_1d": round(change_1d * 100, 2) if change_1d is not None else None,
+            "change_5d": round(change_5d * 100, 2) if change_5d is not None else None,
+        }
+
+    # Assemble grouped output
+    market_groups = []
+    for group_name, group_symbols in MARKET_GROUPS:
+        items = []
+        for sym in group_symbols:
+            if sym in sym_data:
+                items.append(sym_data[sym])
+            else:
+                items.append({"symbol": sym, "close": None, "change_1d": None, "change_5d": None})
+        market_groups.append({"name": group_name, "symbols": items})
+
+    # Top movers — sort by absolute 1d change
+    all_with_change = [v for v in sym_data.values() if v["change_1d"] is not None]
+    sorted_by_change = sorted(all_with_change, key=lambda x: x["change_1d"], reverse=True)
+
+    top_gainers = sorted_by_change[:5]
+    top_losers = sorted_by_change[-5:][::-1]  # worst 5, most negative first
+
+    return market_groups, top_gainers, top_losers
+
+
+async def _fetch_macro_data() -> List[Dict[str, Any]]:
+    """Fetch FRED economic data — VIX, treasuries, credit spreads."""
+    fred_labels = {
+        "VIXCLS": "VIX",
+        "DGS10": "10Y Treasury",
+        "DGS2": "2Y Treasury",
+        "T10Y2Y": "10Y-2Y Spread",
+        "BAMLH0A0HYM2": "HY Credit Spread",
+    }
+    fred_ids = list(fred_labels.keys())
+
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT DISTINCT ON (s.series_id)
+                   s.series_id, v.value, v.timestamp
+            FROM economic.values v
+            JOIN economic.series s ON v.series_id = s.series_id
+            WHERE s.series_id = ANY(:ids)
+            ORDER BY s.series_id, v.timestamp DESC
+        """), {"ids": fred_ids})
+        rows = result.fetchall()
+
+    macro = []
+    for r in rows:
+        sid = r.series_id
+        macro.append({
+            "name": fred_labels.get(sid, sid),
+            "value": round(float(r.value), 2) if r.value is not None else None,
+        })
+    return macro
+
+
+async def _fetch_market_snapshot(
+    as_of: date,
+    market_groups: List[Dict[str, Any]],
+    macro_data: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build the market_snapshot dict for backward compat (indices, rates, portfolio)."""
+    snapshot: Dict[str, Any] = {}
+
+    # Extract indices from market_groups for backward compat
+    for group in market_groups:
+        if group["name"] == "Major Indices":
+            snapshot["indices"] = [
+                {
+                    "name": s["symbol"],
+                    "price": f"${s['close']:,.2f}" if s["close"] else "—",
+                    "change": f"{s['change_1d']:+.2f}%" if s["change_1d"] is not None else "—",
+                    "change_pct": s["change_1d"] / 100 if s["change_1d"] is not None else 0,
+                }
+                for s in group["symbols"]
+            ]
+            break
+
+    # Rates from macro_data
+    if macro_data:
+        snapshot["rates"] = [
+            {"name": m["name"], "price": f"{m['value']:.2f}" if m["value"] is not None else "—"}
+            for m in macro_data
+        ]
+
+    # Portfolio positions
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT symbol, shares, current_price, market_value, weight, unrealized_pnl
+            FROM portfolio.positions
+            ORDER BY market_value DESC NULLS LAST
         """))
         positions = result.fetchall()
         if positions:
@@ -42,60 +218,6 @@ async def _fetch_market_snapshot(as_of: date) -> Dict[str, Any]:
                 }
                 for r in positions
             ]
-
-        # Major indices from latest OHLCV
-        index_symbols = ["SPY", "QQQ", "IWM", "DIA"]
-        result = await conn.execute(text("""
-            WITH latest AS (
-                SELECT symbol, close,
-                       LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp) AS prev_close,
-                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS rn
-                FROM market.ohlcv
-                WHERE symbol = ANY(:symbols) AND timestamp::date >= :start
-            )
-            SELECT symbol, close, prev_close FROM latest WHERE rn = 1
-        """), {"symbols": index_symbols, "start": as_of - timedelta(days=7)})
-        rows = result.fetchall()
-        if rows:
-            snapshot["indices"] = [
-                {
-                    "name": r.symbol,
-                    "price": f"${float(r.close):,.2f}",
-                    "change": f"{(float(r.close)/float(r.prev_close)-1)*100:+.2f}%" if r.prev_close else "—",
-                    "change_pct": (float(r.close)/float(r.prev_close)-1) if r.prev_close else 0,
-                }
-                for r in rows
-            ]
-
-        # Rates from FRED — use short display names
-        fred_labels = {
-            "VIXCLS": "VIX",
-            "DGS10": "10Y Treasury",
-            "DGS2": "2Y Treasury",
-            "T10Y2Y": "10Y-2Y Spread",
-            "BAMLH0A0HYM2": "HY Credit Spread",
-        }
-        fred_ids = list(fred_labels.keys())
-        result = await conn.execute(text("""
-            SELECT s.series_id, v.value
-            FROM economic.values v
-            JOIN economic.series s ON v.series_id = s.series_id
-            WHERE s.series_id = ANY(:ids)
-            ORDER BY v.timestamp DESC
-        """), {"ids": fred_ids})
-        rates_rows = result.fetchall()
-        seen_rates: set = set()
-        rates = []
-        for r in rates_rows:
-            sid = r.series_id
-            if sid not in seen_rates:
-                seen_rates.add(sid)
-                rates.append({
-                    "name": fred_labels.get(sid, sid),
-                    "price": f"{float(r.value):.2f}",
-                })
-        if rates:
-            snapshot["rates"] = rates
 
     return snapshot
 
@@ -148,7 +270,6 @@ async def _fetch_portfolio_state(as_of: date) -> Dict[str, Any]:
     result_data: Dict[str, Any] = {}
 
     async with engine.begin() as conn:
-        # Positions
         result = await conn.execute(text("""
             SELECT symbol, shares, avg_cost, current_price, market_value, weight, unrealized_pnl
             FROM portfolio.positions
@@ -166,7 +287,6 @@ async def _fetch_portfolio_state(as_of: date) -> Dict[str, Any]:
             for r in positions
         ]
 
-        # Latest snapshot
         result = await conn.execute(text("""
             SELECT total_value, cash, daily_return, cumulative_return
             FROM portfolio.snapshots
@@ -185,11 +305,11 @@ async def _fetch_portfolio_state(as_of: date) -> Dict[str, Any]:
 
 
 async def _fetch_track_record() -> Dict[str, Any]:
-    """Fetch recommendation track record."""
+    """Fetch recommendation track record with extended analytics."""
     track: Dict[str, Any] = {}
 
     async with engine.begin() as conn:
-        # Summary counts
+        # --- Basic summary ---
         result = await conn.execute(text("""
             SELECT
                 COUNT(*) AS total,
@@ -209,7 +329,7 @@ async def _fetch_track_record() -> Dict[str, Any]:
                 "avg_pnl": float(row.avg_pnl) if row.avg_pnl else 0,
             }
 
-        # Recent closed recs
+        # --- Recent closed recs ---
         result = await conn.execute(text("""
             SELECT symbol, direction, method, entry_price, closed_price,
                    realized_pnl, status, closed_date
@@ -233,6 +353,143 @@ async def _fetch_track_record() -> Dict[str, Any]:
                 for r in closed
             ]
 
+        # --- Accuracy by method ---
+        result = await conn.execute(text("""
+            SELECT method,
+                   COUNT(*) FILTER (WHERE status != 'open') AS closed,
+                   COUNT(*) FILTER (WHERE status = 'hit_target') AS wins,
+                   COUNT(*) FILTER (WHERE status = 'hit_stop') AS losses,
+                   COUNT(*) FILTER (WHERE status = 'expired') AS expired,
+                   AVG(realized_pnl) FILTER (WHERE status != 'open') AS avg_pnl
+            FROM tracker.recommendations
+            GROUP BY method
+            ORDER BY method
+        """))
+        by_method = []
+        for r in result.fetchall():
+            closed_count = (r.closed or 0)
+            wins = (r.wins or 0)
+            hit_rate = wins / closed_count if closed_count > 0 else None
+            by_method.append({
+                "method": r.method or "unknown",
+                "closed": closed_count,
+                "wins": wins,
+                "losses": r.losses or 0,
+                "expired": r.expired or 0,
+                "hit_rate": round(hit_rate, 3) if hit_rate is not None else None,
+                "avg_pnl": round(float(r.avg_pnl), 4) if r.avg_pnl else None,
+            })
+        if by_method:
+            track["accuracy_by_method"] = by_method
+
+        # --- Accuracy by confidence ---
+        result = await conn.execute(text("""
+            SELECT confidence,
+                   COUNT(*) FILTER (WHERE status != 'open') AS closed,
+                   COUNT(*) FILTER (WHERE status = 'hit_target') AS wins,
+                   AVG(realized_pnl) FILTER (WHERE status != 'open') AS avg_pnl
+            FROM tracker.recommendations
+            GROUP BY confidence
+            ORDER BY confidence
+        """))
+        by_conf = []
+        for r in result.fetchall():
+            closed_count = (r.closed or 0)
+            wins = (r.wins or 0)
+            hit_rate = wins / closed_count if closed_count > 0 else None
+            by_conf.append({
+                "confidence": r.confidence or "unknown",
+                "closed": closed_count,
+                "wins": wins,
+                "hit_rate": round(hit_rate, 3) if hit_rate is not None else None,
+                "avg_pnl": round(float(r.avg_pnl), 4) if r.avg_pnl else None,
+            })
+        if by_conf:
+            track["accuracy_by_confidence"] = by_conf
+
+        # --- Average hold days ---
+        result = await conn.execute(text("""
+            SELECT AVG(closed_date - created_date) AS avg_hold
+            FROM tracker.recommendations
+            WHERE status != 'open' AND closed_date IS NOT NULL
+        """))
+        hold_row = result.fetchone()
+        if hold_row and hold_row.avg_hold is not None:
+            try:
+                track["avg_hold_days"] = round(hold_row.avg_hold.total_seconds() / 86400, 1)
+            except AttributeError:
+                track["avg_hold_days"] = round(float(hold_row.avg_hold), 1)
+
+        # --- Best & worst trades ---
+        result = await conn.execute(text("""
+            SELECT symbol, direction, method, realized_pnl, status, closed_date
+            FROM tracker.recommendations
+            WHERE status != 'open' AND realized_pnl IS NOT NULL
+            ORDER BY realized_pnl DESC
+            LIMIT 1
+        """))
+        best = result.fetchone()
+        if best:
+            track["best_trade"] = {
+                "symbol": best.symbol,
+                "direction": best.direction,
+                "method": best.method,
+                "pnl": round(float(best.realized_pnl), 4),
+            }
+
+        result = await conn.execute(text("""
+            SELECT symbol, direction, method, realized_pnl, status, closed_date
+            FROM tracker.recommendations
+            WHERE status != 'open' AND realized_pnl IS NOT NULL
+            ORDER BY realized_pnl ASC
+            LIMIT 1
+        """))
+        worst = result.fetchone()
+        if worst:
+            track["worst_trade"] = {
+                "symbol": worst.symbol,
+                "direction": worst.direction,
+                "method": worst.method,
+                "pnl": round(float(worst.realized_pnl), 4),
+            }
+
+        # --- Cumulative PnL ---
+        result = await conn.execute(text("""
+            SELECT SUM(realized_pnl) AS cumulative
+            FROM tracker.recommendations
+            WHERE status != 'open' AND realized_pnl IS NOT NULL
+        """))
+        cum_row = result.fetchone()
+        if cum_row and cum_row.cumulative is not None:
+            track["cumulative_pnl"] = round(float(cum_row.cumulative), 4)
+
+        # --- Win / lose streaks (current) ---
+        result = await conn.execute(text("""
+            SELECT status
+            FROM tracker.recommendations
+            WHERE status != 'open'
+            ORDER BY closed_date DESC
+        """))
+        streak_rows = result.fetchall()
+        win_streak = 0
+        lose_streak = 0
+        if streak_rows:
+            first_status = streak_rows[0].status
+            if first_status == "hit_target":
+                for sr in streak_rows:
+                    if sr.status == "hit_target":
+                        win_streak += 1
+                    else:
+                        break
+            elif first_status == "hit_stop":
+                for sr in streak_rows:
+                    if sr.status == "hit_stop":
+                        lose_streak += 1
+                    else:
+                        break
+        track["win_streak"] = win_streak
+        track["lose_streak"] = lose_streak
+
     return track
 
 
@@ -241,7 +498,6 @@ async def _fetch_signals_summary(as_of: date) -> List[Dict[str, Any]]:
     summaries = []
 
     async with engine.begin() as conn:
-        # Informed trading signals by type
         result = await conn.execute(text("""
             SELECT signal_type,
                    COUNT(*) AS cnt,
@@ -263,7 +519,6 @@ async def _fetch_signals_summary(as_of: date) -> List[Dict[str, Any]]:
                 "top_strength": round(float(r.top_strength), 3) if r.top_strength else None,
             })
 
-        # Unified signals
         result = await conn.execute(text("""
             SELECT COUNT(*) AS cnt,
                    MAX(symbol) AS top_symbol,
@@ -281,6 +536,132 @@ async def _fetch_signals_summary(as_of: date) -> List[Dict[str, Any]]:
             })
 
     return summaries
+
+
+CORRELATION_ASSETS = [
+    "SPY", "QQQ", "IWM", "TLT", "GLD", "USO", "IBIT", "HYG", "EEM", "VXX", "DXY",
+]
+
+
+async def _compute_correlation_matrix(trading_day: date) -> Dict[str, Any]:
+    """Compute 20-day rolling Pearson correlations between key assets.
+
+    Returns dict with:
+        labels: list of symbols actually available
+        matrix: 2D list of correlation values (symmetric, diagonal = 1.0)
+        notable_pairs: list of pairs where |current_rho - 60d_avg_rho| > 0.3
+    """
+    # We need 25 trading days for 20-day correlation, plus 65 days for 60-day baseline
+    lookback_days = 100  # calendar days to cover ~65 trading days
+
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT symbol, timestamp::date AS dt, close
+            FROM market.ohlcv
+            WHERE symbol = ANY(:symbols)
+              AND timestamp::date BETWEEN :start AND :end
+            ORDER BY symbol, timestamp::date
+        """), {
+            "symbols": CORRELATION_ASSETS,
+            "start": trading_day - timedelta(days=lookback_days),
+            "end": trading_day,
+        })
+        rows = result.fetchall()
+
+    if not rows:
+        return {"labels": [], "matrix": [], "notable_pairs": []}
+
+    # Organize: symbol -> sorted list of (date, close)
+    from collections import defaultdict
+    price_series: Dict[str, List[Tuple[date, float]]] = defaultdict(list)
+    for r in rows:
+        price_series[r.symbol].append((r.dt, float(r.close)))
+
+    # Only keep symbols with enough data (at least 25 trading days)
+    valid_symbols = [s for s in CORRELATION_ASSETS if len(price_series[s]) >= 25]
+    if len(valid_symbols) < 2:
+        return {"labels": valid_symbols, "matrix": [], "notable_pairs": []}
+
+    # Build aligned date set (intersection of all valid symbols' dates)
+    date_sets = [set(dt for dt, _ in price_series[s]) for s in valid_symbols]
+    common_dates = sorted(set.intersection(*date_sets))
+
+    if len(common_dates) < 25:
+        return {"labels": valid_symbols, "matrix": [], "notable_pairs": []}
+
+    # Build price matrix: each row = symbol, each col = date
+    import math
+    price_lookup: Dict[str, Dict[date, float]] = {}
+    for s in valid_symbols:
+        price_lookup[s] = {dt: c for dt, c in price_series[s]}
+
+    # Compute daily returns for common dates
+    returns: Dict[str, List[float]] = {}
+    for s in valid_symbols:
+        ret = []
+        for i in range(1, len(common_dates)):
+            prev = price_lookup[s].get(common_dates[i - 1])
+            curr = price_lookup[s].get(common_dates[i])
+            if prev and curr and prev != 0:
+                ret.append(curr / prev - 1)
+            else:
+                ret.append(0.0)
+        returns[s] = ret
+
+    n_returns = len(common_dates) - 1
+
+    def pearson(x: List[float], y: List[float]) -> float:
+        """Compute Pearson correlation between two return series."""
+        n = len(x)
+        if n < 5:
+            return 0.0
+        mx = sum(x) / n
+        my = sum(y) / n
+        sx = math.sqrt(max(sum((xi - mx) ** 2 for xi in x) / n, 1e-15))
+        sy = math.sqrt(max(sum((yi - my) ** 2 for yi in y) / n, 1e-15))
+        cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x, y)) / n
+        return cov / (sx * sy)
+
+    # 20-day correlation (use last 20 returns)
+    window_20 = 20
+    recent_20 = {s: returns[s][-window_20:] for s in valid_symbols} if n_returns >= window_20 else {s: returns[s] for s in valid_symbols}
+
+    n = len(valid_symbols)
+    matrix_20: List[List[float]] = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        matrix_20[i][i] = 1.0
+        for j in range(i + 1, n):
+            rho = pearson(recent_20[valid_symbols[i]], recent_20[valid_symbols[j]])
+            rho = max(-1.0, min(1.0, rho))
+            matrix_20[i][j] = round(rho, 4)
+            matrix_20[j][i] = round(rho, 4)
+
+    # 60-day correlation for detecting breaks
+    notable_pairs = []
+    if n_returns >= 60:
+        window_60 = 60
+        recent_60 = {s: returns[s][-window_60:] for s in valid_symbols}
+        for i in range(n):
+            for j in range(i + 1, n):
+                rho_60 = pearson(recent_60[valid_symbols[i]], recent_60[valid_symbols[j]])
+                rho_20 = matrix_20[i][j]
+                delta = abs(rho_20 - rho_60)
+                if delta > 0.3:
+                    notable_pairs.append({
+                        "pair": f"{valid_symbols[i]}/{valid_symbols[j]}",
+                        "rho_20d": round(rho_20, 2),
+                        "rho_60d": round(rho_60, 2),
+                        "delta": round(rho_20 - rho_60, 2),
+                    })
+
+    # Round matrix for display
+    matrix_display = [[round(v, 2) for v in row] for row in matrix_20]
+
+    return {
+        "labels": valid_symbols,
+        "matrix": matrix_display,
+        "notable_pairs": notable_pairs,
+    }
 
 
 async def _fetch_forward_events(as_of: date, days: int = 5) -> List[Dict[str, Any]]:
@@ -307,6 +688,119 @@ async def _fetch_forward_events(as_of: date, days: int = 5) -> List[Dict[str, An
     return events
 
 
+async def _fetch_news_headlines(as_of: date, limit: int = 15) -> List[Dict[str, Any]]:
+    """Fetch recent news headlines with sentiment."""
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT title, source, published_at, symbols, sentiment_score
+            FROM news.articles
+            WHERE published_at::date >= :start AND published_at::date <= :as_of
+            ORDER BY published_at DESC
+            LIMIT :limit
+        """), {"start": as_of - timedelta(days=1), "as_of": as_of, "limit": limit})
+        rows = result.fetchall()
+
+    return [
+        {
+            "title": r.title,
+            "source": r.source,
+            "symbols": r.symbols,
+            "sentiment": round(float(r.sentiment_score), 2) if r.sentiment_score is not None else None,
+        }
+        for r in rows
+    ]
+
+
+async def _fetch_insider_and_analyst(as_of: date) -> Dict[str, List[Dict[str, Any]]]:
+    """Fetch recent insider trades and analyst recommendations."""
+    data: Dict[str, List] = {"insider_trades": [], "analyst_recs": []}
+
+    async with engine.begin() as conn:
+        # Insider trades — last 3 days
+        try:
+            result = await conn.execute(text("""
+                SELECT symbol, insider_name, transaction_type, shares, price, value, filing_date
+                FROM event.insider_trades
+                WHERE filing_date >= :start
+                ORDER BY ABS(value) DESC NULLS LAST
+                LIMIT 10
+            """), {"start": as_of - timedelta(days=3)})
+            for r in result.fetchall():
+                data["insider_trades"].append({
+                    "symbol": r.symbol,
+                    "insider": r.insider_name,
+                    "type": r.transaction_type,
+                    "value": float(r.value) if r.value else 0,
+                })
+        except Exception as e:
+            logger.debug(f"Insider trades query failed (table may not exist): {e}")
+
+        # Analyst recommendations — last 3 days
+        try:
+            result = await conn.execute(text("""
+                SELECT symbol, firm, action, rating_to, price_target, date
+                FROM event.analyst_recommendations
+                WHERE date >= :start
+                ORDER BY date DESC
+                LIMIT 10
+            """), {"start": as_of - timedelta(days=3)})
+            for r in result.fetchall():
+                data["analyst_recs"].append({
+                    "symbol": r.symbol,
+                    "firm": r.firm,
+                    "action": r.action,
+                    "rating": r.rating_to,
+                    "target": float(r.price_target) if r.price_target else None,
+                })
+        except Exception as e:
+            logger.debug(f"Analyst recs query failed (table may not exist): {e}")
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# LLM commentary
+# ---------------------------------------------------------------------------
+
+def _build_llm_market_summary(
+    market_groups: List[Dict[str, Any]],
+    top_gainers: List[Dict[str, Any]],
+    top_losers: List[Dict[str, Any]],
+    macro_data: List[Dict[str, Any]],
+) -> str:
+    """Build a compact text summary of market data for the LLM prompt."""
+    lines = []
+
+    # Macro
+    if macro_data:
+        macro_str = ", ".join(f"{m['name']}: {m['value']}" for m in macro_data if m["value"] is not None)
+        lines.append(f"MACRO: {macro_str}")
+
+    # Per-group summary (show average 1d change + notable movers)
+    for group in market_groups:
+        changes = [s["change_1d"] for s in group["symbols"] if s["change_1d"] is not None]
+        if not changes:
+            continue
+        avg = sum(changes) / len(changes)
+        best = max(group["symbols"], key=lambda s: s["change_1d"] if s["change_1d"] is not None else -999)
+        worst = min(group["symbols"], key=lambda s: s["change_1d"] if s["change_1d"] is not None else 999)
+
+        detail_parts = []
+        for s in group["symbols"]:
+            if s["close"] is not None and s["change_1d"] is not None:
+                detail_parts.append(f"{s['symbol']} ${s['close']:.2f} ({s['change_1d']:+.1f}%)")
+        detail = ", ".join(detail_parts)
+        lines.append(f"\n{group['name']} (avg {avg:+.1f}%): {detail}")
+
+    # Top movers
+    gainer_str = ", ".join(f"{g['symbol']} {g['change_1d']:+.1f}%" for g in top_gainers)
+    loser_str = ", ".join(f"{l['symbol']} {l['change_1d']:+.1f}%" for l in top_losers)
+    lines.append(f"\nTOP GAINERS: {gainer_str}")
+    lines.append(f"TOP LOSERS: {loser_str}")
+
+    return "\n".join(lines)
+
+
 async def _generate_llm_commentary(
     llm_client,
     section: str,
@@ -314,46 +808,150 @@ async def _generate_llm_commentary(
     as_of: date,
 ) -> str:
     """Use LLM to write a section of the report."""
+    market_summary = context.get("market_text", "")
+
     prompts = {
-        "what_happened": f"""Write a concise market summary for {as_of.isoformat()}.
+        "what_happened": f"""Market data for {as_of.isoformat()}:
 
-Context data:
-{json.dumps(context, indent=2, default=str)}
+{market_summary}
 
-Write 2-3 paragraphs in markdown covering:
-1. What happened in the market today — the essential story, not just numbers
-2. Any narrative shifts or anomalies detected
-3. What was unusual or notable
-{chr(10) + "The user previously asked these questions that weren't covered. Try to address them if relevant:" + chr(10) + chr(10).join("- " + q for q in context.get("user_questions", [])) if context.get("user_questions") else ""}
+Narrative: {json.dumps(context.get("narrative"), default=str)}
+News: {json.dumps(context.get("news"), default=str)}
+Insider/Analyst: {json.dumps(context.get("insider_analyst"), default=str)}
 
-Be specific with data references. No fluff. No disclaimers.""",
+OUTPUT FORMAT — quant desk morning note. Tables, bullets, formulas. NO paragraphs. Be DETAILED and THOROUGH.
 
-        "what_it_means": f"""Analyze what the current market state means for positioning.
+## Key Moves (TOP 10 ONLY — do NOT list every symbol)
+| Symbol | Close | 1D Chg | Vol Ratio | Driver |
+MAX 10 rows. Pick the 10 most significant by |return| × vol_ratio. Quality over quantity.
 
-Context data:
-{json.dumps(context, indent=2, default=str)}
+## Cross-Asset Matrix
+| Signal | Reading | 20D Avg | Δ | Z-Score | Interpretation |
+Cover ALL of these:
+- Credit: HY OAS (bps), IG OAS, HY/IG ratio, CDX spread
+- Curves: 2s10s (bps), 5s30s, real rate (10Y - breakeven)
+- Ratios: XLY/XLP, XLK/XLF, copper/gold, oil/gold, BTC/NDX correlation (20d rolling)
+- Vol surface: VIX level, VIX/VXV (term structure), VVIX, put/call ratio, skew (25Δ)
+- FX/Rates: DXY, 10Y yield, TIP breakeven, fed funds futures implied
+- Flows: GLD flows, TLT flows, HYG flows (if available from price action)
 
-Write 2-3 paragraphs in markdown covering:
-1. Regime assessment — what kind of market are we in?
-2. Cross-asset signals — where are the divergences?
-3. Which signals should be weighted higher right now and why?
+## Sector Heatmap
+| Sector (ETF) | 1D | 5D | 20D | Rel vs SPY 1D | Rel vs SPY 5D | Momentum Signal |
+ALL 11 sectors. Momentum signal = {">0" if True else "<0"} based on 5D vs 20D crossover.
 
-Be specific and decisive. Reference actual data points.""",
+## Correlation Breaks
+| Pair | 20D ρ | 60D ρ | Today's Co-Move | Expected | Residual (σ) |
+Flag ANY pair where today's residual > 1.5σ from the regression.
+
+## Statistical Anomalies
+For each anomaly:
+- SYMBOL: return = X%, 20D μ = Y%, 20D σ = Z% → move = Wσ, p-value ≈ V
+- Include volume anomalies: vol = Xk vs 20D avg = Yk → ratio = Z
+- Include correlation breaks: ρ(A,B) 20D = X, today co-move implies ρ ≈ Y → break
+
+## Microstructure
+- Breadth: advancers/decliners ratio, % above 20DMA, % above 50DMA
+- Dispersion: cross-sectional σ of returns today vs 20D avg dispersion
+- Momentum: % of universe with positive 5D returns, % with positive 20D returns
+
+{"User questions: " + "; ".join(context.get("user_questions", [])) if context.get("user_questions") else ""}
+
+RULES: No prose. Every line = data. Be exhaustive — cover ALL asset classes. Use >, <, ≈, →, ↑, ↓, Δ, σ, ρ freely. Use 2+ pages if needed.""",
+
+        "what_it_means": f"""Market data:
+{market_summary}
+
+Macro: {json.dumps(context.get("macro_data"), default=str)}
+Debate regime: {context.get("debate_regime", "")}
+Conflicts: {json.dumps(context.get("debate_conflicts", []), default=str)}
+Risk warnings: {json.dumps(context.get("risk_warnings", []), default=str)}
+Signals: {json.dumps(context.get("top_signals"), default=str)}
+
+OUTPUT FORMAT — senior quant PM style. Formulaic, detailed, technical. NO paragraphs. Be THOROUGH.
+
+## Regime Classification
+- State: X (confidence: Y%)
+- Composite score = w₁·f(VIX) + w₂·f(credit) + w₃·f(curve) + w₄·f(momentum) + w₅·f(dispersion)
+- Show each component:
+  - Vol component: VIX={{}}, percentile=X%, VIX/VXV={{}}, term structure={{contango|backwardation}}
+  - Credit component: HY OAS={{}}, IG OAS={{}}, HY-IG={{}}, vs 1Y range [min, max]
+  - Curve component: 2s10s={{}}, real rate={{}}, fed funds terminal implied={{}}
+  - Momentum component: SPY 5D={{}}, 20D={{}}, breadth=X%
+  - Dispersion: cross-sectional σ={{}}, vs 20D avg={{}}
+- Regime transition probability: P(current→risk-off) ≈ X%, P(current→risk-on) ≈ Y%
+
+## Divergence Matrix (DETAILED)
+| Pair | Spread/Ratio | 20D Avg | 60D Avg | Z(20D) | Z(60D) | Mean-Revert Target | Half-Life (days) |
+Cover at minimum 8-10 pairs:
+- Equity vs Vol (SPX vs VIX)
+- Credit vs Equity (HYG vs SPY)
+- Crypto vs Tech (BTC proxies vs QQQ)
+- Growth vs Value (QQQ/IWM or similar)
+- Commodities vs USD (GLD vs DXY)
+- EM vs DM (EEM vs SPY)
+- Duration vs Credit (TLT vs HYG)
+- Gold vs Real Rates (GLD vs TIP)
+- Energy vs Broad (XLE vs SPY)
+- Vol term structure (VIX vs VXZ)
+
+## Factor Decomposition
+| Factor | Proxy | 1D | 5D | 20D | Signal | Conviction (1-10) | Sizing (% of risk budget) |
+- Momentum (high vs low momentum quintile)
+- Value (high vs low P/E quintile)
+- Quality (high vs low ROE)
+- Size (IWM vs SPY)
+- Low Vol (min vol vs market)
+- Growth (QQQ vs IWM)
+- Credit (HYG vs SHY)
+- Carry (high yield vs short duration)
+
+## Risk Decomposition
+- Portfolio VaR(95%, 1D) estimate: $X (assuming $1M notional)
+- Max sector concentration risk: sector X at Y% weight
+- Tail risk: P(SPY < -2% | current regime) ≈ X%
+- Correlation risk: avg pairwise ρ = X (high/low vs historical)
+- Liquidity: bid-ask proxy (high vol ETFs vs normal)
+
+## Highest Conviction Trades (DETAILED)
+For each (minimum 5):
+| # | Symbol | Dir | Entry | Target | Stop | R/R | Timeframe | Catalyst | Factor Exposure | Edge Decay |
+Include:
+- Expected return = X%, expected vol = Y%, Sharpe ≈ Z
+- Position sizing: Kelly fraction f* = (μ/σ²) → suggested X% of capital
+- Correlation to existing book: ρ ≈ X (diversifying/concentrating?)
+- Key risk: what invalidates the thesis, expressed as a specific level/event
+
+## Scenario Analysis
+| Scenario | P(%) | SPY Δ | VIX Δ | HYG Δ | GLD Δ | BTC Δ | Portfolio Δ |
+- Base case, bull case, bear case, tail risk
+- For each: trigger condition, expected timeline, key indicators to watch
+
+RULES: No prose. Every line = data or formula. Use ≈, →, ↑, ↓, Δ, σ, ρ, ∂, Σ, ∫ freely.
+Be EXHAUSTIVE — this is for a PM who reads math, not English. Use as many pages as needed.""",
     }
 
     prompt = prompts.get(section, f"Write analysis for: {section}")
     system = (
-        "You are a quantitative portfolio strategist writing a daily market report. "
-        "Be concise, data-driven, and decisive. Use markdown formatting. "
-        "No disclaimers, no 'it remains to be seen' hedging."
+        "You are a senior quant portfolio manager at a $5B systematic macro fund. "
+        "You think in covariance matrices, factor loadings, and regime probabilities. "
+        "Your communication style: formulas > tables > bullets > never paragraphs. "
+        "Every output line MUST contain numbers, Greek letters, or mathematical operators. "
+        "You use: σ, ρ, Δ, μ, β, α, Σ, θ, γ, ≈, →, ↑, ↓, ∝, ≫, ≪ naturally. "
+        "Express uncertainty as probability ranges, not words. "
+        "Show your work: intermediate calculations, not just conclusions. "
+        "Think: Citadel/DE Shaw internal research note, not sell-side."
     )
 
     try:
-        return await llm_client.generate(prompt, system=system, temperature=0.3)
+        return await llm_client.generate(prompt, system=system, temperature=0.15)
     except Exception as e:
         logger.warning(f"LLM commentary failed for {section}: {e}")
         return f"*Analysis unavailable: {e}*"
 
+
+# ---------------------------------------------------------------------------
+# Main report generation
+# ---------------------------------------------------------------------------
 
 async def generate_report(
     as_of: Optional[date] = None,
@@ -362,10 +960,12 @@ async def generate_report(
 ) -> Dict[str, Any]:
     """Generate the daily market report.
 
-    1. Fetch all analysis results from DB
-    2. Optionally use LLM for narrative sections
-    3. Assemble template context
-    4. Generate PDF
+    1. Resolve the latest trading day (handles weekends/holidays)
+    2. Fetch full market dashboard (205 symbols, grouped)
+    3. Fetch macro, narrative, debate, signals, events, news
+    4. Generate rich LLM commentary with full market context
+    5. Assemble template context
+    6. Generate PDF
 
     Returns dict with report path and summary.
     """
@@ -374,8 +974,26 @@ async def generate_report(
 
     logger.info(f"Generating report for {as_of}")
 
-    # Fetch all data in parallel-safe order
-    market_snapshot = await _fetch_market_snapshot(as_of)
+    # Resolve latest trading day for OHLCV lookups
+    trading_day = await _resolve_latest_trading_day(as_of)
+    if trading_day != as_of:
+        logger.info(f"Using trading day {trading_day} (as_of={as_of} has no data)")
+
+    # ---- Section 1: Market Dashboard ----
+    market_groups, top_gainers, top_losers = await _fetch_market_dashboard(trading_day)
+    macro_data = await _fetch_macro_data()
+
+    # Build backward-compat market_snapshot
+    market_snapshot = await _fetch_market_snapshot(as_of, market_groups, macro_data)
+
+    # ---- Correlation Matrix ----
+    try:
+        correlation_matrix = await _compute_correlation_matrix(trading_day)
+    except Exception as e:
+        logger.warning(f"Correlation matrix computation failed: {e}")
+        correlation_matrix = {"labels": [], "matrix": [], "notable_pairs": []}
+
+    # ---- Remaining data fetches ----
     narrative_state = await _fetch_narrative_state(as_of)
     debate_payload = await _fetch_debate_results(as_of)
     portfolio_data = await _fetch_portfolio_state(as_of)
@@ -383,27 +1001,46 @@ async def generate_report(
     signals_summary = await _fetch_signals_summary(as_of)
     forward_events = await _fetch_forward_events(as_of)
 
+    # Optional data sources (may not have data yet)
+    try:
+        news_headlines = await _fetch_news_headlines(as_of)
+    except Exception as e:
+        logger.debug(f"News fetch failed: {e}")
+        news_headlines = []
+
+    try:
+        insider_analyst = await _fetch_insider_and_analyst(as_of)
+    except Exception as e:
+        logger.debug(f"Insider/analyst fetch failed: {e}")
+        insider_analyst = {"insider_trades": [], "analyst_recs": []}
+
     # Extract debate synthesis
     synthesis = debate_payload.get("synthesis", {}) if debate_payload else {}
     debate_r1 = debate_payload.get("round1", {}) if debate_payload else {}
 
-    # Read feedback gaps from Mira (questions the briefing couldn't answer)
+    # Read feedback gaps from Mira
     from src.mira.push import read_feedback_gaps
     user_gaps = read_feedback_gaps()
     if user_gaps:
         logger.info(f"Addressing {len(user_gaps)} user feedback gaps")
 
-    # Build LLM commentary context
+    # ---- Section 3: LLM Commentary ----
+    # Build rich market text for LLM
+    market_text = _build_llm_market_summary(market_groups, top_gainers, top_losers, macro_data)
+
     commentary_context = {
+        "market_text": market_text,
         "narrative": narrative_state,
+        "macro_data": macro_data,
         "regime": synthesis.get("regime_consensus", ""),
         "signals_count": len(signals_summary),
         "portfolio_summary": portfolio_data.get("summary"),
         "top_signals": signals_summary[:5],
+        "news": news_headlines[:10],
+        "insider_analyst": insider_analyst,
         "user_questions": [g["question"] for g in user_gaps] if user_gaps else [],
     }
 
-    # Generate narrative sections
     what_happened = ""
     what_it_means = ""
 
@@ -420,16 +1057,14 @@ async def generate_report(
             }, as_of,
         )
     else:
-        # Fallback: use debate regime consensus as what_happened
         if synthesis.get("regime_consensus"):
             what_happened = f"**Regime:** {synthesis['regime_consensus']}"
         what_it_means = ""
 
-    # Debate participants — reconstruct role→provider mapping
+    # ---- Debate participants ----
     debate_participants = None
     llm_stats = debate_payload.get("llm_stats", {}) if debate_payload else {}
     if debate_r1 and llm_stats:
-        # Use same preference order as debate.py to reconstruct assignment
         available = list(llm_stats.keys())
         role_preference = {
             "macro": ["openai", "claude", "deepseek", "gemini"],
@@ -447,30 +1082,54 @@ async def generate_report(
             if role not in debate_participants:
                 debate_participants[role] = available[0] if available else role
 
-    # Portfolio total for cover
+    # Cover data
     portfolio_total = None
     if portfolio_data.get("summary"):
         portfolio_total = f"${portfolio_data['summary']['total_value']:,.0f}"
 
-    # Regime for cover
-    regime = synthesis.get("regime_consensus", "") or None
-    if regime and len(regime) > 30:
-        regime = regime[:30] + "..."
+    regime_raw = synthesis.get("regime_consensus", "") or ""
+    # Extract a short regime label (Bullish/Bearish/Neutral/Risk-Off etc.)
+    regime = None
+    if regime_raw:
+        rl = regime_raw.lower()
+        if any(w in rl for w in ("bull", "risk-on", "risk on", "rally")):
+            regime = "Bullish"
+        elif any(w in rl for w in ("bear", "risk-off", "risk off", "sell-off", "selloff", "crash")):
+            regime = "Bearish"
+        elif any(w in rl for w in ("volatile", "volatil", "uncertain", "choppy", "dispersion")):
+            regime = "Volatile"
+        elif any(w in rl for w in ("neutral", "range", "sideways", "mixed")):
+            regime = "Neutral"
+        else:
+            # Fallback: first 20 chars
+            regime = regime_raw[:20].strip()
 
-    # Assemble template context
+    # ---- Assemble template context ----
     sections = {
         # Cover
         "regime": regime,
         "portfolio_total": portfolio_total,
+        "trading_day": trading_day.isoformat(),
 
-        # Section 1: What Happened
+        # Correlation Matrix
+        "correlation_matrix": correlation_matrix,
+
+        # Section 1: Market Dashboard (NEW)
+        "market_groups": market_groups,
+        "top_gainers": top_gainers,
+        "top_losers": top_losers,
+        "macro_data": [
+            {"name": m["name"], "value": m["value"]} for m in macro_data
+        ],
+
+        # Section 1 (backward compat): What Happened
         "market_snapshot": market_snapshot,
         "what_happened": what_happened,
         "narrative_state": narrative_state,
 
         # Section 2: What It Means
         "what_it_means": what_it_means,
-        "regime_detail": None,  # From meta-signal if available
+        "regime_detail": None,
         "signals_summary": signals_summary,
         "debate_conflicts": synthesis.get("key_conflicts", []),
 
@@ -488,6 +1147,11 @@ async def generate_report(
         # Section 5: Forward Calendar
         "forward_events": forward_events,
 
+        # Additional context
+        "news_headlines": news_headlines,
+        "insider_trades": insider_analyst.get("insider_trades", []),
+        "analyst_recs": insider_analyst.get("analyst_recs", []),
+
         # Appendix
         "debate_participants": debate_participants,
     }
@@ -502,10 +1166,15 @@ async def generate_report(
 
     return {
         "as_of": as_of.isoformat(),
+        "trading_day": trading_day.isoformat(),
         "status": "success",
         "pdf_path": pdf_path,
         "regime": regime,
         "portfolio_total": portfolio_total,
+        "symbols_covered": len(ALL_SYMBOLS),
+        "groups_covered": len(market_groups),
+        "top_gainers": [g["symbol"] for g in top_gainers],
+        "top_losers": [l["symbol"] for l in top_losers],
         "consensus_trades": synthesis.get("consensus_trades", []),
         "contrarian_trades": synthesis.get("contrarian_trades", []),
         "portfolio_actions": synthesis.get("portfolio_actions", []),
@@ -513,6 +1182,7 @@ async def generate_report(
         "portfolio_positions": len(portfolio_data.get("positions", [])),
         "signals": len(signals_summary),
         "forward_events": len(forward_events),
+        "news_headlines": len(news_headlines),
         "user_questions": [g["question"] for g in user_gaps] if user_gaps else [],
     }
 
@@ -527,6 +1197,8 @@ async def _store_report_metadata(
         "contrarian_trades": len(sections.get("contrarian_trades", [])),
         "portfolio_total": sections.get("portfolio_total", ""),
         "signals": len(sections.get("signals_summary", [])),
+        "symbols_covered": len(ALL_SYMBOLS),
+        "groups_covered": len(sections.get("market_groups", [])),
     }
 
     try:
@@ -550,5 +1222,4 @@ async def _store_report_metadata(
                 "active_recs": len(sections.get("portfolio_positions", [])),
             })
     except Exception as e:
-        # Non-critical — don't fail the report
         logger.warning(f"Failed to store report metadata: {e}")

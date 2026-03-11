@@ -247,16 +247,22 @@ def sync_app_status(report_data: Dict[str, Any], as_of: Optional[date] = None) -
         "parent": "pipeline",
     })
 
-    # PDF reference
-    if pdf_path:
+    # PDF reports: include all historical PDFs in output/
+    # Use paths relative to Tetra root so iOS resolves via appRootURL
+    tetra_root = OUTPUT_DIR.parent
+    for pdf_file in sorted(OUTPUT_DIR.glob("market_report_*.pdf"), reverse=True):
+        pdf_date = pdf_file.stem.replace("market_report_", "")
+        try:
+            rel_path = str(pdf_file.relative_to(tetra_root))
+        except ValueError:
+            rel_path = str(pdf_file)
         outputs.append({
             "type": "report",
-            "id": f"pdf-{date_str}",
-            "title": f"Full PDF Report {date_str}",
+            "id": f"pdf-{pdf_date}",
+            "title": f"Market Report {pdf_date}",
             "updatedAt": now,
             "period": "daily",
-            "path": pdf_path,
-            "parent": "pipeline",
+            "path": rel_path,
         })
 
     # Deep dives: consensus trades
