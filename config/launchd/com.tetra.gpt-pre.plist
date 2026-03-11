@@ -6,13 +6,13 @@
   <string>com.tetra.gpt-pre</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/angwei/Repos/tetra/.venv/bin/python</string>
-    <string>/Users/angwei/Repos/tetra/scripts/run_gpt_recommendations.py</string>
+    <string>/Users/angwei/Library/Mobile Documents/com~apple~CloudDocs/MtJoy/Tetra/.venv/bin/python</string>
+    <string>/Users/angwei/Library/Mobile Documents/com~apple~CloudDocs/MtJoy/Tetra/scripts/run_gpt_recommendations.py</string>
     <string>--session</string>
     <string>pre</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/angwei/Repos/tetra</string>
+  <string>/Users/angwei/Library/Mobile Documents/com~apple~CloudDocs/MtJoy/Tetra</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
@@ -21,8 +21,8 @@
     <integer>45</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/Users/angwei/Repos/tetra/logs/gpt-pre.log</string>
+  <string>/Users/angwei/Library/Mobile Documents/com~apple~CloudDocs/MtJoy/Tetra/logs/gpt-pre.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/angwei/Repos/tetra/logs/gpt-pre.err</string>
+  <string>/Users/angwei/Library/Mobile Documents/com~apple~CloudDocs/MtJoy/Tetra/logs/gpt-pre.err</string>
 </dict>
 </plist>

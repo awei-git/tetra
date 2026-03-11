@@ -1,0 +1,42 @@
+{
+  "arxiv": {
+    "categories": ["cs.AI", "cs.CL", "cs.LG", "q-fin.ST", "q-fin.PM"],
+    "max_results": 10
+  },
+  "reddit": {
+    "subreddits": ["Economics", "wallstreetbets", "stocks", "MachineLearning", "LocalLLaMA"],
+    "limit": 8
+  },
+  "huggingface": {
+    "enabled": true
+  },
+  "github_trending": {
+    "enabled": true,
+    "days_back": 3,
+    "per_page": 10
+  },
+  "hackernews": {
+    "enabled": true,
+    "count": 25,
+    "min_points": 80
+  },
+  "lobsters": {
+    "enabled": true,
+    "count": 15
+  },
+  "rss": [
+    {"name": "marginal_revolution", "url": "https://marginalrevolution.com/feed"},
+    {"name": "noah_smith", "url": "https://www.noahpinion.blog/feed"},
+    {"name": "stratechery", "url": "https://stratechery.com/feed/"},
+    {"name": "apricitas_economics", "url": "https://www.apricitas.io/feed"},
+    {"name": "thezvi", "url": "https://thezvi.substack.com/feed"},
+    {"name": "import_ai", "url": "https://importai.substack.com/feed"},
+    {"name": "interconnects", "url": "https://www.interconnects.ai/feed"},
+    {"name": "cold_takes", "url": "https://www.cold-takes.com/rss/"},
+    {"name": "one_useful_thing", "url": "https://www.oneusefulthing.org/feed"},
+    {"name": "construction_physics", "url": "https://constructionphysics.substack.com/feed"},
+    {"name": "slow_boring", "url": "https://www.slowboring.com/feed"},
+    {"name": "astral_codex_ten", "url": "https://www.astralcodexten.com/feed"},
+    {"name": "quanta_magazine", "url": "https://www.quantamagazine.org/feed/"}
+  ]
+}

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tetra Morning Briefing — {{ date }}</title>
+<style>
+
+/* ═══════════════════════════════════════
+   PAGE — charcoal background, edge-to-edge
+═══════════════════════════════════════ */
+@page {
+    size: A4;
+    margin: 0;
+    background: #111118;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.6;
+    color: #b8bfc8;
+    background: #111118;
+}
+
+/* ═══════════════════════════════════════
+   SLIDE
+═══════════════════════════════════════ */
+.slide {
+    page-break-after: always;
+    padding: 36pt 40pt 28pt 40pt;
+    min-height: 100%;
+    position: relative;
+}
+
+.slide-foot {
+    position: absolute;
+    bottom: 18pt;
+    left: 40pt;
+    right: 40pt;
+    display: table;
+    width: calc(100% - 80pt);
+    font-size: 6pt;
+    color: #3a3a48;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.slide-foot-l { display: table-cell; text-align: left; }
+.slide-foot-r { display: table-cell; text-align: right; }
+
+/* ═══════════════════════════════════════
+   COVER
+═══════════════════════════════════════ */
+.cover {
+    page-break-after: always;
+    background: #111118;
+    padding: 80pt 56pt 40pt 56pt;
+    min-height: 297mm;
+    position: relative;
+}
+
+.cover-tag {
+    font-size: 8pt;
+    letter-spacing: 0.25em;
+    color: #00bcd4;
+    text-transform: uppercase;
+    margin-bottom: 20pt;
+}
+
+.cover-bar {
+    width: 40pt;
+    height: 3pt;
+    background: #00bcd4;
+    margin-bottom: 28pt;
+}
+
+.cover h1 {
+    font-size: 38pt;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 8pt;
+}
+
+.cover-sub {
+    font-size: 14pt;
+    color: #555568;
+    font-weight: 400;
+    margin-bottom: 56pt;
+}
+
+.cover-grid {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.cover-grid td {
+    vertical-align: top;
+    padding: 16pt 20pt 16pt 0;
+    border-top: 1pt solid #222230;
+}
+
+.cover-lbl {
+    font-size: 6.5pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #555568;
+    margin-bottom: 5pt;
+}
+
+.cover-val {
+    font-size: 14pt;
+    color: #e8e8f0;
+    font-weight: 700;
+}
+
+.cover-pills {
+    margin-top: 48pt;
+}
+
+.cover-pill {
+    display: inline-block;
+    font-size: 6.5pt;
+    letter-spacing: 0.08em;
+    color: #555568;
+    border: 0.75pt solid #2a2a38;
+    padding: 3pt 8pt;
+    margin-right: 3pt;
+    margin-bottom: 4pt;
+}
+
+.cover-bottom {
+    position: absolute;
+    bottom: 32pt;
+    left: 56pt;
+    right: 56pt;
+    font-size: 6.5pt;
+    color: #333340;
+    letter-spacing: 0.04em;
+    border-top: 0.5pt solid #222230;
+    padding-top: 8pt;
+}
+
+/* Regime badges */
+.badge-regime {
+    display: inline-block;
+    padding: 3pt 12pt;
+    font-size: 11pt;
+    font-weight: 700;
+}
+.badge-bullish  { background: #0a6e3a; color: #ffffff; }
+.badge-bearish  { background: #b32d2d; color: #ffffff; }
+.badge-volatile { background: #7c3aed; color: #ffffff; }
+.badge-neutral  { background: #333340; color: #a0a8b4; }
+
+/* ═══════════════════════════════════════
+   SLIDE TITLE
+═══════════════════════════════════════ */
+.stitle {
+    margin-bottom: 18pt;
+}
+
+.stitle-tag {
+    font-size: 6.5pt;
+    letter-spacing: 0.2em;
+    color: #00bcd4;
+    text-transform: uppercase;
+    margin-bottom: 4pt;
+}
+
+.stitle h2 {
+    font-size: 20pt;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+}
+
+.stitle-sub {
+    font-size: 8pt;
+    color: #555568;
+    margin-top: 2pt;
+}
+
+/* ═══════════════════════════════════════
+   KPI CARDS
+═══════════════════════════════════════ */
+.kpi-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 8pt 0;
+    margin-bottom: 16pt;
+}
+
+.kpi {
+    display: table-cell;
+    background: #18181f;
+    padding: 12pt 14pt;
+    vertical-align: top;
+}
+
+.kpi-label {
+    font-size: 6pt;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #555568;
+    margin-bottom: 4pt;
+}
+
+.kpi-value {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #e8e8f0;
+}
+
+.kpi-detail {
+    font-size: 7pt;
+    color: #555568;
+    margin-top: 2pt;
+}
+
+/* ═══════════════════════════════════════
+   TABLES
+═══════════════════════════════════════ */
+.t {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    margin-bottom: 12pt;
+}
+
+.t th {
+    text-align: left;
+    font-size: 6pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #555568;
+    border-bottom: 1pt solid #222230;
+    padding: 5pt 6pt;
+    font-weight: 600;
+}
+
+.t td {
+    padding: 4pt 6pt;
+    border-bottom: 0.5pt solid #1a1a24;
+    color: #a0a8b4;
+    vertical-align: top;
+}
+
+.t tr:last-child td { border-bottom: none; }
+
+.t .r { text-align: right; }
+.t .c { text-align: center; }
+
+/* ═══════════════════════════════════════
+   PROSE — conversational narrative
+═══════════════════════════════════════ */
+.prose {
+    font-size: 9.5pt;
+    line-height: 1.75;
+    color: #c8cdd4;
+}
+
+.prose h2, .prose h3 {
+    color: #ffffff;
+    font-weight: 700;
+    margin-top: 14pt;
+    margin-bottom: 6pt;
+}
+
+.prose h2 { font-size: 13pt; }
+.prose h3 { font-size: 11pt; }
+
+.prose p {
+    margin-bottom: 8pt;
+}
+
+.prose ul, .prose ol {
+    margin-left: 16pt;
+    margin-bottom: 8pt;
+}
+
+.prose li {
+    margin-bottom: 3pt;
+}
+
+.prose strong {
+    color: #e8e8f0;
+    font-weight: 700;
+}
+
+.prose em {
+    color: #00bcd4;
+    font-style: italic;
+}
+
+.prose a {
+    color: #00bcd4;
+    text-decoration: none;
+}
+
+.prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    margin: 8pt 0;
+}
+
+.prose table th {
+    text-align: left;
+    font-size: 7pt;
+    color: #555568;
+    border-bottom: 1pt solid #222230;
+    padding: 4pt 6pt;
+    font-weight: 600;
+}
+
+.prose table td {
+    padding: 3pt 6pt;
+    border-bottom: 0.5pt solid #1a1a24;
+    color: #a0a8b4;
+}
+
+/* ═══════════════════════════════════════
+   COLORS
+═══════════════════════════════════════ */
+.up { color: #22c55e; }
+.down { color: #ef4444; }
+.muted { color: #555568; }
+.accent { color: #00bcd4; }
+
+/* ═══════════════════════════════════════
+   SECTION DIVIDER
+═══════════════════════════════════════ */
+.divider {
+    border: none;
+    border-top: 1pt solid #222230;
+    margin: 16pt 0;
+}
+
+/* ═══════════════════════════════════════
+   FEED ITEM CARDS
+═══════════════════════════════════════ */
+.feed-item {
+    background: #18181f;
+    padding: 8pt 12pt;
+    margin-bottom: 6pt;
+}
+
+.feed-source {
+    font-size: 6pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #00bcd4;
+    margin-bottom: 2pt;
+}
+
+.feed-title {
+    font-size: 8.5pt;
+    color: #e8e8f0;
+    font-weight: 600;
+    margin-bottom: 2pt;
+}
+
+.feed-summary {
+    font-size: 7.5pt;
+    color: #777;
+    line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════
+   ALERT / INFO BOXES
+═══════════════════════════════════════ */
+.alert-box {
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 3pt solid #ef4444;
+    padding: 8pt 12pt;
+    margin-bottom: 8pt;
+    font-size: 8pt;
+    color: #ef4444;
+}
+
+.info-box {
+    background: rgba(0, 188, 212, 0.06);
+    border-left: 3pt solid #00bcd4;
+    padding: 8pt 12pt;
+    margin-bottom: 8pt;
+    font-size: 8pt;
+    color: #a0a8b4;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     COVER
+═══════════════════════════════════════ -->
+<div class="cover">
+    <div class="cover-tag">Tetra · Pre-Market Briefing</div>
+    <div class="cover-bar"></div>
+    <h1>Morning<br>Briefing</h1>
+    <div class="cover-sub">{{ date }} · Before US Market Open</div>
+
+    <table class="cover-grid">
+        <tr>
+            <td>
+                <div class="cover-lbl">Portfolio Value</div>
+                <div class="cover-val">
+                    {% if portfolio and portfolio.summary %}
+                        ${{ "{:,.0f}".format(portfolio.summary.total_value) }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+            </td>
+            <td>
+                <div class="cover-lbl">Last Day Return</div>
+                <div class="cover-val">
+                    {% if portfolio and portfolio.summary %}
+                        <span class="{{ 'up' if portfolio.summary.daily_return >= 0 else 'down' }}">
+                            {{ "{:+.2%}".format(portfolio.summary.daily_return) }}
+                        </span>
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+            </td>
+            <td>
+                <div class="cover-lbl">Regime</div>
+                <div class="cover-val">
+                    {% if regime %}
+                        {% set regime_lower = regime|lower %}
+                        {% if 'bull' in regime_lower %}
+                            <span class="badge-regime badge-bullish">{{ regime }}</span>
+                        {% elif 'bear' in regime_lower %}
+                            <span class="badge-regime badge-bearish">{{ regime }}</span>
+                        {% elif 'volat' in regime_lower %}
+                            <span class="badge-regime badge-volatile">{{ regime }}</span>
+                        {% else %}
+                            <span class="badge-regime badge-neutral">{{ regime }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge-regime badge-neutral">Pending</span>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="cover-pills">
+        <span class="cover-pill">Market Data</span>
+        <span class="cover-pill">Overnight News</span>
+        <span class="cover-pill">Polymarket</span>
+        <span class="cover-pill">Economic Calendar</span>
+        <span class="cover-pill">Portfolio</span>
+        <span class="cover-pill">Tech & Social Feeds</span>
+        <span class="cover-pill">LLM Synthesis</span>
+    </div>
+
+    <div class="cover-bottom">
+        Tetra Intelligence · Generated {{ time }} · Confidential
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     SLIDE 1: MARKET OVERVIEW + NARRATIVE
+═══════════════════════════════════════ -->
+<div class="slide">
+    <div class="stitle">
+        <div class="stitle-tag">01 · Market Intelligence</div>
+        <h2>Morning Narrative</h2>
+        <div class="stitle-sub">Comprehensive pre-market analysis</div>
+    </div>
+
+    <div class="prose">
+        {{ commentary | markdown | safe }}
+    </div>
+
+    <div class="slide-foot">
+        <div class="slide-foot-l">Tetra Morning Briefing · {{ date }}</div>
+        <div class="slide-foot-r">1</div>
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     SLIDE 2: PORTFOLIO & RATES
+═══════════════════════════════════════ -->
+<div class="slide">
+    <div class="stitle">
+        <div class="stitle-tag">02 · Portfolio & Macro</div>
+        <h2>Positions & Rates</h2>
+    </div>
+
+    {% if portfolio and portfolio.positions %}
+    <table class="t">
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th class="r">Price</th>
+                <th class="r">Value</th>
+                <th class="r">Weight</th>
+                <th class="r">Unrealized P&L</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in portfolio.positions %}
+            <tr>
+                <td><strong>{{ p.symbol }}</strong></td>
+                <td class="r">${{ "{:,.2f}".format(p.price) }}</td>
+                <td class="r">${{ "{:,.0f}".format(p.value) }}</td>
+                <td class="r">{{ "{:.1f}".format(p.weight) }}%</td>
+                <td class="r {{ 'up' if p.pnl >= 0 else 'down' }}">
+                    ${{ "{:+,.0f}".format(p.pnl) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if rates %}
+    <hr class="divider">
+    <table class="t">
+        <thead>
+            <tr>
+                <th>Indicator</th>
+                <th class="r">Value</th>
+                <th class="r">As Of</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rates %}
+            <tr>
+                <td>{{ r.name }}</td>
+                <td class="r"><strong>{{ "{:.2f}".format(r.value) }}</strong></td>
+                <td class="r muted">{{ r.as_of[:10] if r.as_of else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if risk_warnings %}
+    <hr class="divider">
+    {% for w in risk_warnings %}
+    <div class="alert-box">⚠ {{ w }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="slide-foot">
+        <div class="slide-foot-l">Tetra Morning Briefing · {{ date }}</div>
+        <div class="slide-foot-r">2</div>
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     SLIDE 3: OVERNIGHT NEWS & POLYMARKET
+═══════════════════════════════════════ -->
+<div class="slide">
+    <div class="stitle">
+        <div class="stitle-tag">03 · Intelligence</div>
+        <h2>Overnight News & Signals</h2>
+    </div>
+
+    {% if news %}
+    <table class="t">
+        <thead>
+            <tr>
+                <th>Headline</th>
+                <th>Source</th>
+                <th>Tickers</th>
+                <th class="r">Sentiment</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in news[:15] %}
+            <tr>
+                <td>{{ a.title[:80] }}</td>
+                <td class="muted">{{ a.source }}</td>
+                <td class="accent">{{ a.symbols[:3]|join(', ') if a.symbols else '' }}</td>
+                <td class="r {{ 'up' if a.sentiment > 0.3 else ('down' if a.sentiment < -0.3 else 'muted') }}">
+                    {{ "{:+.2f}".format(a.sentiment) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if polymarket %}
+    <hr class="divider">
+    <table class="t">
+        <thead>
+            <tr>
+                <th>Polymarket</th>
+                <th class="r">Price</th>
+                <th class="r">Volume</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in polymarket[:10] %}
+            <tr>
+                <td>{{ p.question[:70] if p.question else p.market }}</td>
+                <td class="r"><strong>{{ "{:.0%}".format(p.price) }}</strong></td>
+                <td class="r muted">${{ "{:,.0f}".format(p.volume_24h) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <div class="slide-foot">
+        <div class="slide-foot-l">Tetra Morning Briefing · {{ date }}</div>
+        <div class="slide-foot-r">3</div>
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     SLIDE 4: EVENTS CALENDAR
+═══════════════════════════════════════ -->
+{% if events %}
+<div class="slide">
+    <div class="stitle">
+        <div class="stitle-tag">04 · Calendar</div>
+        <h2>Today's Events</h2>
+    </div>
+
+    <table class="t">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Event</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in events %}
+            <tr>
+                <td class="muted">{{ e.date }}</td>
+                <td><strong>{{ e.symbol }}</strong></td>
+                <td>{{ e.event }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if narrative %}
+    <hr class="divider">
+    <div class="info-box">
+        <strong>Narrative State:</strong> {{ narrative.dominant_narrative or 'N/A' }}<br>
+        {% if narrative.counter_narrative %}
+        <span class="muted">Counter: {{ narrative.counter_narrative }}</span><br>
+        {% endif %}
+        {% if narrative.narrative_shift %}
+        Shift: {{ "{:+.1%}".format(narrative.narrative_shift) }} | Magnitude: {{ "{:.1%}".format(narrative.shift_magnitude) }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="slide-foot">
+        <div class="slide-foot-l">Tetra Morning Briefing · {{ date }}</div>
+        <div class="slide-foot-r">4</div>
+    </div>
+</div>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════
+     SLIDE 5: TECH & SOCIAL FEEDS
+═══════════════════════════════════════ -->
+{% if feed_narrative %}
+<div class="slide">
+    <div class="stitle">
+        <div class="stitle-tag">{{ '05' if events else '04' }} · World Pulse</div>
+        <h2>Tech, AI & Social</h2>
+        <div class="stitle-sub">From Arxiv, HN, Reddit, GitHub & RSS — what's buzzing</div>
+    </div>
+
+    <div class="prose">
+        {{ feed_narrative | markdown | safe }}
+    </div>
+
+    <div class="slide-foot">
+        <div class="slide-foot-l">Tetra Morning Briefing · {{ date }}</div>
+        <div class="slide-foot-r">{{ '5' if events else '4' }}</div>
+    </div>
+</div>
+{% endif %}
+
+
+<!-- ═══════════════════════════════════════
+     SLIDE 6: CROSS-SIGNAL SYNTHESIS
+═══════════════════════════════════════ -->
+{% if cross_signal %}
+<div class="slide">
+    <div class="stitle">
+        <div class="stitle-tag">{{ '06' if events else '05' }} · Synthesis</div>
+        <h2>Cross-Signal Insights</h2>
+        <div class="stitle-sub">Where market data meets tech/social signals</div>
+    </div>
+
+    <div class="prose">
+        {{ cross_signal | markdown | safe }}
+    </div>
+
+    <div class="slide-foot">
+        <div class="slide-foot-l">Tetra Morning Briefing · {{ date }}</div>
+        <div class="slide-foot-r">{{ '6' if events else '5' }}</div>
+    </div>
+</div>
+{% endif %}
+
+
+</body>
+</html>
