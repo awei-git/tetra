@@ -201,6 +201,92 @@ async def _fetch_portfolio() -> List[Dict[str, Any]]:
                 for r in result.fetchall()]
 
 
+async def _fetch_quant_signals(as_of: date) -> Dict[str, Any]:
+    """Fetch Tetra's quantitative model outputs for CIO synthesis."""
+    from src.utils.factors.scoring import score_factor_rows, action_from_signal
+
+    quant = {}
+    async with engine.begin() as conn:
+        # HMM regime detection
+        r = await conn.execute(text("""
+            SELECT current_regime, current_probs, transition_matrix
+            FROM simulation.regimes ORDER BY as_of DESC LIMIT 1
+        """))
+        row = r.fetchone()
+        if row:
+            probs = row.current_probs
+            if isinstance(probs, str):
+                probs = json.loads(probs)
+            quant["regime"] = {
+                "current": row.current_regime,
+                "probabilities": probs,
+            }
+
+        # Portfolio risk metrics
+        r = await conn.execute(text("""
+            SELECT total_vol_ann, var_95_1d, cvar_95_1d, expected_max_drawdown,
+                   effective_n, hhi
+            FROM simulation.risk WHERE method='parametric' ORDER BY as_of DESC LIMIT 1
+        """))
+        row = r.fetchone()
+        if row:
+            quant["risk"] = {
+                "annualized_vol": round(float(row.total_vol_ann), 4),
+                "var_95_1d": round(float(row.var_95_1d), 0),
+                "cvar_95_1d": round(float(row.cvar_95_1d), 0),
+                "expected_max_drawdown": round(float(row.expected_max_drawdown), 4),
+                "effective_n": round(float(row.effective_n), 1),
+                "hhi": round(float(row.hhi), 3) if row.hhi else None,
+            }
+
+        # Scenario stress tests (all)
+        r = await conn.execute(text("""
+            SELECT scenario_name, portfolio_pnl_pct, description
+            FROM simulation.scenarios
+            WHERE as_of = (SELECT MAX(as_of) FROM simulation.scenarios)
+            ORDER BY portfolio_pnl_pct ASC
+        """))
+        rows = r.fetchall()
+        if rows:
+            quant["scenarios"] = [
+                {"name": row.scenario_name,
+                 "pnl_pct": round(float(row.portfolio_pnl_pct), 4),
+                 "description": row.description}
+                for row in rows
+            ]
+
+        # Factor signals — compute from daily_factors
+        r = await conn.execute(text("""
+            SELECT symbol, factor, value
+            FROM factors.daily_factors
+            WHERE as_of = (SELECT MAX(as_of) FROM factors.daily_factors)
+              AND symbol != '__macro__' AND value IS NOT NULL
+        """))
+        rows = r.fetchall()
+        if rows:
+            row_values = []
+            for row in rows:
+                try:
+                    row_values.append((row.symbol, row.factor, float(row.value)))
+                except (ValueError, TypeError):
+                    continue
+            if row_values:
+                scoring = score_factor_rows(row_values)
+                signals = []
+                for symbol, data in scoring["scores"].items():
+                    if data.get("coverage", 0) >= 3 and data.get("score") is not None:
+                        signals.append({
+                            "symbol": symbol,
+                            "score": round(data["score"], 3),
+                            "action": action_from_signal(data["score"]),
+                            "coverage": data["coverage"],
+                        })
+                signals.sort(key=lambda x: abs(x["score"]), reverse=True)
+                quant["factor_signals"] = signals[:30]
+
+    return quant
+
+
 # ─── Debate rounds ─────────────────────────────────────────────────────
 
 
@@ -361,13 +447,48 @@ async def _round3_synthesis(
     r1_results: Dict[str, Dict],
     r2_results: Dict[str, Dict],
     portfolio: List[Dict],
+    quant_signals: Dict[str, Any],
     as_of: date,
 ) -> Dict[str, Any]:
-    """Round 3: Synthesis — one LLM reads the full debate and produces final output."""
+    """Round 3: Synthesis — CIO reads debate + quant models and produces final output."""
+
+    # Build quant context block
+    quant_block = ""
+    if quant_signals:
+        quant_block = "\n=== QUANTITATIVE MODELS (Tetra pipeline — these are HARD DATA, not opinions) ===\n"
+        if "regime" in quant_signals:
+            reg = quant_signals["regime"]
+            quant_block += f"HMM REGIME: {reg['current']} (probabilities: {json.dumps(reg['probabilities'])})\n"
+        if "risk" in quant_signals:
+            rk = quant_signals["risk"]
+            quant_block += (
+                f"PORTFOLIO RISK: vol={rk['annualized_vol']:.1%}, "
+                f"VaR95=${rk['var_95_1d']:,.0f}, CVaR95=${rk['cvar_95_1d']:,.0f}, "
+                f"E[MDD]={rk['expected_max_drawdown']:.1%}, "
+                f"Eff.N={rk['effective_n']:.1f}, HHI={rk.get('hhi', 'n/a')}\n"
+            )
+        if "scenarios" in quant_signals:
+            quant_block += "STRESS SCENARIOS:\n"
+            for sc in quant_signals["scenarios"]:
+                quant_block += f"  {sc['name']}: {sc['pnl_pct']:+.1%} ({sc.get('description','')})\n"
+        if "factor_signals" in quant_signals:
+            quant_block += "FACTOR SIGNALS (composite of 60+ daily alpha factors per symbol):\n"
+            for fs in quant_signals["factor_signals"][:20]:
+                quant_block += f"  {fs['symbol']}: score={fs['score']:+.3f} action={fs['action']} ({fs['coverage']} factors)\n"
+        quant_block += (
+            "\nIMPORTANT RULES:\n"
+            "- Factor signals are QUANTITATIVE EVIDENCE. If factor_action=sell for a symbol, "
+            "you need STRONG qualitative reasons to override it with a buy.\n"
+            "- If regime=bearish, limit long positions and prioritize hedges.\n"
+            "- If HHI>0.25 (concentrated), suggest diversifying trades.\n"
+            "- Confidence must be a NUMBER 0.0-1.0: 0.9=very high, 0.7=solid, 0.5=balanced, 0.3=speculative.\n"
+        )
+
     prompt = f"""DATE: {as_of.isoformat()}
 
 You are the Chief Investment Officer reviewing a debate between three analysts.
 Each analyst had DIFFERENT data — their views reflect genuine information asymmetry.
+You also have access to Tetra's quantitative models that provide hard data signals.
 
 === ROUND 1: INITIAL VIEWS ===
 MACRO ANALYST (sees: yields, credit spreads, economic data):
@@ -383,26 +504,29 @@ CROWD ANALYST (sees: Polymarket, narrative shifts, sentiment):
 MACRO response: {json.dumps(r2_results.get('macro', {}), indent=2)}
 MICRO response: {json.dumps(r2_results.get('micro', {}), indent=2)}
 CROWD response: {json.dumps(r2_results.get('crowd', {}), indent=2)}
-
+{quant_block}
 === CURRENT PORTFOLIO ===
 {json.dumps(portfolio, indent=2)}
 
 === YOUR TASK ===
-Synthesize the debate into actionable decisions. Pay special attention to:
-1. CONSENSUS trades: all analysts agree → high confidence
-2. CONTRARIAN trades: only one analyst sees it, but with strong data → potential alpha
-3. CONFLICTS: genuine disagreements that need monitoring
+Synthesize the debate AND quantitative signals into actionable decisions:
+1. CONSENSUS trades: analysts + quant models agree → highest confidence
+2. QUANT-BACKED trades: factor signals strongly support even if only 1-2 analysts agree
+3. CONTRARIAN trades: one analyst sees something quant models miss → potential alpha but lower confidence
+4. Flag any analyst recommendation that CONTRADICTS factor signals
 
 RESPOND WITH JSON:
 {{
-  "regime_consensus": "what all analysts agree about the current environment",
+  "regime_consensus": "what analysts + HMM regime model agree about current environment",
   "consensus_trades": [
     {{
       "symbol": "TICKER",
       "direction": "long" | "short",
-      "confidence": "high" | "medium",
+      "confidence": 0.0 to 1.0,
       "supporting_analysts": ["macro", "micro", "crowd"],
-      "combined_thesis": "synthesis of all supporting data",
+      "factor_aligned": true | false,
+      "factor_score": number or null,
+      "combined_thesis": "synthesis of analyst views + quant signals",
       "risk": "main risk"
     }}
   ],
@@ -410,8 +534,9 @@ RESPOND WITH JSON:
     {{
       "symbol": "TICKER",
       "direction": "long" | "short",
-      "confidence": "medium" | "low",
+      "confidence": 0.0 to 1.0,
       "source_analyst": "macro|micro|crowd",
+      "factor_aligned": true | false,
       "thesis": "why this analyst sees something others don't",
       "what_others_miss": "the information gap",
       "risk": "why the majority might be right"
@@ -422,12 +547,13 @@ RESPOND WITH JSON:
       "symbol": "TICKER",
       "action": "hold" | "add" | "reduce" | "exit" | "hedge",
       "urgency": "immediate" | "this_week" | "monitor",
-      "reasoning": "based on debate evidence"
+      "reasoning": "based on debate + quant evidence"
     }}
   ],
   "key_conflicts": [
     {{
       "topic": "what the debate couldn't resolve",
+      "quant_says": "what the models indicate",
       "bull_case": "...",
       "bear_case": "...",
       "resolution_data": "what data would resolve this"
@@ -437,8 +563,10 @@ RESPOND WITH JSON:
 }}"""
 
     system = (
-        "You are a Chief Investment Officer synthesizing analyst debates. "
-        "Be decisive — the goal is ACTIONABLE output, not balanced commentary. "
+        "You are a Chief Investment Officer synthesizing analyst debates with quantitative model outputs. "
+        "Quant signals (factor scores, regime, risk metrics) are HARD DATA — treat them as evidence, not opinions. "
+        "When analyst views conflict with quant signals, explain why you side with one or the other. "
+        "Be decisive — the goal is ACTIONABLE output with numeric confidence scores. "
         "Respond only with valid JSON. No markdown."
     )
 
@@ -543,8 +671,18 @@ async def run_debate(
     logger.info(f"Role assignment: macro={assigned['macro'].name}, "
                 f"micro={assigned['micro'].name}, crowd={assigned['crowd'].name}")
 
-    # Fetch partitioned data
+    # Fetch partitioned data + quant signals
     macro_data, micro_data, crowd_data, portfolio = await _fetch_all_data(as_of)
+
+    # Fetch Tetra quant model outputs
+    quant_signals = {}
+    try:
+        quant_signals = await _fetch_quant_signals(as_of)
+        logger.info(f"Quant signals loaded: regime={quant_signals.get('regime', {}).get('current', '?')}, "
+                    f"factors={len(quant_signals.get('factor_signals', []))}, "
+                    f"scenarios={len(quant_signals.get('scenarios', []))}")
+    except Exception as e:
+        logger.warning(f"Quant signal fetch failed (non-critical): {e}")
 
     # Fetch track record for self-critique
     track_record_ctx = ""
@@ -567,7 +705,7 @@ async def run_debate(
     logger.info("Debate Round 2: Challenges")
     r2 = await _round2_challenge(assigned, r1, as_of)
 
-    # Round 3: Synthesis (use the most capable client)
+    # Round 3: Synthesis with quant signals (use the most capable client)
     synthesis_order = ["openai", "claude", "deepseek", "gemini"]
     synthesis_client = None
     for name in synthesis_order:
@@ -577,8 +715,8 @@ async def run_debate(
     if not synthesis_client:
         synthesis_client = llm_clients[available[0]]
 
-    logger.info(f"Debate Round 3: Synthesis ({synthesis_client.name})")
-    synthesis = await _round3_synthesis(synthesis_client, r1, r2, portfolio, as_of)
+    logger.info(f"Debate Round 3: Synthesis ({synthesis_client.name}) + quant models")
+    synthesis = await _round3_synthesis(synthesis_client, r1, r2, portfolio, quant_signals, as_of)
 
     # Collect stats
     all_stats = {}

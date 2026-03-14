@@ -51,13 +51,13 @@ class Settings(BaseSettings):
     fred_base_url: str = "https://api.stlouisfed.org/fred"
     news_api_base_url: str = "https://newsapi.org/v2"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
-    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     polymarket_gamma_base_url: str = "https://gamma-api.polymarket.com"
     
     # LLM models
     openai_model: str = "gpt-5.2"
     deepseek_model: str = "deepseek-chat"
-    gemini_model: str = "gemini-3-flash-preview"
+    gemini_model: str = "gemini-3.1-pro-preview"
     claude_model: str = "claude-opus-4-6"
 
     # Email / report delivery

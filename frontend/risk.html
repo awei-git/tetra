@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetra Risk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260313-1" />
+  <link rel="stylesheet" href="/static/risk.css?v=20260313-1" />
+</head>
+<body>
+  <div class="backdrop">
+    <div class="glow"></div>
+    <div class="grid"></div>
+  </div>
+
+  <main>
+    <nav class="tabs">
+      <a class="tab" href="/analysis">ANALYSIS</a>
+      <a class="tab" href="/strats">STRESS</a>
+      <a class="tab active" href="/risk">RISK</a>
+      <a class="tab" href="/">DATA</a>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Tetra / Simulation Engine</p>
+        <h1>Risk Dashboard</h1>
+        <p class="subtitle">Regime detection, risk decomposition, scenario stress tests.</p>
+      </div>
+      <div class="status">
+        <div class="status-pill" id="regime-pill">Loading...</div>
+        <p class="status-meta" id="status-meta">Connecting...</p>
+      </div>
+    </header>
+
+    <!-- Row 1: Regime + Risk Summary -->
+    <section class="risk-row">
+      <div class="panel risk-regime-panel">
+        <div class="panel-head">
+          <h3>Market Regime</h3>
+          <span class="eyebrow" id="regime-date"></span>
+        </div>
+        <div class="regime-badge-row" id="regime-badge-row"></div>
+        <div class="regime-states" id="regime-states"></div>
+        <div class="panel-sub">
+          <h4>5-Day Transition Forecast</h4>
+          <div class="regime-forecast" id="regime-forecast"></div>
+        </div>
+      </div>
+
+      <div class="panel risk-metrics-panel">
+        <div class="panel-head">
+          <h3>Portfolio Risk</h3>
+          <span class="eyebrow" id="risk-method-label">Parametric</span>
+        </div>
+        <div class="risk-kpi-grid" id="risk-kpis"></div>
+        <div class="panel-sub">
+          <h4>Risk Contributors</h4>
+          <div class="risk-contributors" id="risk-contributors"></div>
+        </div>
+        <div class="risk-breaches" id="risk-breaches"></div>
+      </div>
+    </section>
+
+    <!-- Row 2: Scenarios + Correlation -->
+    <section class="risk-row">
+      <div class="panel risk-scenarios-panel">
+        <div class="panel-head">
+          <h3>Scenario Stress Tests</h3>
+          <span class="eyebrow" id="scenario-count"></span>
+        </div>
+        <div class="scenario-table-wrap">
+          <table class="scenario-table" id="scenario-table">
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Portfolio P&L</th>
+                <th>P&L %</th>
+                <th>Worst Position</th>
+                <th>Worst P&L</th>
+              </tr>
+            </thead>
+            <tbody id="scenario-tbody"></tbody>
+          </table>
+        </div>
+        <div class="scenario-detail" id="scenario-detail"></div>
+      </div>
+
+      <div class="panel risk-corr-panel">
+        <div class="panel-head">
+          <h3>Correlation Heatmap</h3>
+          <span class="eyebrow" id="corr-meta"></span>
+        </div>
+        <canvas id="corr-canvas" width="500" height="500"></canvas>
+      </div>
+    </section>
+
+    <!-- Row 3: Volatility surface -->
+    <section class="risk-row">
+      <div class="panel risk-vol-panel">
+        <div class="panel-head">
+          <h3>Annualized Volatilities</h3>
+          <span class="eyebrow" id="vol-meta"></span>
+        </div>
+        <canvas id="vol-canvas" width="900" height="220"></canvas>
+      </div>
+    </section>
+
+    <footer class="risk-footer">
+      <button class="run-btn" id="run-simulation-btn">Run Simulation Pipeline</button>
+      <span class="risk-footer-meta" id="run-status"></span>
+    </footer>
+  </main>
+  <script src="/static/risk.js?v=20260313-1"></script>
+</body>
+</html>

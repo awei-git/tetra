@@ -388,6 +388,79 @@ factors_runs = sa.Table(
 )
 
 
+# ---------------------------------------------------------------------------
+# Simulation schema — regime detection, risk metrics, scenario analysis
+# ---------------------------------------------------------------------------
+
+simulation_regimes = sa.Table(
+    "regimes",
+    metadata,
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("n_states", sa.Integer(), nullable=False),
+    sa.Column("current_regime", sa.String(32), nullable=False),
+    sa.Column("current_probs", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("transition_matrix", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("regime_states", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("regime_forecast_5d", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("log_likelihood", sa.Numeric(20, 4)),
+    sa.Column("n_observations", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="simulation",
+)
+
+simulation_risk = sa.Table(
+    "risk",
+    metadata,
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("method", sa.String(32), primary_key=True),
+    sa.Column("total_vol_ann", sa.Numeric(12, 6)),
+    sa.Column("var_95_1d", sa.Numeric(20, 4)),
+    sa.Column("var_99_1d", sa.Numeric(20, 4)),
+    sa.Column("cvar_95_1d", sa.Numeric(20, 4)),
+    sa.Column("cvar_99_1d", sa.Numeric(20, 4)),
+    sa.Column("expected_max_drawdown", sa.Numeric(12, 6)),
+    sa.Column("hhi", sa.Numeric(12, 6)),
+    sa.Column("effective_n", sa.Numeric(12, 4)),
+    sa.Column("marginal_risk", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("component_risk", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("risk_budget_breaches", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="simulation",
+)
+
+simulation_scenarios = sa.Table(
+    "scenarios",
+    metadata,
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("scenario_name", sa.String(128), primary_key=True),
+    sa.Column("description", sa.Text()),
+    sa.Column("portfolio_pnl", sa.Numeric(20, 4)),
+    sa.Column("portfolio_pnl_pct", sa.Numeric(12, 6)),
+    sa.Column("var_95_under_stress", sa.Numeric(20, 4)),
+    sa.Column("worst_position", sa.String(32)),
+    sa.Column("worst_position_pnl", sa.Numeric(20, 4)),
+    sa.Column("target_moves", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("position_pnls", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("summary_stats", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="simulation",
+)
+
+simulation_covariance = sa.Table(
+    "covariance",
+    metadata,
+    sa.Column("as_of", sa.Date(), primary_key=True),
+    sa.Column("method", sa.String(64), primary_key=True),
+    sa.Column("symbols", postgresql.ARRAY(sa.String(32))),
+    sa.Column("vols_ann", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("correlation_matrix", postgresql.JSONB(astext_type=sa.Text())),
+    sa.Column("n_observations", sa.Integer()),
+    sa.Column("effective_observations", sa.Numeric(12, 4)),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+    schema="simulation",
+)
+
+
 __all__ = [
     "metadata",
     "market_assets",
@@ -408,4 +481,8 @@ __all__ = [
     "gpt_recommendation_summaries",
     "factors_daily",
     "factors_runs",
+    "simulation_regimes",
+    "simulation_risk",
+    "simulation_scenarios",
+    "simulation_covariance",
 ]

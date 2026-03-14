@@ -39,16 +39,17 @@ ENTRY_BOUNDS: Dict[str, Tuple[float, float]] = {
 }
 
 SYSTEM_PROMPT = (
-    "You are a markets strategist. Provide concise trade ideas with clear targets. "
+    "You are a quantitative portfolio strategist at a systematic macro fund. "
+    "You integrate regime detection, risk analytics, stress scenarios, and factor signals "
+    "to generate high-conviction trade ideas. Be selective — quality over quantity. "
+    "Only recommend trades where your quantitative evidence is strong. "
     "Respond with JSON only."
 )
 DEFAULT_GEMINI_MODELS = (
-    "gemini-3.0-flash",
-    "gemini-3.0-pro",
+    "gemini-3.1-pro-preview",
+    "gemini-3-pro-preview",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
 )
 
 
@@ -58,16 +59,99 @@ def _determine_session(now: datetime) -> str:
     return "post" if local >= close_time else "pre"
 
 
-def _build_prompt(session: str, as_of: str, price_snapshot: Dict[str, Dict[str, Any]]) -> str:
+async def _fetch_tetra_context() -> str:
+    """Fetch regime, risk, scenarios, and portfolio from Tetra's pipeline."""
+    parts = []
+    try:
+        async with engine.begin() as conn:
+            # Regime
+            r = await conn.execute(text("""
+                SELECT current_regime, current_probs
+                FROM simulation.regimes ORDER BY as_of DESC LIMIT 1
+            """))
+            row = r.fetchone()
+            if row:
+                parts.append(f"REGIME: {row.current_regime} (probs: {row.current_probs})")
+
+            # Risk
+            r = await conn.execute(text("""
+                SELECT total_vol_ann, var_95_1d, cvar_95_1d, expected_max_drawdown, effective_n
+                FROM simulation.risk WHERE method='parametric' ORDER BY as_of DESC LIMIT 1
+            """))
+            row = r.fetchone()
+            if row:
+                parts.append(
+                    f"PORTFOLIO RISK: vol={float(row.total_vol_ann):.1%}, "
+                    f"VaR95=${float(row.var_95_1d):,.0f}, CVaR95=${float(row.cvar_95_1d):,.0f}, "
+                    f"E[MDD]={float(row.expected_max_drawdown):.1%}, Eff.N={float(row.effective_n):.1f}"
+                )
+
+            # Scenarios (top 5 worst)
+            r = await conn.execute(text("""
+                SELECT scenario_name, portfolio_pnl_pct, description
+                FROM simulation.scenarios
+                WHERE as_of = (SELECT MAX(as_of) FROM simulation.scenarios)
+                ORDER BY portfolio_pnl_pct ASC LIMIT 5
+            """))
+            rows = r.fetchall()
+            if rows:
+                sc = "; ".join(f"{r.scenario_name}={float(r.portfolio_pnl_pct):+.1%}" for r in rows)
+                parts.append(f"WORST SCENARIOS: {sc}")
+
+            # Portfolio positions
+            r = await conn.execute(text("""
+                SELECT symbol, shares, market_value, weight
+                FROM portfolio.positions ORDER BY market_value DESC
+            """))
+            rows = r.fetchall()
+            if rows:
+                pos = ", ".join(
+                    f"{r.symbol}({float(r.weight)*100:.0f}%=${float(r.market_value):,.0f})"
+                    for r in rows
+                )
+                parts.append(f"CURRENT POSITIONS: {pos}")
+
+            cash_r = await conn.execute(text(
+                "SELECT amount FROM portfolio.cash ORDER BY id DESC LIMIT 1"
+            ))
+            cash_row = cash_r.fetchone()
+            if cash_row:
+                parts.append(f"CASH: ${float(cash_row.amount):,.0f}")
+
+    except Exception:
+        pass
+    return "\n".join(parts)
+
+
+def _build_prompt(session: str, as_of: str, price_snapshot: Dict[str, Dict[str, Any]],
+                  tetra_context: str = "") -> str:
     price_json = json.dumps(price_snapshot, separators=(",", ":"), sort_keys=True)
+
+    context_block = ""
+    if tetra_context:
+        context_block = (
+            "\n\nQUANTITATIVE CONTEXT FROM TETRA PIPELINE:\n"
+            + tetra_context
+            + "\n\nUse this context to inform your recommendations. "
+            "If the regime is bearish/stressed, be defensive. "
+            "If portfolio is concentrated, suggest diversification. "
+            "If scenarios show large downside, suggest hedges.\n\n"
+        )
+
     return (
         f"Today is {as_of}. Session: {session}. "
-        "Return JSON with keys: as_of (YYYY-MM-DD today's date), session (pre or post), categories. "
+        + context_block
+        + "Return JSON with keys: as_of (YYYY-MM-DD today's date), session (pre or post), categories. "
         "Categories must include large_cap, growth, etf, crypto. "
         "Use only symbols from the price snapshot below. Use USD prices; no commas. "
         "Each category is a list of 3 ideas ranked by conviction. "
         "Each idea must include: symbol, action (buy or sell), "
-        "entry, target, stop, horizon, thesis, confidence (0 to 1). "
+        "entry (number), target (number), stop (number), "
+        "horizon (use format: '1w', '2w', '1m', '3m'), "
+        "thesis (string), confidence (0.0 to 1.0 — be precise: 0.9 = very high conviction with strong catalyst, "
+        "0.7 = solid thesis with some uncertainty, 0.5 = balanced risk/reward, "
+        "0.3 = speculative. Explain your conviction level in thesis), "
+        "confidence_reason (1 sentence: why this confidence level). "
         "IMPORTANT - use factor_score and factor_action from the snapshot to guide your picks: "
         "prefer symbols where factor_action aligns with your recommended action. "
         "IMPORTANT - set realistic targets using atr14 (average true range): "
@@ -556,7 +640,8 @@ async def run_gpt_recommendations(session: Optional[str] = None) -> Dict[str, An
     session = session or _determine_session(now)
     as_of = now.astimezone(EASTERN).date().isoformat()
     price_snapshot, atr_by_symbol = await _build_price_snapshot()
-    prompt = _build_prompt(session, as_of, price_snapshot)
+    tetra_context = await _fetch_tetra_context()
+    prompt = _build_prompt(session, as_of, price_snapshot, tetra_context)
 
     providers: List[Dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=10.0)) as client:

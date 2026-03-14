@@ -1,0 +1,370 @@
+/* Risk Dashboard — extends base styles.css */
+
+.risk-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .risk-row { grid-template-columns: 1fr; }
+}
+
+.risk-regime-panel,
+.risk-metrics-panel,
+.risk-scenarios-panel,
+.risk-corr-panel,
+.risk-vol-panel {
+  padding: 20px;
+  min-height: 280px;
+}
+
+.risk-vol-panel {
+  grid-column: 1 / -1;
+}
+
+.risk-scenarios-panel {
+  min-height: 340px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+
+.panel-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.panel-sub {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.panel-sub h4 {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Regime */
+.regime-badge-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.regime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.regime-badge.calm {
+  background: rgba(63, 227, 196, 0.15);
+  color: #3fe3c4;
+  border: 1px solid rgba(63, 227, 196, 0.3);
+}
+
+.regime-badge.stressed {
+  background: rgba(255, 199, 89, 0.15);
+  color: #ffc759;
+  border: 1px solid rgba(255, 199, 89, 0.3);
+}
+
+.regime-badge.crisis {
+  background: rgba(255, 89, 89, 0.15);
+  color: #ff5959;
+  border: 1px solid rgba(255, 89, 89, 0.3);
+}
+
+.regime-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.regime-prob {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.regime-states {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.regime-state-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.regime-state-card.active {
+  border-color: var(--accent-2);
+  background: rgba(63, 227, 196, 0.06);
+}
+
+.regime-state-card .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.regime-state-card .value {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.regime-state-card .sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.regime-forecast {
+  display: flex;
+  gap: 8px;
+}
+
+.forecast-bar {
+  flex: 1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  text-align: center;
+  background: rgba(255,255,255,0.04);
+}
+
+.forecast-bar .day-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+/* Risk KPIs */
+.risk-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.risk-kpi {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.risk-kpi .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.risk-kpi .value {
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.risk-kpi .value.warn {
+  color: #ffc759;
+}
+
+.risk-kpi .value.danger {
+  color: #ff5959;
+}
+
+.risk-contributors {
+  display: grid;
+  gap: 6px;
+}
+
+.risk-contrib-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 60px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.risk-contrib-row .sym {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.risk-contrib-row .bar-wrap {
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.risk-contrib-row .bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-2);
+  transition: width 0.4s ease;
+}
+
+.risk-contrib-row .bar.negative {
+  background: #ff5959;
+}
+
+.risk-contrib-row .pct {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  text-align: right;
+  color: var(--muted);
+}
+
+.risk-breaches {
+  margin-top: 12px;
+}
+
+.breach-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  margin: 2px 4px 2px 0;
+  border-radius: 12px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  background: rgba(255, 89, 89, 0.12);
+  color: #ff5959;
+  border: 1px solid rgba(255, 89, 89, 0.25);
+}
+
+/* Scenarios */
+.scenario-table-wrap {
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.scenario-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.scenario-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  position: sticky;
+  top: 0;
+  background: rgba(11, 27, 43, 0.95);
+}
+
+.scenario-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: var(--mono);
+}
+
+.scenario-table tr:hover td {
+  background: rgba(255,255,255,0.03);
+}
+
+.scenario-table .name-cell {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  max-width: 180px;
+}
+
+.scenario-table .pnl-neg { color: #ff5959; }
+.scenario-table .pnl-pos { color: #3fe3c4; }
+
+.scenario-detail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-height: 40px;
+}
+
+/* Correlation heatmap */
+#corr-canvas {
+  width: 100%;
+  height: auto;
+  max-height: 440px;
+  border-radius: 6px;
+}
+
+/* Volatility bar chart */
+#vol-canvas {
+  width: 100%;
+  height: 200px;
+  border-radius: 6px;
+}
+
+/* Footer */
+.risk-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding-bottom: 40px;
+}
+
+.run-btn {
+  padding: 10px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(255, 122, 89, 0.1);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.run-btn:hover {
+  background: rgba(255, 122, 89, 0.2);
+}
+
+.run-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.risk-footer-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}

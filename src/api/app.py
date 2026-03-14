@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 import html
@@ -38,6 +39,8 @@ from src.utils.gpt.factor_review import (
     run_gpt_factor_reviews,
 )
 from src.utils.gpt.recommendations import normalize_recommendations, run_gpt_recommendations
+from src.analysis.debate import run_debate
+from src.report.llm_clients import create_clients
 from src.utils.gpt.summary import generate_summary
 from src.utils.simulations.paths import (
     STRESS_WINDOWS,
@@ -51,6 +54,7 @@ from src.utils.simulations.paths import (
 
 UTC = timezone.utc
 EASTERN = ZoneInfo("America/New_York")
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Tetra Data Console")
 
@@ -507,7 +511,11 @@ def _majority(values: List[str], fallback: str) -> Tuple[str, int]:
 
 def _build_gpt_consensus(providers: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     provider_list = [p for p in providers if not p.get("error")]
-    provider_count = max(1, len(provider_list))
+    # Only count providers that actually returned recommendations
+    provider_count = max(1, sum(
+        1 for p in provider_list
+        if any((p.get("recommendations") or {}).values())
+    ))
     consensus_min = 2
     min_per_category = 5
     max_per_category = 5
@@ -620,15 +628,31 @@ def _build_gpt_consensus(providers: List[Dict[str, Any]]) -> Dict[str, List[Dict
 
         reward_risk = expected / risk if risk and risk > 0 else None
         support_count = len(providers)
-        support_ratio = support_count / provider_count
-        symbol_key = (data["category"], data["symbol"])
-        total_support = symbol_support.get(symbol_key) or support_count
-        agreement_ratio = support_count / total_support if total_support else 1.0
+        # Bayesian consensus score: agreement_weight × (1 + avg_conf) / 2
+        # 3/3 agree @ 0.75 avg → 87.5%, 2/3 @ 0.70 → 57%, 1/3 @ 0.80 → 30%
+        agreement_weight = support_count / provider_count if provider_count > 0 else 0.0
         if data["confidence"]:
             avg_conf = sum(data["confidence"]) / len(data["confidence"])
-            confidence = max(0.0, min(1.0, avg_conf * support_ratio * agreement_ratio))
         else:
-            confidence = max(0.0, min(1.0, support_ratio * agreement_ratio))
+            avg_conf = 0.5  # neutral prior when no confidence given
+        consensus_score = agreement_weight * (1.0 + avg_conf) / 2.0
+        confidence = max(0.0, min(1.0, consensus_score))
+        # Per-provider confidence breakdown
+        provider_confs = {}
+        for prov_name in providers:
+            prov_scores = []
+            for p in provider_list:
+                if (p.get("provider") or "unknown") == prov_name:
+                    cats = p.get("recommendations") or {}
+                    for items in cats.values():
+                        for item in items or []:
+                            if str(item.get("symbol") or "").upper() == data["symbol"] and \
+                               str(item.get("action") or "").lower() == action:
+                                c = _parse_confidence_value(item.get("confidence"))
+                                if c is not None:
+                                    prov_scores.append(c)
+            if prov_scores:
+                provider_confs[prov_name] = round(sum(prov_scores) / len(prov_scores), 2)
         thesis_entries: List[str] = []
         for entry in data["thesis"]:
             if entry in thesis_entries:
@@ -648,6 +672,8 @@ def _build_gpt_consensus(providers: List[Dict[str, Any]]) -> Dict[str, List[Dict
             "expected_return": expected,
             "reward_risk": reward_risk,
             "confidence": confidence,
+            "avg_provider_confidence": round(avg_conf, 2),
+            "provider_confidences": provider_confs,
             "providers": providers,
             "support": support_count,
             "horizon": data["horizon"][0] if data["horizon"] else None,
@@ -811,6 +837,21 @@ async def _run_gpt_refresh(session: Optional[str]) -> None:
         gpt_state["status"] = "success"
         gpt_state["last_run"] = result.get("run_time")
         gpt_state["last_session"] = result.get("session")
+
+        # Also run debate with quant model integration
+        try:
+            from config.config import settings as tetra_settings
+            clients = create_clients(tetra_settings)
+            logger.info(f"Debate: created clients: {list(clients.keys())}")
+            if clients:
+                debate_result = await run_debate(llm_clients=clients)
+                logger.info(f"Debate completed: {debate_result.get('status')}")
+            else:
+                logger.warning("Debate: no LLM clients available")
+        except Exception as debate_exc:
+            import traceback
+            logger.error(f"Debate failed: {debate_exc}\n{traceback.format_exc()}")
+
     except Exception as exc:
         gpt_state["status"] = "failed"
         gpt_state["last_error"] = _redact_error(str(exc))
@@ -860,7 +901,11 @@ async def _run_factor_refresh(as_of: Optional[date]) -> None:
 
 
 @app.get("/")
-async def index() -> FileResponse:
+async def dashboard() -> FileResponse:
+    return FileResponse(frontend_dir / "dashboard.html", headers={"Cache-Control": "no-store"})
+
+@app.get("/data")
+async def data_page() -> FileResponse:
     return FileResponse(frontend_dir / "index.html", headers={"Cache-Control": "no-store"})
 
 @app.get("/analysis")
@@ -871,6 +916,11 @@ async def analysis() -> FileResponse:
 @app.get("/strats")
 async def strats() -> FileResponse:
     return FileResponse(frontend_dir / "strats.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/risk")
+async def risk_dashboard() -> FileResponse:
+    return FileResponse(frontend_dir / "risk.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/alpha")
@@ -1018,6 +1068,7 @@ async def _load_gpt_recommendations(session: Optional[str]) -> Dict[str, Any]:
                 "session": row.session,
                 "run_time": _isoformat(row.run_time),
                 "recommendations": normalized.get("categories", {}),
+                "payload": payload,
                 "error": _redact_error(row.error),
             }
         )
@@ -1100,11 +1151,74 @@ async def _load_gpt_recommendations_history(
 async def _load_gpt_consensus(session: Optional[str]) -> Dict[str, Any]:
     data = await _load_gpt_recommendations(session=session)
     by_category = _build_gpt_consensus(data.get("providers", []))
-    consensus = [row for rows in by_category.values() for row in rows]
+    llm_consensus = [row for rows in by_category.values() for row in rows]
+
+    # Merge debate synthesis trades if available
+    debate_trades = []
+    debate_meta = {}
+    for prov in data.get("providers", []):
+        if prov.get("provider") == "debate" and not prov.get("error"):
+            payload = prov.get("payload") or {}
+            synthesis = payload.get("synthesis", {})
+            debate_meta = {
+                "regime_consensus": synthesis.get("regime_consensus"),
+                "risk_warnings": synthesis.get("risk_warnings", []),
+                "key_conflicts": synthesis.get("key_conflicts", []),
+                "portfolio_actions": synthesis.get("portfolio_actions", []),
+            }
+            for t in synthesis.get("consensus_trades", []):
+                conf = t.get("confidence", 0)
+                if isinstance(conf, str):
+                    conf = {"high": 0.85, "medium": 0.65, "low": 0.35}.get(conf, 0.5)
+                debate_trades.append({
+                    "symbol": t.get("symbol", ""),
+                    "action": "buy" if t.get("direction") == "long" else "sell",
+                    "confidence": float(conf),
+                    "providers": t.get("supporting_analysts", []),
+                    "support": len(t.get("supporting_analysts", [])),
+                    "thesis": t.get("combined_thesis", ""),
+                    "risk": t.get("risk", ""),
+                    "factor_aligned": t.get("factor_aligned"),
+                    "factor_score": t.get("factor_score"),
+                    "source": "debate_consensus",
+                })
+            for t in synthesis.get("contrarian_trades", []):
+                conf = t.get("confidence", 0)
+                if isinstance(conf, str):
+                    conf = {"high": 0.85, "medium": 0.65, "low": 0.35}.get(conf, 0.5)
+                debate_trades.append({
+                    "symbol": t.get("symbol", ""),
+                    "action": "buy" if t.get("direction") == "long" else "sell",
+                    "confidence": float(conf),
+                    "providers": [t.get("source_analyst", "unknown")],
+                    "support": 1,
+                    "thesis": t.get("thesis", ""),
+                    "risk": t.get("risk", ""),
+                    "factor_aligned": t.get("factor_aligned"),
+                    "source": "debate_contrarian",
+                })
+            break
+
+    # Unified: debate trades first (higher quality), then LLM consensus for coverage
+    seen_symbols = set()
+    unified = []
+    for t in sorted(debate_trades, key=lambda x: -x.get("confidence", 0)):
+        sym = t["symbol"].upper()
+        if sym not in seen_symbols:
+            seen_symbols.add(sym)
+            unified.append(t)
+    for t in llm_consensus:
+        sym = (t.get("symbol") or "").upper()
+        if sym not in seen_symbols:
+            seen_symbols.add(sym)
+            t["source"] = "llm_consensus"
+            unified.append(t)
+
     return {
         "session": data.get("session"),
         "run_time": data.get("run_time"),
-        "consensus": consensus,
+        "consensus": unified,
+        "debate": debate_meta,
         "by_category": by_category,
         "providers": data.get("providers", []),
         "status": data.get("status"),
@@ -2849,3 +2963,249 @@ async def refresh_factors(request: FactorRefreshRequest) -> Dict[str, Any]:
         }
     asyncio.create_task(_run_factor_refresh(request.as_of))
     return {"status": "running"}
+
+
+# ---------------------------------------------------------------------------
+# Simulation / Risk Dashboard API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/simulation/regime")
+async def get_regime(as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Get latest regime detection results."""
+    async with engine.begin() as conn:
+        if as_of:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.regimes WHERE as_of = :date
+            """), {"date": as_of})
+        else:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.regimes ORDER BY as_of DESC LIMIT 1
+            """))
+        row = result.fetchone()
+    if not row:
+        return {"status": "no_data"}
+    return {
+        "as_of": row.as_of.isoformat(),
+        "current_regime": row.current_regime,
+        "n_states": row.n_states,
+        "current_probs": json.loads(row.current_probs) if isinstance(row.current_probs, str) else row.current_probs,
+        "regime_states": json.loads(row.regime_states) if isinstance(row.regime_states, str) else row.regime_states,
+        "transition_matrix": json.loads(row.transition_matrix) if isinstance(row.transition_matrix, str) else row.transition_matrix,
+        "regime_forecast_5d": json.loads(row.regime_forecast_5d) if isinstance(row.regime_forecast_5d, str) else row.regime_forecast_5d,
+        "log_likelihood": float(row.log_likelihood) if row.log_likelihood else None,
+        "n_observations": row.n_observations,
+    }
+
+
+@app.get("/api/simulation/regime/history")
+async def get_regime_history(days: int = 30) -> Dict[str, Any]:
+    """Get regime history over time."""
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT as_of, current_regime, current_probs, regime_states
+            FROM simulation.regimes
+            WHERE as_of >= CURRENT_DATE - :days
+            ORDER BY as_of ASC
+        """), {"days": days})
+        rows = result.fetchall()
+    history = []
+    for r in rows:
+        probs = json.loads(r.current_probs) if isinstance(r.current_probs, str) else (r.current_probs or {})
+        history.append({
+            "date": r.as_of.isoformat(),
+            "regime": r.current_regime,
+            "probs": probs,
+        })
+    return {"history": history, "days": days}
+
+
+@app.get("/api/simulation/risk")
+async def get_risk(as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Get latest risk metrics (both parametric and simulation)."""
+    async with engine.begin() as conn:
+        if as_of:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.risk WHERE as_of = :date ORDER BY method
+            """), {"date": as_of})
+        else:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.risk
+                WHERE as_of = (SELECT MAX(as_of) FROM simulation.risk)
+                ORDER BY method
+            """))
+        rows = result.fetchall()
+    if not rows:
+        return {"status": "no_data"}
+    methods = {}
+    as_of_val = None
+    for r in rows:
+        as_of_val = r.as_of.isoformat()
+        methods[r.method] = {
+            "total_vol_ann": float(r.total_vol_ann) if r.total_vol_ann else None,
+            "var_95_1d": float(r.var_95_1d) if r.var_95_1d else None,
+            "var_99_1d": float(r.var_99_1d) if r.var_99_1d else None,
+            "cvar_95_1d": float(r.cvar_95_1d) if r.cvar_95_1d else None,
+            "cvar_99_1d": float(r.cvar_99_1d) if r.cvar_99_1d else None,
+            "expected_max_drawdown": float(r.expected_max_drawdown) if r.expected_max_drawdown else None,
+            "hhi": float(r.hhi) if r.hhi else None,
+            "effective_n": float(r.effective_n) if r.effective_n else None,
+            "marginal_risk": json.loads(r.marginal_risk) if isinstance(r.marginal_risk, str) else (r.marginal_risk or {}),
+            "component_risk": json.loads(r.component_risk) if isinstance(r.component_risk, str) else (r.component_risk or {}),
+            "risk_budget_breaches": json.loads(r.risk_budget_breaches) if isinstance(r.risk_budget_breaches, str) else (r.risk_budget_breaches or {}),
+        }
+    # Add portfolio value from snapshots
+    portfolio_value = None
+    async with engine.begin() as conn:
+        snap = await conn.execute(text("""
+            SELECT total_value FROM portfolio.snapshots
+            ORDER BY date DESC LIMIT 1
+        """))
+        row = snap.fetchone()
+        if row:
+            portfolio_value = float(row.total_value)
+    if portfolio_value:
+        for m in methods.values():
+            m["portfolio_value"] = portfolio_value
+    return {"as_of": as_of_val, "methods": methods}
+
+
+@app.get("/api/portfolio")
+async def get_portfolio() -> Dict[str, Any]:
+    """Get current portfolio positions and cash."""
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT symbol, shares, avg_cost, current_price, market_value, weight, unrealized_pnl
+            FROM portfolio.positions ORDER BY market_value DESC
+        """))
+        positions = []
+        for r in result.fetchall():
+            positions.append({
+                "symbol": r.symbol,
+                "shares": float(r.shares),
+                "avg_cost": float(r.avg_cost) if r.avg_cost else None,
+                "price": float(r.current_price) if r.current_price else None,
+                "market_value": float(r.market_value) if r.market_value else 0,
+                "weight": float(r.weight) if r.weight else 0,
+                "pnl": float(r.unrealized_pnl) if r.unrealized_pnl else 0,
+            })
+        cash_result = await conn.execute(text(
+            "SELECT amount FROM portfolio.cash ORDER BY id DESC LIMIT 1"
+        ))
+        cash_row = cash_result.fetchone()
+        cash = float(cash_row.amount) if cash_row else 0
+        snap_result = await conn.execute(text(
+            "SELECT total_value, daily_return FROM portfolio.snapshots ORDER BY date DESC LIMIT 1"
+        ))
+        snap = snap_result.fetchone()
+        total = float(snap.total_value) if snap else 0
+        daily_ret = float(snap.daily_return) if snap else 0
+    return {
+        "positions": positions,
+        "cash": cash,
+        "total_value": total,
+        "daily_return": daily_ret,
+    }
+
+
+@app.get("/api/simulation/risk/history")
+async def get_risk_history(days: int = 30, method: str = "parametric") -> Dict[str, Any]:
+    """Get risk metric history for charting."""
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT as_of, total_vol_ann, var_95_1d, cvar_95_1d, expected_max_drawdown, effective_n
+            FROM simulation.risk
+            WHERE method = :method AND as_of >= CURRENT_DATE - :days
+            ORDER BY as_of ASC
+        """), {"method": method, "days": days})
+        rows = result.fetchall()
+    return {
+        "method": method,
+        "history": [
+            {
+                "date": r.as_of.isoformat(),
+                "vol": float(r.total_vol_ann) if r.total_vol_ann else None,
+                "var_95": float(r.var_95_1d) if r.var_95_1d else None,
+                "cvar_95": float(r.cvar_95_1d) if r.cvar_95_1d else None,
+                "max_dd": float(r.expected_max_drawdown) if r.expected_max_drawdown else None,
+                "eff_n": float(r.effective_n) if r.effective_n else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/api/simulation/scenarios")
+async def get_scenarios(as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Get scenario stress test results."""
+    async with engine.begin() as conn:
+        if as_of:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.scenarios WHERE as_of = :date
+                ORDER BY portfolio_pnl_pct ASC
+            """), {"date": as_of})
+        else:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.scenarios
+                WHERE as_of = (SELECT MAX(as_of) FROM simulation.scenarios)
+                ORDER BY portfolio_pnl_pct ASC
+            """))
+        rows = result.fetchall()
+    if not rows:
+        return {"status": "no_data", "scenarios": []}
+    return {
+        "as_of": rows[0].as_of.isoformat(),
+        "scenarios": [
+            {
+                "name": r.scenario_name,
+                "description": r.description,
+                "pnl": float(r.portfolio_pnl) if r.portfolio_pnl else 0,
+                "pnl_pct": float(r.portfolio_pnl_pct) if r.portfolio_pnl_pct else 0,
+                "var_95_stress": float(r.var_95_under_stress) if r.var_95_under_stress else 0,
+                "worst_position": r.worst_position,
+                "worst_pnl": float(r.worst_position_pnl) if r.worst_position_pnl else 0,
+                "position_pnls": json.loads(r.position_pnls) if isinstance(r.position_pnls, str) else (r.position_pnls or {}),
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/api/simulation/covariance")
+async def get_covariance(as_of: Optional[str] = None, method: str = "ledoit_wolf_identity") -> Dict[str, Any]:
+    """Get covariance estimate (correlation matrix + vols)."""
+    async with engine.begin() as conn:
+        if as_of:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.covariance
+                WHERE as_of = :date AND method = :method
+            """), {"date": as_of, "method": method})
+        else:
+            result = await conn.execute(text("""
+                SELECT * FROM simulation.covariance
+                WHERE method = :method
+                ORDER BY as_of DESC LIMIT 1
+            """), {"method": method})
+        row = result.fetchone()
+    if not row:
+        return {"status": "no_data"}
+    return {
+        "as_of": row.as_of.isoformat(),
+        "method": row.method,
+        "symbols": row.symbols,
+        "vols_ann": json.loads(row.vols_ann) if isinstance(row.vols_ann, str) else (row.vols_ann or {}),
+        "correlation_matrix": json.loads(row.correlation_matrix) if isinstance(row.correlation_matrix, str) else (row.correlation_matrix or []),
+        "n_observations": row.n_observations,
+        "effective_observations": float(row.effective_observations) if row.effective_observations else None,
+    }
+
+
+@app.post("/api/simulation/run")
+async def trigger_simulation(as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Trigger a simulation pipeline run."""
+    from src.simulation.pipeline import run_simulation_pipeline
+    target = datetime.strptime(as_of, "%Y-%m-%d").date() if as_of else None
+    try:
+        result = await run_simulation_pipeline(as_of=target)
+        return result
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}

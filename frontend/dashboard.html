@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tetra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/dashboard.css"/>
+</head>
+<body>
+
+  <!-- ── Status Bar ── -->
+  <header class="bar">
+    <div class="bar-left">
+      <span class="logo">TETRA</span>
+      <span class="bar-sep"></span>
+      <span class="bar-label">Portfolio</span>
+      <span class="bar-val mono" id="port-value" data-tip="Total portfolio market value across all positions">—</span>
+      <span class="bar-pnl mono" id="port-pnl"></span>
+    </div>
+    <div class="bar-right">
+      <span class="regime-pill" id="regime-pill" data-tip="Current market regime detected by Hidden Markov Model — Bull, Bear, or Sideways">—</span>
+      <span class="breach-badge" id="breach-badge" data-tip="Number of risk budget limits currently breached" style="display:none">⚠ <span id="breach-count">0</span></span>
+      <span class="bar-label">as of</span>
+      <span class="mono" id="bar-asof">—</span>
+      <button class="bar-btn" id="btn-refresh" title="Refresh data">↻</button>
+      <a class="bar-btn" href="/data" title="Data pipeline">⚙</a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Pulse: 4 cards ── -->
+    <section class="pulse">
+
+      <div class="card" id="c-regime">
+        <div class="card-head">REGIME</div>
+        <div class="card-body">
+          <div class="regime-state" id="regime-state" data-tip="HMM-detected market regime based on returns, volatility, and correlation patterns">—</div>
+          <div class="regime-probs" id="regime-probs" data-tip="Probability distribution across regimes from the Hidden Markov Model"></div>
+          <div class="card-sub">5-day forecast</div>
+          <div class="regime-forecast" id="regime-forecast" data-tip="Predicted regime probabilities for the next 5 trading days using transition matrix"></div>
+        </div>
+      </div>
+
+      <div class="card" id="c-risk">
+        <div class="card-head">RISK</div>
+        <div class="card-body">
+          <div class="kpi-grid">
+            <div class="kpi" data-tip="Annualized portfolio volatility — standard deviation of returns scaled to 1 year"><span class="kpi-label">Vol</span><span class="kpi-val" id="risk-vol">—</span></div>
+            <div class="kpi" data-tip="Value at Risk (95%) — maximum expected 1-day loss with 95% confidence"><span class="kpi-label">VaR 95</span><span class="kpi-val" id="risk-var">—</span></div>
+            <div class="kpi" data-tip="Conditional VaR (95%) — expected loss in the worst 5% of days, i.e. average loss beyond VaR"><span class="kpi-label">CVaR 95</span><span class="kpi-val" id="risk-cvar">—</span></div>
+            <div class="kpi" data-tip="Expected Maximum Drawdown — estimated worst peak-to-trough decline over the horizon"><span class="kpi-label">E[MDD]</span><span class="kpi-val" id="risk-mdd">—</span></div>
+            <div class="kpi" data-tip="Effective N — diversification measure. Higher = more diversified. Equal-weight portfolio of N stocks gives N"><span class="kpi-label">Eff. N</span><span class="kpi-val" id="risk-effn">—</span></div>
+            <div class="kpi" data-tip="Herfindahl-Hirschman Index — concentration measure (0–1). Lower = more diversified. >0.25 is concentrated"><span class="kpi-label">HHI</span><span class="kpi-val" id="risk-hhi">—</span></div>
+          </div>
+          <div class="breaches" id="risk-breaches"></div>
+        </div>
+      </div>
+
+      <div class="card" id="c-signals">
+        <div class="card-head">SIGNALS</div>
+        <div class="card-body">
+          <div class="signal-counts" id="signal-counts" data-tip="Aggregate signal direction count from all recommendation providers">—</div>
+          <div class="card-sub">Top picks</div>
+          <div class="signal-picks" id="signal-picks" data-tip="Highest-confidence recommendations across all providers"></div>
+        </div>
+      </div>
+
+      <div class="card" id="c-portfolio">
+        <div class="card-head">POSITIONS</div>
+        <div class="card-body">
+          <div class="positions" id="positions"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── Recommendations ── -->
+    <section class="panel" id="recs-panel">
+      <div class="panel-head">
+        <h2>Recommendations</h2>
+        <span class="panel-meta" id="recs-meta"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl" id="recs-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th data-tip="Recommended action — BUY or SELL">Action</th>
+              <th data-tip="Consensus confidence — weighted by provider agreement and individual confidence">Conf</th>
+              <th data-tip="Median entry price across agreeing providers">Entry</th>
+              <th data-tip="Median price target across agreeing providers">Target</th>
+              <th data-tip="Median stop-loss across agreeing providers">Stop</th>
+              <th data-tip="Expected return if target is hit">Return</th>
+              <th data-tip="Reward/Risk ratio — expected return divided by stop distance">R/R</th>
+              <th data-tip="Number of providers agreeing and which ones">Agreement</th>
+            </tr>
+          </thead>
+          <tbody id="recs-body"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="recs-empty" style="display:none">No recommendations available</div>
+    </section>
+
+    <!-- ── Scenarios (full width) ── -->
+    <section class="panel" id="scenarios-panel">
+      <div class="panel-head">
+        <h2 data-tip="Monte Carlo stress tests — each scenario shocks asset returns with predefined moves and simulates portfolio impact">Stress Scenarios</h2>
+        <span class="panel-meta" id="scenario-count"></span>
+      </div>
+      <div class="scenario-chart" id="scenario-chart"></div>
+    </section>
+
+    <!-- ── Bottom: Correlation + Volatility ── -->
+    <section class="bottom-grid">
+      <div class="panel">
+        <div class="panel-head"><h2 data-tip="Pairwise return correlations estimated via Ledoit-Wolf shrinkage. Green = positive, red = negative">Correlation Matrix</h2></div>
+        <canvas id="corr-canvas"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2 data-tip="Annualized volatility per asset — standard deviation of daily returns × √252">Annualized Volatility</h2></div>
+        <canvas id="vol-canvas"></canvas>
+      </div>
+    </section>
+
+    <!-- ── Deep Dive (collapsible) ── -->
+    <section class="deep">
+      <details id="d-factors">
+        <summary>Factor Signals</summary>
+        <div class="detail-body">
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr>
+                <th>Symbol</th>
+                <th data-tip="Composite factor score — weighted combination of momentum, value, quality, and other alpha signals">Score</th>
+                <th>Action</th>
+                <th data-tip="Factor coverage — how many individual factors contribute to this score">Coverage</th>
+              </tr></thead>
+              <tbody id="factor-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details id="d-inference">
+        <summary>Signal Quality — IC Leaderboard</summary>
+        <div class="detail-body">
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr>
+                <th>Factor</th>
+                <th data-tip="Forward-looking period used to measure predictive power">Horizon</th>
+                <th data-tip="Average Information Coefficient — rank correlation between signal and forward returns. >0.05 is good">Avg IC</th>
+                <th data-tip="Median IC — more robust than average, less affected by outliers">Median IC</th>
+                <th data-tip="Hit Rate — fraction of periods where IC > 0 (signal directionally correct). >55% is meaningful">Hit Rate</th>
+                <th data-tip="Number of trading days in the evaluation window">Days</th>
+              </tr></thead>
+              <tbody id="ic-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details id="d-risk-detail">
+        <summary data-tip="Component risk decomposition — each position's marginal contribution to total portfolio risk">Risk Contributors</summary>
+        <div class="detail-body">
+          <div class="contrib-chart" id="contrib-chart"></div>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>

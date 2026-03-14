@@ -145,17 +145,26 @@ body {
     padding-top: 8pt;
 }
 
-/* Regime badges */
-.badge-regime {
-    display: inline-block;
-    padding: 3pt 12pt;
-    font-size: 11pt;
-    font-weight: 700;
+/* Regime summary box — full width below KPIs */
+.regime-box {
+    margin-top: 16pt;
+    padding: 14pt 18pt;
+    font-size: 9.5pt;
+    line-height: 1.55;
+    font-weight: 500;
+    border-left: 3pt solid #00bcd4;
 }
-.badge-bullish  { background: #0a6e3a; color: #ffffff; }
-.badge-bearish  { background: #b32d2d; color: #ffffff; }
-.badge-volatile { background: #7c3aed; color: #ffffff; }
-.badge-neutral  { background: #333340; color: #a0a8b4; }
+.regime-box.regime-bullish  { background: rgba(10, 110, 58, 0.15); border-left-color: #22c55e; color: #c8f5d8; }
+.regime-box.regime-bearish  { background: rgba(179, 45, 45, 0.15); border-left-color: #ef4444; color: #fcc; }
+.regime-box.regime-volatile { background: rgba(124, 58, 237, 0.15); border-left-color: #7c3aed; color: #d4bfff; }
+.regime-box.regime-neutral  { background: rgba(0, 188, 212, 0.08); border-left-color: #00bcd4; color: #e0e4ec; }
+.regime-lbl {
+    font-size: 6.5pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 6pt;
+}
 
 /* ═══════════════════════════════════════
    SLIDE TITLE
@@ -432,27 +441,25 @@ body {
                     {% endif %}
                 </div>
             </td>
-            <td>
-                <div class="cover-lbl">Regime</div>
-                <div class="cover-val">
-                    {% if regime %}
-                        {% set regime_lower = regime|lower %}
-                        {% if 'bull' in regime_lower %}
-                            <span class="badge-regime badge-bullish">{{ regime }}</span>
-                        {% elif 'bear' in regime_lower %}
-                            <span class="badge-regime badge-bearish">{{ regime }}</span>
-                        {% elif 'volat' in regime_lower %}
-                            <span class="badge-regime badge-volatile">{{ regime }}</span>
-                        {% else %}
-                            <span class="badge-regime badge-neutral">{{ regime }}</span>
-                        {% endif %}
-                    {% else %}
-                        <span class="badge-regime badge-neutral">Pending</span>
-                    {% endif %}
-                </div>
-            </td>
         </tr>
     </table>
+
+    {% if regime %}
+        {% set regime_lower = regime|lower %}
+        {% if 'bull' in regime_lower %}
+            {% set rclass = 'regime-bullish' %}
+        {% elif 'bear' in regime_lower %}
+            {% set rclass = 'regime-bearish' %}
+        {% elif 'volat' in regime_lower %}
+            {% set rclass = 'regime-volatile' %}
+        {% else %}
+            {% set rclass = 'regime-neutral' %}
+        {% endif %}
+        <div class="regime-box {{ rclass }}">
+            <div class="regime-lbl">Regime Assessment</div>
+            {{ regime }}
+        </div>
+    {% endif %}
 
     <div class="cover-pills">
         <span class="cover-pill">Market Data</span>

@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
         "--stage",
         choices=["narrative", "polymarket", "insider", "earnings_net",
                  "analyst_net", "debate", "portfolio", "scenarios", "meta",
-                 "phase1", "phase2", "phase3", "all"],
+                 "simulation", "phase1", "phase2", "phase3", "all"],
         default="all",
         help="Which stage to run",
     )
@@ -227,6 +227,17 @@ async def run_pipeline(as_of: date | None, stage: str, use_llm: bool, llm_provid
             logging.exception("Meta-signal analysis failed")
             results["meta_signal"] = {"status": "error"}
 
+    # Stage 10: Quantitative Simulation (no LLM needed)
+    # Covariance → Regime detection → Risk analysis → Scenario stress tests
+    if stage in ("simulation", "all"):
+        logging.info("=== Stage 10: Quantitative Simulation Engine ===")
+        from src.simulation.pipeline import run_simulation_pipeline
+        try:
+            results["simulation"] = await run_simulation_pipeline(as_of=as_of)
+        except Exception:
+            logging.exception("Simulation pipeline failed")
+            results["simulation"] = {"status": "error"}
+
     elapsed = (datetime.now(tz=UTC) - started).total_seconds()
     results["elapsed_seconds"] = round(elapsed, 1)
 
@@ -261,7 +272,7 @@ def main() -> None:
     # Print summary
     for stage_name in ("narrative", "polymarket", "insider", "earnings_network",
                        "analyst_network", "debate", "portfolio", "scenarios",
-                       "meta_signal"):
+                       "meta_signal", "simulation"):
         if stage_name in results:
             r = results[stage_name]
             status = r.get("status", "unknown")
